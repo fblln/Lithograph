@@ -1,0 +1,12 @@
+service:
+  name: route-api
+  image: ghcr.io/example/route-api:${VERSION}
+  port: 8080
+  command: "python -m python_app.service"
+  env:
+    RIDGELINE_WORKER: /usr/local/bin/worker
+    RIDGELINE_CACHE_DIR: /var/cache/ridgeline
+paths:
+  schema: config/schema.json
+  static_assets: assets/
+

@@ -1,0 +1,305 @@
+//! Command-line argument definitions.
+
+use clap::{Args, Parser, Subcommand, ValueEnum};
+use std::path::PathBuf;
+
+/// Repository knowledge compiler that builds evidence-backed documentation.
+#[derive(Debug, Parser)]
+#[command(name = "lithograph")]
+#[command(version)]
+#[command(about = "Compile repository knowledge into evidence-backed documentation.")]
+#[command(long_about = None)]
+pub struct Cli {
+    /// Command to run.
+    #[command(subcommand)]
+    pub command: Option<Command>,
+}
+
+/// Top-level Lithograph commands.
+#[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
+pub enum Command {
+    /// Scan, analyze, plan, generate, and write documentation for a repository.
+    Init(InitArgs),
+    /// Rescan and selectively regenerate documentation for changed content.
+    Update(InitArgs),
+    /// Inspect deterministic repository inventory data.
+    Inspect(InspectCommand),
+    /// Add or refresh a Lithograph reference section in top-level
+    /// `AGENTS.md`/`CLAUDE.md`. The only command allowed to edit those files.
+    IntegrateAgents(IntegrateAgentsArgs),
+}
+
+/// Arguments for `init` and `update`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct InitArgs {
+    /// Repository path to compile documentation for.
+    pub path: PathBuf,
+    /// Prompt template version stamped on generated pages.
+    #[arg(long, default_value = "v1")]
+    pub prompt_version: String,
+}
+
+/// Arguments for `integrate-agents`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct IntegrateAgentsArgs {
+    /// Repository path whose top-level `AGENTS.md`/`CLAUDE.md` should be updated.
+    pub path: PathBuf,
+}
+
+/// Inspect command namespace.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct InspectCommand {
+    /// Inspect target.
+    #[command(subcommand)]
+    pub target: InspectTarget,
+}
+
+/// Inspectable repository data.
+#[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
+pub enum InspectTarget {
+    /// Print artifact inventory.
+    Artifacts(InspectArtifactsArgs),
+    /// Print the semantic graph.
+    Graph(InspectGraphArgs),
+    /// Print the deterministic module plan.
+    Modules(InspectModulesArgs),
+}
+
+/// Arguments for `inspect modules`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct InspectModulesArgs {
+    /// Repository path to inspect.
+    pub path: PathBuf,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Arguments for `inspect artifacts`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct InspectArtifactsArgs {
+    /// Repository path to inspect.
+    pub path: PathBuf,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Arguments for `inspect graph`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct InspectGraphArgs {
+    /// Repository path to inspect.
+    pub path: PathBuf,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Supported output formats.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum OutputFormat {
+    /// Human-readable table.
+    Table,
+    /// Deterministic JSON.
+    Json,
+}
+
+impl Cli {
+    /// Parses command-line arguments from the current process.
+    pub fn parse_args() -> Self {
+        Self::parse()
+    }
+
+    /// Parses command-line arguments from an explicit iterator.
+    ///
+    /// Tests use this path to verify the CLI definition without spawning a
+    /// process. User-facing process behavior is covered by integration tests.
+    pub fn parse_from_args<I, T>(args: I) -> Self
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<std::ffi::OsString> + Clone,
+    {
+        Self::parse_from(args)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        Cli, Command, InitArgs, InspectArtifactsArgs, InspectCommand, InspectGraphArgs,
+        InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, OutputFormat,
+    };
+    use std::path::PathBuf;
+
+    #[test]
+    fn parses_binary_name_without_subcommands() {
+        let cli = Cli::parse_from_args(["lithograph"]);
+
+        assert_eq!(cli.command, None);
+    }
+
+    #[test]
+    fn parses_inspect_artifacts_defaults_to_table() {
+        let cli = Cli::parse_from_args(["lithograph", "inspect", "artifacts", "fixtures/polyglot"]);
+
+        assert_eq!(
+            cli.command,
+            Some(Command::Inspect(InspectCommand {
+                target: InspectTarget::Artifacts(InspectArtifactsArgs {
+                    path: PathBuf::from("fixtures/polyglot"),
+                    format: OutputFormat::Table,
+                }),
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_inspect_artifacts_json_format() {
+        let cli = Cli::parse_from_args([
+            "lithograph",
+            "inspect",
+            "artifacts",
+            "fixtures/polyglot",
+            "--format",
+            "json",
+        ]);
+
+        assert!(matches!(
+            cli.command,
+            Some(Command::Inspect(InspectCommand {
+                target: InspectTarget::Artifacts(InspectArtifactsArgs {
+                    format: OutputFormat::Json,
+                    ..
+                }),
+            }))
+        ));
+    }
+
+    #[test]
+    fn parses_inspect_graph_defaults_to_table() {
+        let cli = Cli::parse_from_args(["lithograph", "inspect", "graph", "fixtures/polyglot"]);
+
+        assert_eq!(
+            cli.command,
+            Some(Command::Inspect(InspectCommand {
+                target: InspectTarget::Graph(InspectGraphArgs {
+                    path: PathBuf::from("fixtures/polyglot"),
+                    format: OutputFormat::Table,
+                }),
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_inspect_graph_json_format() {
+        let cli = Cli::parse_from_args([
+            "lithograph",
+            "inspect",
+            "graph",
+            "fixtures/polyglot",
+            "--format",
+            "json",
+        ]);
+
+        assert!(matches!(
+            cli.command,
+            Some(Command::Inspect(InspectCommand {
+                target: InspectTarget::Graph(InspectGraphArgs {
+                    format: OutputFormat::Json,
+                    ..
+                }),
+            }))
+        ));
+    }
+
+    #[test]
+    fn parses_init_defaults_prompt_version() {
+        let cli = Cli::parse_from_args(["lithograph", "init", "fixtures/polyglot"]);
+
+        assert_eq!(
+            cli.command,
+            Some(Command::Init(InitArgs {
+                path: PathBuf::from("fixtures/polyglot"),
+                prompt_version: "v1".to_owned(),
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_init_prompt_version_override() {
+        let cli = Cli::parse_from_args([
+            "lithograph",
+            "init",
+            "fixtures/polyglot",
+            "--prompt-version",
+            "v2",
+        ]);
+
+        assert!(matches!(
+            cli.command,
+            Some(Command::Init(InitArgs { prompt_version, .. })) if prompt_version == "v2"
+        ));
+    }
+
+    #[test]
+    fn parses_update_defaults_prompt_version() {
+        let cli = Cli::parse_from_args(["lithograph", "update", "fixtures/polyglot"]);
+
+        assert_eq!(
+            cli.command,
+            Some(Command::Update(InitArgs {
+                path: PathBuf::from("fixtures/polyglot"),
+                prompt_version: "v1".to_owned(),
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_inspect_modules_defaults_to_table() {
+        let cli = Cli::parse_from_args(["lithograph", "inspect", "modules", "fixtures/polyglot"]);
+
+        assert_eq!(
+            cli.command,
+            Some(Command::Inspect(InspectCommand {
+                target: InspectTarget::Modules(InspectModulesArgs {
+                    path: PathBuf::from("fixtures/polyglot"),
+                    format: OutputFormat::Table,
+                }),
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_inspect_modules_json_format() {
+        let cli = Cli::parse_from_args([
+            "lithograph",
+            "inspect",
+            "modules",
+            "fixtures/polyglot",
+            "--format",
+            "json",
+        ]);
+
+        assert!(matches!(
+            cli.command,
+            Some(Command::Inspect(InspectCommand {
+                target: InspectTarget::Modules(InspectModulesArgs {
+                    format: OutputFormat::Json,
+                    ..
+                }),
+            }))
+        ));
+    }
+
+    #[test]
+    fn parses_integrate_agents() {
+        let cli = Cli::parse_from_args(["lithograph", "integrate-agents", "fixtures/polyglot"]);
+
+        assert_eq!(
+            cli.command,
+            Some(Command::IntegrateAgents(IntegrateAgentsArgs {
+                path: PathBuf::from("fixtures/polyglot"),
+            }))
+        );
+    }
+}

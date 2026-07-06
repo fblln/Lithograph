@@ -1,0 +1,21 @@
+name: Fixture CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python tests
+        run: python -m pytest
+      - name: Rust tests
+        run: cargo test --manifest-path rust/Cargo.toml
+      - name: Web lint
+        run: npm --prefix web run lint
+      - name: Build image
+        run: docker build -t ghcr.io/example/route-api:${{ github.sha }} .
+

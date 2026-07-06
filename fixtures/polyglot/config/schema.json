@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RouteSettings",
+  "type": "object",
+  "properties": {
+    "route_file": {
+      "type": "string",
+      "description": "Path to a GPX route file"
+    },
+    "worker_image": {
+      "type": "string",
+      "default": "ghcr.io/example/worker:1.0"
+    }
+  },
+  "required": ["route_file"]
+}
+

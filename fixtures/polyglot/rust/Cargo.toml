@@ -1,0 +1,19 @@
+[package]
+name = "fixture-worker"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "worker"
+path = "src/bin/worker.rs"
+
+[features]
+default = ["serde-support"]
+serde-support = []
+
+[dependencies]
+anyhow = "1"
+

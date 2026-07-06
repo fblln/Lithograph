@@ -1,0 +1,21 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/example/route-api:${VERSION:-dev}
+    ports:
+      - "8080:8080"
+    environment:
+      RIDGELINE_WORKER: /usr/local/bin/worker
+    volumes:
+      - ./data:/data:ro
+    depends_on:
+      - web
+  web:
+    image: node:24-alpine
+    command: npm run dev
+    working_dir: /workspace/web
+    volumes:
+      - ./web:/workspace/web
+
