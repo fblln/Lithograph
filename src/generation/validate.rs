@@ -79,6 +79,21 @@ impl EvidenceValidator {
             .filter_map(|reference| validate_one(reference, &excerpts))
             .collect()
     }
+
+    /// Keeps only references that pass validation against `context`.
+    pub fn valid_references(&self, page: &PageGeneration, context: &ModelContext) -> Vec<String> {
+        let excerpts: BTreeMap<&str, &ContextExcerpt> = context
+            .excerpts
+            .iter()
+            .map(|excerpt| (excerpt.artifact_path.as_str(), excerpt))
+            .collect();
+
+        page.evidence_refs
+            .iter()
+            .filter(|reference| validate_one(reference, &excerpts).is_none())
+            .cloned()
+            .collect()
+    }
 }
 
 fn validate_one(
@@ -203,5 +218,23 @@ mod tests {
         );
 
         assert_eq!(issues.len(), 2);
+    }
+
+    #[test]
+    fn valid_references_filters_invalid_entries() {
+        let valid = EvidenceValidator.valid_references(
+            &page(vec![
+                "src/lib.rs",
+                "src/lib.rs#L1-L3",
+                "src/not_in_context.rs",
+                "src/lib.rs#L1-L100",
+            ]),
+            &context(),
+        );
+
+        assert_eq!(
+            valid,
+            vec!["src/lib.rs".to_owned(), "src/lib.rs#L1-L3".to_owned()]
+        );
     }
 }

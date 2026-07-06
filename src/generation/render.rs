@@ -79,10 +79,21 @@ impl PageRenderer {
         context: &ModelContext,
         repo_root: &Path,
     ) -> Result<PageWriteOutcome, RenderError> {
-        let issues = EvidenceValidator.validate(generation, context);
-        if !issues.is_empty() {
-            return Err(RenderError::EvidenceInvalid(issues));
-        }
+        let repaired_generation;
+        let generation = if EvidenceValidator.validate(generation, context).is_empty() {
+            generation
+        } else {
+            repaired_generation = {
+                let mut repaired = generation.clone();
+                repaired.evidence_refs = EvidenceValidator.valid_references(&repaired, context);
+                repaired
+            };
+            let remaining_issues = EvidenceValidator.validate(&repaired_generation, context);
+            if !remaining_issues.is_empty() {
+                return Err(RenderError::EvidenceInvalid(remaining_issues));
+            }
+            &repaired_generation
+        };
 
         let rendered_body = body_with_source_evidence(generation, repo_root);
         let mermaid_issues = validate_mermaid_fences(&rendered_body);
@@ -113,11 +124,12 @@ impl PageRenderer {
 }
 
 fn body_with_source_evidence(generation: &PageGeneration, repo_root: &Path) -> String {
-    if generation.evidence_refs.is_empty() || generation.body.contains("## Source Evidence") {
-        return generation.body.clone();
+    let mut body = body_without_source_evidence(&generation.body);
+    if generation.evidence_refs.is_empty() {
+        return body;
     }
 
-    let mut body = generation.body.trim_end().to_owned();
+    body = body.trim_end().to_owned();
     body.push_str("\n\n## Source Evidence\n");
     let source_base = source_base_url(repo_root);
     for reference in &generation.evidence_refs {
@@ -128,6 +140,13 @@ fn body_with_source_evidence(generation: &PageGeneration, repo_root: &Path) -> S
         }
     }
     body
+}
+
+fn body_without_source_evidence(body: &str) -> String {
+    let Some((prefix, _)) = body.split_once("\n## Source Evidence") else {
+        return body.to_owned();
+    };
+    format!("{}\n", prefix.trim_end())
 }
 
 fn validate_mermaid_fences(body: &str) -> Vec<String> {
@@ -375,22 +394,50 @@ mod tests {
     }
 
     #[test]
-    fn rejects_invalid_evidence_without_writing_or_updating_page_metadata()
+    fn drops_invalid_evidence_without_recording_page_evidence()
     -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::TempDir::new()?;
         let mut page = page();
 
-        let result = PageRenderer.render_and_write(
+        let outcome = PageRenderer.render_and_write(
             &mut page,
             &generation("# Test\nbody\n", vec!["not/in/context.rs"]),
             &context(),
             temp.path(),
-        );
+        )?;
 
-        assert!(result.is_err());
-        assert!(!temp.path().join(&page.path).exists());
-        assert!(page.output_hash.is_none());
+        assert!(outcome.written);
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join(&page.path))?,
+            "# Test\nbody\n"
+        );
+        assert!(page.output_hash.is_some());
         assert!(page.evidence.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn rewrites_source_evidence_from_validated_refs() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        let mut page = page();
+
+        PageRenderer.render_and_write(
+            &mut page,
+            &generation(
+                "# Test\n\n## Source Evidence\n- `not/in/context.rs`\n",
+                vec!["src/lib.rs#L1-L5", "not/in/context.rs"],
+            ),
+            &context(),
+            temp.path(),
+        )?;
+
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join(&page.path))?,
+            "# Test\n\n## Source Evidence\n- `src/lib.rs#L1-L5`\n"
+        );
+        assert_eq!(page.evidence.len(), 1);
+        assert_eq!(page.evidence[0].path.as_str(), "src/lib.rs");
 
         Ok(())
     }

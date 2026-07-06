@@ -9,8 +9,7 @@ use crate::analysis::{
     PythonAnalyzer, PythonImportKind, PythonReferenceKind, RequirementsAnalyzer,
     RequirementsProfile, RustAnalysis, RustAnalyzer, RustReferenceKind, RustWorkspaceAnalysis,
     RustWorkspaceAnalyzer, StructuredAnalysis, StructuredAnalyzer, StructuredFormat, TextFinding,
-    TextFindingKind, is_python_stdlib_module, is_rust_prelude_type, python, rust_source,
-    rust_std_crate,
+    TextFindingKind, is_python_stdlib_module, python, rust_source, rust_std_crate,
 };
 use crate::domain::{
     AnalyzerSelection, Artifact, ArtifactId, Confidence, EvidenceRef, ModelExposurePolicy,
@@ -824,11 +823,11 @@ impl BuilderState {
             let source = symbol_ids
                 .get(&imp.target_type)
                 .cloned()
-                .unwrap_or_else(|| self.rust_external_type_target(&imp.target_type));
+                .unwrap_or_else(|| self.unresolved(&imp.target_type));
             let target = symbol_ids
                 .get(trait_name)
                 .cloned()
-                .unwrap_or_else(|| self.rust_external_type_target(trait_name));
+                .unwrap_or_else(|| self.unresolved(trait_name));
             self.relate(
                 source,
                 target,
@@ -899,17 +898,6 @@ impl BuilderState {
                     vec![reference.evidence.clone()],
                 );
             }
-        }
-    }
-
-    /// Resolves a Rust type/trait name that didn't match a same-file symbol:
-    /// a well-known prelude type/trait becomes a shared external `Package`
-    /// node instead of a per-file `Unresolved` node.
-    fn rust_external_type_target(&mut self, name: &str) -> GraphNodeId {
-        if is_rust_prelude_type(name) {
-            self.package(name, true)
-        } else {
-            self.unresolved(name)
         }
     }
 
@@ -1474,6 +1462,7 @@ fn file_name(path: &str) -> &str {
 mod tests {
     use super::GraphBuilder;
     use crate::analysis::AnalysisCache;
+    use crate::graph::GraphValidator;
     use crate::graph::{GraphNode, RelationKind};
     use crate::inventory::{RepositoryWalker, WalkOptions};
     use std::path::Path;
@@ -1842,15 +1831,14 @@ impl Debug for Foo {}
 
         let has_node = |id: &str| graph.nodes.iter().any(|node| node.id().as_str() == id);
 
-        // Known stdlib/prelude references resolve to shared external Package
-        // nodes rather than per-file Unresolved noise.
+        // Known stdlib imports resolve to shared external Package nodes
+        // rather than per-file Unresolved noise.
         assert!(has_node("package:os"), "expected package:os");
         assert!(
             has_node("package:__future__"),
             "expected package:__future__"
         );
         assert!(has_node("package:std"), "expected package:std");
-        assert!(has_node("package:Debug"), "expected package:Debug");
         assert!(
             !has_node("unresolved:os"),
             "os should not be Unresolved once classified as stdlib"
@@ -1862,10 +1850,6 @@ impl Debug for Foo {}
         assert!(
             !has_node("unresolved:std::collections::HashMap"),
             "std:: use path should not be Unresolved once classified as stdlib"
-        );
-        assert!(
-            !has_node("unresolved:Debug"),
-            "Debug should not be Unresolved once classified as a prelude type"
         );
 
         // Genuinely unknown third-party references still fall through to
@@ -1885,6 +1869,44 @@ impl Debug for Foo {}
                 .iter()
                 .any(|node| node.id().as_str().starts_with("unresolved:serde")),
             "third-party serde use path should remain Unresolved"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_impls_do_not_target_prelude_package_nodes() -> Result<(), Box<dyn std::error::Error>> {
+        let repo = tempfile::TempDir::new()?;
+        std::fs::write(
+            repo.path().join("lib.rs"),
+            "\
+struct Route;
+
+impl Drop for Route {
+    fn drop(&mut self) {}
+}
+",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(repo.path())?;
+        let graph = GraphBuilder.build(repo.path(), &artifacts);
+        let issues = GraphValidator.validate(&graph, &artifacts);
+
+        assert_eq!(issues, Vec::new());
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::Implements
+                    && relation.target.as_str() == "unresolved:Drop"),
+            "expected the external Drop trait to stay unresolved for Implements"
+        );
+        assert!(
+            !graph.relations.iter().any(|relation| {
+                relation.kind == RelationKind::Implements
+                    && relation.target.as_str() == "package:Drop"
+            }),
+            "Implements must not target package nodes"
         );
 
         Ok(())
