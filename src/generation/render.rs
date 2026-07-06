@@ -14,6 +14,8 @@ use std::path::{Path, PathBuf};
 pub enum RenderError {
     /// The generated page cited evidence not present in its context.
     EvidenceInvalid(Vec<EvidenceIssue>),
+    /// The rendered Markdown has invalid Mermaid fence structure.
+    MermaidInvalid(Vec<String>),
     /// Writing the rendered file failed.
     Io(std::io::Error),
 }
@@ -23,6 +25,13 @@ impl Display for RenderError {
         match self {
             Self::EvidenceInvalid(issues) => {
                 writeln!(formatter, "generated page failed evidence validation:")?;
+                for issue in issues {
+                    writeln!(formatter, "  - {issue}")?;
+                }
+                Ok(())
+            }
+            Self::MermaidInvalid(issues) => {
+                writeln!(formatter, "generated page failed Mermaid validation:")?;
                 for issue in issues {
                     writeln!(formatter, "  - {issue}")?;
                 }
@@ -75,18 +84,21 @@ impl PageRenderer {
             return Err(RenderError::EvidenceInvalid(issues));
         }
 
-        let output_hash = blake3::hash(generation.body.as_bytes())
-            .to_hex()
-            .to_string();
+        let rendered_body = body_with_source_evidence(generation, repo_root);
+        let mermaid_issues = validate_mermaid_fences(&rendered_body);
+        if !mermaid_issues.is_empty() {
+            return Err(RenderError::MermaidInvalid(mermaid_issues));
+        }
+        let output_hash = blake3::hash(rendered_body.as_bytes()).to_hex().to_string();
         let full_path = repo_root.join(&page.path);
 
         let unchanged =
-            std::fs::read_to_string(&full_path).is_ok_and(|existing| existing == generation.body);
+            std::fs::read_to_string(&full_path).is_ok_and(|existing| existing == rendered_body);
         if !unchanged {
             if let Some(parent) = full_path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::write(&full_path, &generation.body)?;
+            std::fs::write(&full_path, &rendered_body)?;
         }
 
         page.evidence = evidence_refs(generation);
@@ -98,6 +110,134 @@ impl PageRenderer {
             path: full_path,
         })
     }
+}
+
+fn body_with_source_evidence(generation: &PageGeneration, repo_root: &Path) -> String {
+    if generation.evidence_refs.is_empty() || generation.body.contains("## Source Evidence") {
+        return generation.body.clone();
+    }
+
+    let mut body = generation.body.trim_end().to_owned();
+    body.push_str("\n\n## Source Evidence\n");
+    let source_base = source_base_url(repo_root);
+    for reference in &generation.evidence_refs {
+        if let Some(url) = source_url(source_base.as_deref(), reference) {
+            body.push_str(&format!("- [`{reference}`]({url})\n"));
+        } else {
+            body.push_str(&format!("- `{reference}`\n"));
+        }
+    }
+    body
+}
+
+fn validate_mermaid_fences(body: &str) -> Vec<String> {
+    let mut issues = Vec::new();
+    let mut in_mermaid = false;
+    let mut block_start = 0usize;
+    let mut saw_body_line = false;
+
+    for (index, line) in body.lines().enumerate() {
+        let line_number = index + 1;
+        let trimmed = line.trim();
+        if !in_mermaid && trimmed.eq_ignore_ascii_case("```mermaid") {
+            in_mermaid = true;
+            block_start = line_number;
+            saw_body_line = false;
+            continue;
+        }
+        if in_mermaid && trimmed == "```" {
+            if !saw_body_line {
+                issues.push(format!(
+                    "Mermaid block starting at line {block_start} is empty"
+                ));
+            }
+            in_mermaid = false;
+            continue;
+        }
+        if in_mermaid && !trimmed.is_empty() {
+            saw_body_line = true;
+        }
+    }
+
+    if in_mermaid {
+        issues.push(format!(
+            "Mermaid block starting at line {block_start} is not closed"
+        ));
+    }
+    issues
+}
+
+fn source_base_url(repo_root: &Path) -> Option<String> {
+    let output = std::process::Command::new("git")
+        .args(["config", "--get", "remote.origin.url"])
+        .current_dir(repo_root)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let remote = String::from_utf8(output.stdout).ok()?;
+    let remote = remote.trim();
+    let normalized = normalize_git_remote(remote)?;
+    let head = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(repo_root)
+        .output()
+        .ok()
+        .and_then(|output| {
+            output
+                .status
+                .success()
+                .then(|| String::from_utf8(output.stdout).ok())
+                .flatten()
+        })
+        .map(|head| head.trim().to_owned())
+        .filter(|head| !head.is_empty())?;
+    Some(format!("{normalized}/blob/{head}"))
+}
+
+fn normalize_git_remote(remote: &str) -> Option<String> {
+    if let Some(rest) = remote.strip_prefix("git@github.com:") {
+        return Some(format!(
+            "https://github.com/{}",
+            rest.trim_end_matches(".git")
+        ));
+    }
+    if let Some(rest) = remote.strip_prefix("git@gitlab.com:") {
+        return Some(format!(
+            "https://gitlab.com/{}",
+            rest.trim_end_matches(".git")
+        ));
+    }
+    if (remote.starts_with("https://github.com/") || remote.starts_with("https://gitlab.com/"))
+        && !remote.contains(' ')
+    {
+        return Some(remote.trim_end_matches(".git").to_owned());
+    }
+    None
+}
+
+fn source_url(base: Option<&str>, reference: &str) -> Option<String> {
+    let base = base?;
+    let (path, fragment) = reference
+        .split_once('#')
+        .map_or((reference, None), |(path, fragment)| (path, Some(fragment)));
+    if path.is_empty()
+        || path.starts_with('/')
+        || path.contains("..")
+        || path.contains('\\')
+        || path.contains(' ')
+    {
+        return None;
+    }
+    let mut url = format!("{base}/{path}");
+    if let Some(fragment) = fragment
+        && fragment.starts_with('L')
+    {
+        url.push('#');
+        url.push_str(fragment);
+    }
+    Some(url)
 }
 
 fn evidence_refs(generation: &PageGeneration) -> Vec<EvidenceRef> {
@@ -129,7 +269,7 @@ fn parse_line_span(fragment: &str) -> Option<(u32, u32)> {
 
 #[cfg(test)]
 mod tests {
-    use super::PageRenderer;
+    use super::{PageRenderer, normalize_git_remote, source_url};
     use crate::domain::ModelExposurePolicy;
     use crate::generation::context::{ContextExcerpt, ModelContext};
     use crate::generation::llm::PageGeneration;
@@ -159,6 +299,8 @@ mod tests {
             evidence: Vec::new(),
             input_hash: "hash".to_owned(),
             output_hash: None,
+            prompt_version: "v1".to_owned(),
+            context_schema_version: TaskKind::ModulePage.context_schema_version().to_owned(),
         }
     }
 
@@ -188,7 +330,7 @@ mod tests {
         assert!(outcome.written);
         assert_eq!(
             std::fs::read_to_string(temp.path().join(&page.path))?,
-            "# Test\nbody\n"
+            "# Test\nbody\n\n## Source Evidence\n- `src/lib.rs#L1-L5`\n"
         );
         assert_eq!(
             page.output_hash.as_deref(),
@@ -251,5 +393,60 @@ mod tests {
         assert!(page.evidence.is_empty());
 
         Ok(())
+    }
+
+    #[test]
+    fn does_not_duplicate_existing_source_evidence_section()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        let mut page = page();
+
+        PageRenderer.render_and_write(
+            &mut page,
+            &generation(
+                "# Test\n\n## Source Evidence\n- `src/lib.rs`\n",
+                vec!["src/lib.rs"],
+            ),
+            &context(),
+            temp.path(),
+        )?;
+
+        let body = std::fs::read_to_string(temp.path().join(&page.path))?;
+        assert_eq!(body.matches("## Source Evidence").count(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_unclosed_mermaid_block_without_writing() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        let mut page = page();
+
+        let result = PageRenderer.render_and_write(
+            &mut page,
+            &generation("# Test\n\n```mermaid\nflowchart TD\n", vec![]),
+            &context(),
+            temp.path(),
+        );
+
+        assert!(matches!(result, Err(super::RenderError::MermaidInvalid(_))));
+        assert!(!temp.path().join(&page.path).exists());
+
+        Ok(())
+    }
+
+    #[test]
+    fn source_url_supports_common_git_remotes_and_line_fragments() {
+        let base = Some("https://github.com/example/repo/blob/abc123");
+
+        assert_eq!(
+            source_url(base, "src/lib.rs#L1-L5").as_deref(),
+            Some("https://github.com/example/repo/blob/abc123/src/lib.rs#L1-L5")
+        );
+        assert_eq!(
+            normalize_git_remote("git@github.com:owner/repo.git").as_deref(),
+            Some("https://github.com/owner/repo")
+        );
+        assert!(source_url(base, "../secret").is_none());
     }
 }

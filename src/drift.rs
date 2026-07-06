@@ -26,6 +26,10 @@ pub enum DriftKind {
     /// An inline-code token used near the word "service" does not match
     /// any current graph service.
     StaleServiceMention,
+    /// A documented fact contradicts the current graph, rather than merely
+    /// being absent from it -- e.g. an inline-code image reference names a
+    /// real, current image but with a tag that no longer matches.
+    ContradictsCurrentFact,
 }
 
 /// One likely-stale documentation fact.
@@ -104,10 +108,25 @@ impl DriftDetector {
             }
             for token in inline_code_tokens(&text) {
                 if is_image_like(token.text) && !known_images.contains(token.text) {
+                    // An unknown reference is either genuinely stale (no
+                    // current image with this name at all) or a
+                    // contradiction (the image is real and current, but the
+                    // documented tag no longer matches it) -- these are
+                    // different failure modes and get different kinds.
+                    let (kind, detail) = match matching_image_by_name(token.text, &known_images) {
+                        Some(actual) => (
+                            DriftKind::ContradictsCurrentFact,
+                            format!(
+                                "documented image `{}` does not match the current tag `{actual}`",
+                                token.text
+                            ),
+                        ),
+                        None => (DriftKind::StaleImageMention, token.text.to_owned()),
+                    };
                     findings.push(DriftFinding {
-                        kind: DriftKind::StaleImageMention,
+                        kind,
                         artifact_path: artifact.path.as_str().to_owned(),
-                        detail: token.text.to_owned(),
+                        detail,
                         evidence: EvidenceRef::file(
                             crate::domain::ArtifactId::from_path(&artifact.path),
                             artifact.path.clone(),
@@ -274,6 +293,29 @@ fn is_image_like(text: &str) -> bool {
     text.contains('/') && text.contains(':') && !text.contains(' ') && !text.starts_with("http")
 }
 
+/// The image name portion of `reference` (everything before the last `:`),
+/// e.g. `"ghcr.io/example/app"` from `"ghcr.io/example/app:v1"`.
+fn image_name(reference: &str) -> &str {
+    reference
+        .rsplit_once(':')
+        .map_or(reference, |(name, _)| name)
+}
+
+/// Finds a known image sharing `reference`'s name but a different tag --
+/// i.e. the same real, current image the documentation is trying to name,
+/// just with a stale tag -- distinguishing a tag contradiction from a
+/// genuinely unknown image (no match at all).
+fn matching_image_by_name<'a>(
+    reference: &str,
+    known_images: &BTreeSet<&'a str>,
+) -> Option<&'a str> {
+    let name = image_name(reference);
+    known_images
+        .iter()
+        .find(|image| image_name(image) == name)
+        .copied()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{DriftDetector, DriftKind};
@@ -368,6 +410,52 @@ The `ghost` service handles routing.
                 .findings
                 .iter()
                 .any(|finding| finding.kind == DriftKind::StaleServiceMention)
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn documented_image_tag_mismatch_is_a_contradiction_not_a_stale_mention()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("docker-compose.yml"),
+            "\
+services:
+  app:
+    image: ghcr.io/example/app:v2
+",
+        )?;
+        std::fs::write(
+            temp.path().join("README.md"),
+            "The app image is `ghcr.io/example/app:v1`.\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+        let report = DriftDetector.scan(&artifacts, &graph, temp.path());
+
+        let contradiction = report
+            .findings
+            .iter()
+            .find(|finding| finding.kind == DriftKind::ContradictsCurrentFact)
+            .ok_or_else(|| {
+                format!(
+                    "expected a contradiction finding, got {:#?}",
+                    report.findings
+                )
+            })?;
+        assert_eq!(
+            contradiction.detail,
+            "documented image `ghcr.io/example/app:v1` does not match the current tag `ghcr.io/example/app:v2`"
+        );
+        assert!(
+            !report
+                .findings
+                .iter()
+                .any(|finding| finding.kind == DriftKind::StaleImageMention),
+            "a name match with a different tag is a contradiction, not a stale mention"
         );
 
         Ok(())

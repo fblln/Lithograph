@@ -2,18 +2,25 @@
 
 pub mod agents;
 pub mod analysis;
+pub mod ask;
 pub mod cli;
 pub mod commands;
 pub mod domain;
 pub mod drift;
 pub mod generation;
+pub mod golden;
 pub mod graph;
 pub mod inventory;
 pub mod manifest;
+pub mod mcp;
+pub mod mermaid;
 pub mod orchestrate;
 pub mod plan;
+pub mod quality;
+pub mod research;
 pub mod run;
 pub mod storage;
+pub mod viewer;
 
 /// Runs the Lithograph command-line interface.
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {

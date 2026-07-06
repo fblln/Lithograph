@@ -6,17 +6,17 @@ use std::error::Error;
 
 const TABLE_SNAPSHOT: &str = "\
 kind            name            members  input_hash                                                        tokens
-Configuration   Configuration        21  3ff68e804254ecdf6acd55f7e90933d940df4ef0e9f453d6a1f4f755c11c8b9a     258
-Directory       assets                2  3029d94afd11745b29441c5ecd57daf06d7140c928d35bc44a3911eb472f769d      55
-Directory       data                  1  6b99ef6840a59c785d9f18965146b65ed88f2f225487b77007c2ef5e5cbb0227       7
-Directory       generated             3  af7c6864a5f8b357a9d86e0806a7739ea426ccbcceebf15fd1f4a462e06a3c40      32
-Directory       root                  6  d9b071b9e6f27ac2909415dc4c2590b2ba32e0fcab686075d2b79db574615771      68
-Directory       vendor                3  031399bb81b35a133503a3e11bf0af08d46a4064e5f34c019380e97d73812819      15
-Directory       web                   5  684e2e68e5213a8ace17ed654a9a177835e7045586aebf6808961cbcddf9379c     131
-Documentation   Documentation        13  072a11ff87434dd925fa9e1516a3e2271ed75b8cca6b7049bc82f65ac1584f09     945
-Infrastructure  Infrastructure       19  b504fade04dddb8d546b8a78b5e1a16e0692f96f8e34c926def164672be19873     335
-PythonPackage   python_app           16  e6b2ad1a1b9b13f6bb619843c76721d3af8d54ad49b5007add9f863090c72157     291
-RustCrate       fixture-worker       13  3326ff9d7b5b8c213d8e5329e3931e01e5fb4ad896fad50c7ca87ece04d4c69b     319
+Configuration   Configuration        21  3ff68e804254ecdf6acd55f7e90933d940df4ef0e9f453d6a1f4f755c11c8b9a     295
+Directory       assets                2  3029d94afd11745b29441c5ecd57daf06d7140c928d35bc44a3911eb472f769d      64
+Directory       data                  1  6b99ef6840a59c785d9f18965146b65ed88f2f225487b77007c2ef5e5cbb0227       9
+Directory       generated             3  af7c6864a5f8b357a9d86e0806a7739ea426ccbcceebf15fd1f4a462e06a3c40      37
+Directory       root                  6  d9b071b9e6f27ac2909415dc4c2590b2ba32e0fcab686075d2b79db574615771      78
+Directory       vendor                3  031399bb81b35a133503a3e11bf0af08d46a4064e5f34c019380e97d73812819      18
+Directory       web                   5  684e2e68e5213a8ace17ed654a9a177835e7045586aebf6808961cbcddf9379c     151
+Documentation   Documentation        13  072a11ff87434dd925fa9e1516a3e2271ed75b8cca6b7049bc82f65ac1584f09    1081
+Infrastructure  Infrastructure       19  b504fade04dddb8d546b8a78b5e1a16e0692f96f8e34c926def164672be19873     384
+PythonPackage   python_app           16  e6b2ad1a1b9b13f6bb619843c76721d3af8d54ad49b5007add9f863090c72157     333
+RustCrate       fixture-worker       14  3326ff9d7b5b8c213d8e5329e3931e01e5fb4ad896fad50c7ca87ece04d4c69b     365
 ";
 
 #[test]

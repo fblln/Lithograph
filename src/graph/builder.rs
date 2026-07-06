@@ -2,10 +2,15 @@
 //! output into one typed semantic graph.
 
 use crate::analysis::{
-    ActionsProfileAnalyzer, ActionsStepHint, CargoProfileAnalyzer, ComposeProfileAnalyzer,
-    ConfigReferenceKind, DockerfileAnalyzer, GenericTextExtractor, MarkdownAnalyzer,
-    PyProjectAnalyzer, PythonAnalyzer, PythonImportKind, PythonReferenceKind, RequirementsAnalyzer,
-    RustAnalyzer, StructuredAnalyzer, StructuredFormat, TextFindingKind, python, rust_source,
+    ActionsProfile, ActionsProfileAnalyzer, ActionsStepHint, AnalysisCache, AnalyzerKind,
+    AnalyzerOutput, CargoProfile, CargoProfileAnalyzer, ComposeProfile, ComposeProfileAnalyzer,
+    ConfigReferenceKind, DockerfileAnalysis, DockerfileAnalyzer, GenericTextExtractor,
+    MarkdownAnalysis, MarkdownAnalyzer, PyProjectAnalyzer, PyProjectProfile, PythonAnalysis,
+    PythonAnalyzer, PythonImportKind, PythonReferenceKind, RequirementsAnalyzer,
+    RequirementsProfile, RustAnalysis, RustAnalyzer, RustReferenceKind, RustWorkspaceAnalysis,
+    RustWorkspaceAnalyzer, StructuredAnalysis, StructuredAnalyzer, StructuredFormat, TextFinding,
+    TextFindingKind, is_python_stdlib_module, is_rust_prelude_type, python, rust_source,
+    rust_std_crate,
 };
 use crate::domain::{
     AnalyzerSelection, Artifact, ArtifactId, Confidence, EvidenceRef, ModelExposurePolicy,
@@ -29,9 +34,59 @@ impl GraphBuilder {
     /// safe text artifact's content as needed to run its selected analyzer.
     ///
     /// Every artifact gets an `Artifact` node regardless of analyzer support,
-    /// so unsupported artifacts remain visible in the graph.
+    /// so unsupported artifacts remain visible in the graph. Equivalent to
+    /// [`Self::build_with_cache`] with no cache, i.e. always parses fresh.
     pub fn build(&self, repo_root: &Path, artifacts: &[Artifact]) -> Graph {
+        self.build_with_cache(repo_root, artifacts, None)
+    }
+
+    /// Builds the graph exactly like [`Self::build`], except each artifact's
+    /// analyzer output is first looked up in `cache` (keyed by content hash)
+    /// before falling back to reading and parsing the file. A fresh parse is
+    /// written back to `cache` so a later run with the same content hash can
+    /// reuse it. The resulting graph is identical either way: only whether an
+    /// artifact's file is actually read and reparsed changes.
+    pub fn build_with_cache(
+        &self,
+        repo_root: &Path,
+        artifacts: &[Artifact],
+        cache: Option<&AnalysisCache>,
+    ) -> Graph {
         let mut state = BuilderState::new(artifacts);
+
+        // Resolve every Cargo manifest's real crate/target layout before
+        // indexing any Rust file's module, so `rust_module_path` has crate
+        // roots available for every file regardless of artifact walk order.
+        // `Cargo.toml` artifacts already dispatch to `AnalyzerKind::Cargo`
+        // for their raw TOML profile below; this is a second, independent
+        // analysis of the same artifact, cached under its own `AnalyzerKind`
+        // (the cache key is `(content_hash, kind)`, not content hash alone).
+        for artifact in artifacts {
+            if analyzer_kind(artifact) != Some(AnalyzerKind::Cargo) {
+                continue;
+            }
+            if artifact.text_status != TextStatus::Text
+                || artifact.model_policy == ModelExposurePolicy::Never
+            {
+                continue;
+            }
+            let workspace = match cache.and_then(|cache| {
+                cache.get(artifact.content_hash.as_str(), AnalyzerKind::RustWorkspace)
+            }) {
+                Some(AnalyzerOutput::RustWorkspace(analysis)) => analysis,
+                _ => {
+                    let fresh = RustWorkspaceAnalyzer.analyze(artifact, repo_root);
+                    if let Some(cache) = cache {
+                        cache.put(
+                            artifact.content_hash.as_str(),
+                            &AnalyzerOutput::RustWorkspace(fresh.clone()),
+                        );
+                    }
+                    fresh
+                }
+            };
+            state.register_rust_crate_roots(&workspace);
+        }
 
         for artifact in artifacts {
             state.add_artifact_node(artifact);
@@ -44,13 +99,135 @@ impl GraphBuilder {
             {
                 continue;
             }
-            let Ok(text) = fs::read_to_string(repo_root.join(artifact.path.as_str())) else {
+            let Some(kind) = analyzer_kind(artifact) else {
                 continue;
             };
-            state.process_artifact(artifact, &text, repo_root);
+            let mut output =
+                match cache.and_then(|cache| cache.get(artifact.content_hash.as_str(), kind)) {
+                    Some(cached) => cached,
+                    None => {
+                        let Ok(text) = fs::read_to_string(repo_root.join(artifact.path.as_str()))
+                        else {
+                            continue;
+                        };
+                        let fresh = compute_fresh(artifact, &text, repo_root, kind);
+                        if let Some(cache) = cache {
+                            cache.put(artifact.content_hash.as_str(), &fresh);
+                        }
+                        fresh
+                    }
+                };
+            // Existence depends on the whole repo's current file listing, not
+            // this artifact's own bytes, so it must be refreshed whether
+            // `output` came from cache or a fresh parse.
+            if let AnalyzerOutput::Markdown(analysis) = &mut output {
+                MarkdownAnalyzer::refresh_path_existence(analysis, repo_root, &artifact.path);
+            }
+            state.apply_output(artifact, output);
         }
 
         state.finish()
+    }
+}
+
+/// Returns the analyzer that would handle `artifact`, or `None` when no
+/// analyzer applies (binary/unsafe artifacts keep only their `Artifact` node).
+/// Mirrors the routing table every `process_artifact` call site used to
+/// dispatch on directly.
+fn analyzer_kind(artifact: &Artifact) -> Option<AnalyzerKind> {
+    let name = file_name(artifact.path.as_str());
+    match (&artifact.analyzer, artifact.detected_format.as_deref()) {
+        (AnalyzerSelection::Specialized(format), _) if format == "python" => {
+            Some(AnalyzerKind::Python)
+        }
+        (AnalyzerSelection::Specialized(format), _) if format == "rust" => Some(AnalyzerKind::Rust),
+        (AnalyzerSelection::Specialized(format), _) if format == "requirements-txt" => {
+            Some(AnalyzerKind::Requirements)
+        }
+        (AnalyzerSelection::Structured(format), _) if format == "dockerfile" => {
+            Some(AnalyzerKind::Dockerfile)
+        }
+        (AnalyzerSelection::Structured(format), _) if format == "markdown" => {
+            Some(AnalyzerKind::Markdown)
+        }
+        (AnalyzerSelection::Structured(format), _) if format == "docker-compose" => {
+            Some(AnalyzerKind::Compose)
+        }
+        (AnalyzerSelection::Structured(format), _) if format == "github-actions" => {
+            Some(AnalyzerKind::Actions)
+        }
+        (AnalyzerSelection::Structured(format), _) if format == "toml" && name == "Cargo.toml" => {
+            Some(AnalyzerKind::Cargo)
+        }
+        (AnalyzerSelection::Structured(format), _)
+            if format == "toml" && name == "pyproject.toml" =>
+        {
+            Some(AnalyzerKind::PyProject)
+        }
+        (AnalyzerSelection::Structured(format), _)
+            if matches!(format.as_str(), "yaml" | "json" | "toml") =>
+        {
+            Some(AnalyzerKind::Structured(structured_format(format)))
+        }
+        (AnalyzerSelection::GenericText, _) => Some(AnalyzerKind::GenericText),
+        _ => None,
+    }
+}
+
+fn structured_format(format: &str) -> StructuredFormat {
+    match format {
+        "yaml" => StructuredFormat::Yaml,
+        "json" => StructuredFormat::Json,
+        _ => StructuredFormat::Toml,
+    }
+}
+
+/// Runs the analyzer selected by `kind` against `text`, producing the same
+/// output a cache hit for this artifact's content hash would have returned.
+fn compute_fresh(
+    artifact: &Artifact,
+    text: &str,
+    repo_root: &Path,
+    kind: AnalyzerKind,
+) -> AnalyzerOutput {
+    match kind {
+        AnalyzerKind::Python => AnalyzerOutput::Python(PythonAnalyzer.analyze(artifact, text)),
+        AnalyzerKind::Rust => AnalyzerOutput::Rust(RustAnalyzer.analyze(artifact, text)),
+        AnalyzerKind::Requirements => {
+            AnalyzerOutput::Requirements(RequirementsAnalyzer.analyze(artifact, text))
+        }
+        AnalyzerKind::Dockerfile => {
+            AnalyzerOutput::Dockerfile(DockerfileAnalyzer.analyze(artifact, text))
+        }
+        AnalyzerKind::Markdown => {
+            AnalyzerOutput::Markdown(MarkdownAnalyzer.analyze(artifact, text, repo_root))
+        }
+        AnalyzerKind::Compose => {
+            AnalyzerOutput::Compose(ComposeProfileAnalyzer.analyze(artifact, text))
+        }
+        AnalyzerKind::Actions => {
+            AnalyzerOutput::Actions(ActionsProfileAnalyzer.analyze(artifact, text))
+        }
+        AnalyzerKind::Cargo => AnalyzerOutput::Cargo(CargoProfileAnalyzer.analyze(artifact, text)),
+        AnalyzerKind::PyProject => {
+            AnalyzerOutput::PyProject(PyProjectAnalyzer.analyze(artifact, text))
+        }
+        AnalyzerKind::Structured(format) => {
+            AnalyzerOutput::Structured(format, StructuredAnalyzer.analyze(artifact, text, format))
+        }
+        AnalyzerKind::GenericText => {
+            AnalyzerOutput::GenericText(GenericTextExtractor.extract(artifact, text))
+        }
+        // Not reachable via `analyzer_kind()` -- `Cargo.toml` artifacts
+        // already dispatch to `AnalyzerKind::Cargo` through this path, and
+        // `RustWorkspaceAnalyzer` is instead run from a dedicated pre-pass in
+        // `build_with_cache` (a `Cargo.toml` needs both outputs, but this
+        // per-artifact dispatch only ever selects one `AnalyzerKind`). This
+        // arm exists only so the shared enum match stays exhaustive and
+        // behaves consistently if that ever changes.
+        AnalyzerKind::RustWorkspace => {
+            AnalyzerOutput::RustWorkspace(RustWorkspaceAnalyzer.analyze(artifact, repo_root))
+        }
     }
 }
 
@@ -61,6 +238,12 @@ struct BuilderState {
     artifact_paths: BTreeSet<String>,
     python_modules: BTreeMap<String, GraphNodeId>,
     rust_modules: BTreeMap<String, GraphNodeId>,
+    /// Repository-relative source root directory of every known Cargo
+    /// build target (e.g. `"rust/src"` for a `rust/src/lib.rs` target),
+    /// resolved from `cargo metadata` via [`RustWorkspaceAnalyzer`]. Used to
+    /// compute a file's true crate-relative module path instead of
+    /// `rust_source::module_path`'s naive whole-repo-relative guess.
+    rust_crate_roots: BTreeSet<String>,
 }
 
 impl BuilderState {
@@ -75,6 +258,41 @@ impl BuilderState {
                 .collect(),
             python_modules: BTreeMap::new(),
             rust_modules: BTreeMap::new(),
+            rust_crate_roots: BTreeSet::new(),
+        }
+    }
+
+    /// Records each resolved Cargo target's source root directory, so
+    /// [`Self::rust_module_path`] can compute crate-relative module paths.
+    /// Safe to call more than once for the same workspace (a `BTreeSet`).
+    fn register_rust_crate_roots(&mut self, workspace: &RustWorkspaceAnalysis) {
+        for package in &workspace.packages {
+            for target in &package.targets {
+                if let Some((root, _file_name)) = target.path.rsplit_once('/') {
+                    self.rust_crate_roots.insert(root.to_owned());
+                }
+            }
+        }
+    }
+
+    /// Computes a Rust file's module path relative to the deepest known
+    /// Cargo target root directory that contains it, falling back to
+    /// `rust_source::module_path`'s naive whole-repo-relative guess when no
+    /// crate root is known (no `Cargo.toml` present, or `cargo metadata`
+    /// failed to resolve it) -- see `docs/dev/parser-spike-decisions.md`.
+    fn rust_module_path(&self, artifact_path: &str) -> String {
+        let matched_root = self
+            .rust_crate_roots
+            .iter()
+            .filter(|root| {
+                artifact_path
+                    .strip_prefix(root.as_str())
+                    .is_some_and(|rest| rest.starts_with('/'))
+            })
+            .max_by_key(|root| root.len());
+        match matched_root {
+            Some(root) => rust_source::module_path(&artifact_path[root.len() + 1..]),
+            None => rust_source::module_path(artifact_path),
         }
     }
 
@@ -124,7 +342,7 @@ impl BuilderState {
                 self.python_modules.insert(module_path, id);
             }
             Some("rust") => {
-                let module_path = rust_source::module_path(artifact.path.as_str());
+                let module_path = self.rust_module_path(artifact.path.as_str());
                 let id = self.module(&module_path, ModuleLanguage::Rust, file_evidence(artifact));
                 self.rust_modules.insert(module_path, id);
             }
@@ -191,6 +409,19 @@ impl BuilderState {
         }))
     }
 
+    /// Resolves a Python import target that didn't match a project module:
+    /// a known stdlib module becomes a shared external `Package` node (one
+    /// per module name, deduplicated across the whole repo) instead of a
+    /// per-file `Unresolved` node.
+    fn python_external_target(&mut self, dotted_name: &str) -> GraphNodeId {
+        if is_python_stdlib_module(dotted_name) {
+            let top_level = dotted_name.split('.').next().unwrap_or(dotted_name);
+            self.package(top_level, true)
+        } else {
+            self.unresolved(dotted_name)
+        }
+    }
+
     fn config(
         &mut self,
         artifact: &Artifact,
@@ -223,61 +454,40 @@ impl BuilderState {
         }
     }
 
-    fn process_artifact(&mut self, artifact: &Artifact, text: &str, repo_root: &Path) {
+    /// Dispatches an already-computed analyzer output (fresh or cache-loaded)
+    /// to the matching graph-resolution method.
+    fn apply_output(&mut self, artifact: &Artifact, output: AnalyzerOutput) {
         let node = artifact_node_id(artifact);
-        let name = file_name(artifact.path.as_str());
-
-        match (&artifact.analyzer, artifact.detected_format.as_deref()) {
-            (AnalyzerSelection::Specialized(format), _) if format == "python" => {
-                self.process_python(artifact, text, &node);
+        match output {
+            AnalyzerOutput::Python(analysis) => self.process_python(artifact, analysis, &node),
+            AnalyzerOutput::Rust(analysis) => self.process_rust(artifact, analysis, &node),
+            AnalyzerOutput::Requirements(profile) => {
+                self.process_requirements(profile, &node);
             }
-            (AnalyzerSelection::Specialized(format), _) if format == "rust" => {
-                self.process_rust(artifact, text, &node);
+            AnalyzerOutput::Dockerfile(analysis) => {
+                self.process_dockerfile(artifact, analysis, &node);
             }
-            (AnalyzerSelection::Specialized(format), _) if format == "requirements-txt" => {
-                self.process_requirements(artifact, text, &node);
+            AnalyzerOutput::Markdown(analysis) => self.process_markdown(artifact, analysis, &node),
+            AnalyzerOutput::Compose(profile) => self.process_compose(artifact, profile, &node),
+            AnalyzerOutput::Actions(profile) => self.process_actions(artifact, profile, &node),
+            AnalyzerOutput::Cargo(profile) => self.process_cargo(profile, &node),
+            AnalyzerOutput::PyProject(profile) => self.process_pyproject(profile, &node),
+            AnalyzerOutput::Structured(_, analysis) => {
+                self.process_structured(artifact, analysis, &node);
             }
-            (AnalyzerSelection::Structured(format), _) if format == "dockerfile" => {
-                self.process_dockerfile(artifact, text, &node);
+            AnalyzerOutput::GenericText(findings) => {
+                self.process_generic_text(artifact, &findings, &node);
             }
-            (AnalyzerSelection::Structured(format), _) if format == "markdown" => {
-                self.process_markdown(artifact, text, repo_root, &node);
-            }
-            (AnalyzerSelection::Structured(format), _) if format == "docker-compose" => {
-                self.process_compose(artifact, text, &node);
-            }
-            (AnalyzerSelection::Structured(format), _) if format == "github-actions" => {
-                self.process_actions(artifact, text, &node);
-            }
-            (AnalyzerSelection::Structured(format), _)
-                if format == "toml" && name == "Cargo.toml" =>
-            {
-                self.process_cargo(artifact, text, &node);
-            }
-            (AnalyzerSelection::Structured(format), _)
-                if format == "toml" && name == "pyproject.toml" =>
-            {
-                self.process_pyproject(artifact, text, &node);
-            }
-            (AnalyzerSelection::Structured(format), _)
-                if matches!(format.as_str(), "yaml" | "json" | "toml") =>
-            {
-                let format = match format.as_str() {
-                    "yaml" => StructuredFormat::Yaml,
-                    "json" => StructuredFormat::Json,
-                    _ => StructuredFormat::Toml,
-                };
-                self.process_structured(artifact, text, format, &node);
-            }
-            (AnalyzerSelection::GenericText, _) => {
-                self.process_generic_text(artifact, text, &node);
-            }
-            _ => {}
+            AnalyzerOutput::RustWorkspace(analysis) => self.register_rust_crate_roots(&analysis),
         }
     }
 
-    fn process_python(&mut self, artifact: &Artifact, text: &str, artifact_node: &GraphNodeId) {
-        let analysis = PythonAnalyzer.analyze(artifact, text);
+    fn process_python(
+        &mut self,
+        artifact: &Artifact,
+        analysis: PythonAnalysis,
+        artifact_node: &GraphNodeId,
+    ) {
         let module_id = self
             .python_modules
             .get(&analysis.module_path)
@@ -386,7 +596,7 @@ impl BuilderState {
                         .python_modules
                         .get(&name.name)
                         .cloned()
-                        .unwrap_or_else(|| self.unresolved(&name.name));
+                        .unwrap_or_else(|| self.python_external_target(&name.name));
                     self.relate(
                         artifact_node.clone(),
                         target,
@@ -406,15 +616,21 @@ impl BuilderState {
                 let target = resolved
                     .as_ref()
                     .and_then(|resolved| self.python_modules.get(resolved).cloned())
-                    .unwrap_or_else(|| {
-                        let marker = resolved.unwrap_or_else(|| {
-                            format!(
-                                "{}{}",
-                                ".".repeat(import.relative_level as usize),
-                                import.module.clone().unwrap_or_default()
-                            )
-                        });
-                        self.unresolved(&marker)
+                    .unwrap_or_else(|| match (import.relative_level, &resolved) {
+                        // Only an absolute (non-relative) import can ever name
+                        // a stdlib module, so relative imports always fall
+                        // through to the marker/unresolved path below.
+                        (0, Some(module)) => self.python_external_target(module),
+                        _ => {
+                            let marker = resolved.clone().unwrap_or_else(|| {
+                                format!(
+                                    "{}{}",
+                                    ".".repeat(import.relative_level as usize),
+                                    import.module.clone().unwrap_or_default()
+                                )
+                            });
+                            self.unresolved(&marker)
+                        }
                     });
                 self.relate(
                     artifact_node.clone(),
@@ -511,18 +727,23 @@ impl BuilderState {
         }
     }
 
-    fn process_rust(&mut self, artifact: &Artifact, text: &str, artifact_node: &GraphNodeId) {
-        let analysis = RustAnalyzer.analyze(artifact, text);
+    fn process_rust(
+        &mut self,
+        artifact: &Artifact,
+        analysis: RustAnalysis,
+        artifact_node: &GraphNodeId,
+    ) {
+        // `RustAnalyzer` only sees this one file's own path, so its
+        // `analysis.module_path` is always the naive whole-repo-relative
+        // guess; the graph builder has the cross-artifact `cargo metadata`
+        // knowledge needed to correct it, via `rust_module_path`.
+        let module_path = self.rust_module_path(artifact.path.as_str());
         let module_id = self
             .rust_modules
-            .get(&analysis.module_path)
+            .get(&module_path)
             .cloned()
             .unwrap_or_else(|| {
-                self.module(
-                    &analysis.module_path,
-                    ModuleLanguage::Rust,
-                    file_evidence(artifact),
-                )
+                self.module(&module_path, ModuleLanguage::Rust, file_evidence(artifact))
             });
         self.relate(
             artifact_node.clone(),
@@ -541,7 +762,7 @@ impl BuilderState {
             .chain(analysis.enums.iter().map(|item| (item, SymbolKind::Enum)))
         {
             let (item, kind) = item;
-            let qualified = format!("{}::{}", analysis.module_path, item.name);
+            let qualified = format!("{module_path}::{}", item.name);
             let id = self.insert(GraphNode::Symbol(SymbolNode {
                 id: GraphNodeId::new(format!("symbol:{}#{qualified}", artifact.path)),
                 kind,
@@ -560,7 +781,7 @@ impl BuilderState {
         }
 
         for trait_item in &analysis.traits {
-            let qualified = format!("{}::{}", analysis.module_path, trait_item.name);
+            let qualified = format!("{module_path}::{}", trait_item.name);
             let id = self.insert(GraphNode::Symbol(SymbolNode {
                 id: GraphNodeId::new(format!("symbol:{}#{qualified}", artifact.path)),
                 kind: SymbolKind::Trait,
@@ -579,7 +800,7 @@ impl BuilderState {
         }
 
         for function in &analysis.functions {
-            let qualified = format!("{}::{}", analysis.module_path, function.name);
+            let qualified = format!("{module_path}::{}", function.name);
             let id = self.insert(GraphNode::Symbol(SymbolNode {
                 id: GraphNodeId::new(format!("symbol:{}#{qualified}", artifact.path)),
                 kind: SymbolKind::Function,
@@ -603,11 +824,11 @@ impl BuilderState {
             let source = symbol_ids
                 .get(&imp.target_type)
                 .cloned()
-                .unwrap_or_else(|| self.unresolved(&imp.target_type));
+                .unwrap_or_else(|| self.rust_external_type_target(&imp.target_type));
             let target = symbol_ids
                 .get(trait_name)
                 .cloned()
-                .unwrap_or_else(|| self.unresolved(trait_name));
+                .unwrap_or_else(|| self.rust_external_type_target(trait_name));
             self.relate(
                 source,
                 target,
@@ -623,7 +844,10 @@ impl BuilderState {
                 .rust_modules
                 .get(candidate)
                 .cloned()
-                .unwrap_or_else(|| self.unresolved(&use_.path));
+                .unwrap_or_else(|| match rust_std_crate(candidate) {
+                    Some(crate_name) => self.package(crate_name, true),
+                    None => self.unresolved(&use_.path),
+                });
             self.relate(
                 artifact_node.clone(),
                 target,
@@ -632,11 +856,69 @@ impl BuilderState {
                 vec![use_.evidence.clone()],
             );
         }
+
+        for reference in &analysis.references {
+            self.process_rust_reference(artifact, artifact_node, reference);
+        }
     }
 
-    fn process_dockerfile(&mut self, artifact: &Artifact, text: &str, artifact_node: &GraphNodeId) {
-        let analysis = DockerfileAnalyzer.analyze(artifact, text);
+    fn process_rust_reference(
+        &mut self,
+        artifact: &Artifact,
+        artifact_node: &GraphNodeId,
+        reference: &crate::analysis::RustReference,
+    ) {
+        match reference.kind {
+            RustReferenceKind::EnvRead => {
+                let target = self.env_var(&reference.value);
+                self.relate(
+                    artifact_node.clone(),
+                    target,
+                    RelationKind::ReadsEnv,
+                    reference.confidence,
+                    vec![reference.evidence.clone()],
+                );
+            }
+            RustReferenceKind::Subprocess => {
+                let key = format!(
+                    "{}",
+                    reference
+                        .evidence
+                        .span
+                        .as_ref()
+                        .map(|span| span.start_line)
+                        .unwrap_or(0)
+                );
+                let target =
+                    self.command(artifact, &key, &reference.value, reference.evidence.clone());
+                self.relate(
+                    artifact_node.clone(),
+                    target,
+                    RelationKind::RunsCommand,
+                    reference.confidence,
+                    vec![reference.evidence.clone()],
+                );
+            }
+        }
+    }
 
+    /// Resolves a Rust type/trait name that didn't match a same-file symbol:
+    /// a well-known prelude type/trait becomes a shared external `Package`
+    /// node instead of a per-file `Unresolved` node.
+    fn rust_external_type_target(&mut self, name: &str) -> GraphNodeId {
+        if is_rust_prelude_type(name) {
+            self.package(name, true)
+        } else {
+            self.unresolved(name)
+        }
+    }
+
+    fn process_dockerfile(
+        &mut self,
+        artifact: &Artifact,
+        analysis: DockerfileAnalysis,
+        artifact_node: &GraphNodeId,
+    ) {
         for stage in &analysis.stages {
             let target = self.image(&stage.image);
             self.relate(
@@ -673,12 +955,9 @@ impl BuilderState {
     fn process_markdown(
         &mut self,
         artifact: &Artifact,
-        text: &str,
-        repo_root: &Path,
+        analysis: MarkdownAnalysis,
         artifact_node: &GraphNodeId,
     ) {
-        let analysis = MarkdownAnalyzer.analyze(artifact, text, repo_root);
-
         for heading in &analysis.headings {
             let key = heading
                 .evidence
@@ -759,12 +1038,9 @@ impl BuilderState {
     fn process_structured(
         &mut self,
         artifact: &Artifact,
-        text: &str,
-        format: StructuredFormat,
+        analysis: StructuredAnalysis,
         artifact_node: &GraphNodeId,
     ) {
-        let analysis = StructuredAnalyzer.analyze(artifact, text, format);
-
         for reference in &analysis.references {
             match reference.kind {
                 ConfigReferenceKind::Path | ConfigReferenceKind::Url => {
@@ -848,8 +1124,7 @@ impl BuilderState {
         }
     }
 
-    fn process_cargo(&mut self, artifact: &Artifact, text: &str, artifact_node: &GraphNodeId) {
-        let profile = CargoProfileAnalyzer.analyze(artifact, text);
+    fn process_cargo(&mut self, profile: CargoProfile, artifact_node: &GraphNodeId) {
         let Some(package) = &profile.package else {
             return;
         };
@@ -874,8 +1149,7 @@ impl BuilderState {
         }
     }
 
-    fn process_pyproject(&mut self, artifact: &Artifact, text: &str, artifact_node: &GraphNodeId) {
-        let profile = PyProjectAnalyzer.analyze(artifact, text);
+    fn process_pyproject(&mut self, profile: PyProjectProfile, artifact_node: &GraphNodeId) {
         let Some(project) = &profile.project else {
             return;
         };
@@ -901,13 +1175,7 @@ impl BuilderState {
         }
     }
 
-    fn process_requirements(
-        &mut self,
-        artifact: &Artifact,
-        text: &str,
-        artifact_node: &GraphNodeId,
-    ) {
-        let profile = RequirementsAnalyzer.analyze(artifact, text);
+    fn process_requirements(&mut self, profile: RequirementsProfile, artifact_node: &GraphNodeId) {
         for requirement in &profile.requirements {
             let dependency_id = self.package(&requirement.name, true);
             self.relate(
@@ -920,8 +1188,12 @@ impl BuilderState {
         }
     }
 
-    fn process_compose(&mut self, artifact: &Artifact, text: &str, artifact_node: &GraphNodeId) {
-        let profile = ComposeProfileAnalyzer.analyze(artifact, text);
+    fn process_compose(
+        &mut self,
+        artifact: &Artifact,
+        profile: ComposeProfile,
+        artifact_node: &GraphNodeId,
+    ) {
         for service in &profile.services {
             let key = format!("services.{}", service.name);
             let service_id = self.config(
@@ -980,8 +1252,12 @@ impl BuilderState {
         }
     }
 
-    fn process_actions(&mut self, artifact: &Artifact, text: &str, artifact_node: &GraphNodeId) {
-        let profile = ActionsProfileAnalyzer.analyze(artifact, text);
+    fn process_actions(
+        &mut self,
+        artifact: &Artifact,
+        profile: ActionsProfile,
+        artifact_node: &GraphNodeId,
+    ) {
         for job in &profile.jobs {
             let key = format!("jobs.{}", job.id);
             let job_id = self.config(
@@ -1057,11 +1333,10 @@ impl BuilderState {
     fn process_generic_text(
         &mut self,
         artifact: &Artifact,
-        text: &str,
+        findings: &[TextFinding],
         artifact_node: &GraphNodeId,
     ) {
-        let findings = GenericTextExtractor.extract(artifact, text);
-        for finding in &findings {
+        for finding in findings {
             let evidence = generic_finding_evidence(artifact, finding.line);
             match finding.kind {
                 TextFindingKind::EnvironmentVariable => {
@@ -1198,12 +1473,127 @@ fn file_name(path: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::GraphBuilder;
+    use crate::analysis::AnalysisCache;
     use crate::graph::{GraphNode, RelationKind};
     use crate::inventory::{RepositoryWalker, WalkOptions};
     use std::path::Path;
 
     fn fixture_root() -> std::path::PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot")
+    }
+
+    fn copy_dir(from: &Path, to: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        for entry in walk_files(from)? {
+            let relative = entry.strip_prefix(from)?;
+            let destination = to.join(relative);
+            if let Some(parent) = destination.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::copy(&entry, &destination)?;
+        }
+        Ok(())
+    }
+
+    fn walk_files(root: &Path) -> Result<Vec<std::path::PathBuf>, Box<dyn std::error::Error>> {
+        let mut files = Vec::new();
+        let mut stack = vec![root.to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else {
+                    files.push(path);
+                }
+            }
+        }
+        Ok(files)
+    }
+
+    #[test]
+    fn build_with_cache_none_matches_build() -> Result<(), Box<dyn std::error::Error>> {
+        let root = fixture_root();
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
+
+        let via_build = GraphBuilder.build(&root, &artifacts);
+        let via_build_with_cache = GraphBuilder.build_with_cache(&root, &artifacts, None);
+
+        assert_eq!(via_build, via_build_with_cache);
+
+        Ok(())
+    }
+
+    #[test]
+    fn mixed_cache_hit_and_miss_matches_a_fully_fresh_rebuild()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let repo = tempfile::TempDir::new()?;
+        copy_dir(&fixture_root(), repo.path())?;
+        let cache_dir = tempfile::TempDir::new()?;
+        let cache = AnalysisCache::new(cache_dir.path());
+
+        let before_artifacts = RepositoryWalker::new(WalkOptions::default()).walk(repo.path())?;
+        // Populates one cache entry per analyzable artifact.
+        GraphBuilder.build_with_cache(repo.path(), &before_artifacts, Some(&cache));
+        let misses_after_populating = cache.misses();
+
+        let lib_rs = repo.path().join("rust/src/lib.rs");
+        let mut source = std::fs::read_to_string(&lib_rs)?;
+        source.push_str("\n// a deliberate one-file change\n");
+        std::fs::write(&lib_rs, source)?;
+
+        let after_artifacts = RepositoryWalker::new(WalkOptions::default()).walk(repo.path())?;
+        let mixed = GraphBuilder.build_with_cache(repo.path(), &after_artifacts, Some(&cache));
+        // Every artifact except the mutated one should have been served from
+        // cache: exactly one miss since the cache was populated.
+        assert_eq!(cache.misses() - misses_after_populating, 1);
+
+        let fresh = GraphBuilder.build(repo.path(), &after_artifacts);
+
+        assert_eq!(mixed, fresh);
+        assert_eq!(mixed.to_json()?, fresh.to_json()?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn cache_hit_still_refreshes_markdown_path_existence() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let repo = tempfile::TempDir::new()?;
+        copy_dir(&fixture_root(), repo.path())?;
+        // Plain prose (no Markdown link syntax) so this only populates
+        // `source_paths`, not `links` -- `links` resolves live against the
+        // current artifact set regardless of caching, so a link here
+        // wouldn't exercise the `source_paths[].exists` staleness this test
+        // is checking for.
+        std::fs::write(
+            repo.path().join("README.md"),
+            "# Fixture\n\nSee not-yet-created.md for details.\n",
+        )?;
+        let cache_dir = tempfile::TempDir::new()?;
+        let cache = AnalysisCache::new(cache_dir.path());
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(repo.path())?;
+        // Populates the cache with README.md's analysis while the reference
+        // is still dangling.
+        GraphBuilder.build_with_cache(repo.path(), &artifacts, Some(&cache));
+
+        std::fs::write(repo.path().join("not-yet-created.md"), "# Now it exists\n")?;
+        // README.md's own bytes are unchanged, so this rebuild must hit the
+        // cache for it -- proving existence is still refreshed on a hit.
+        let rebuilt_artifacts = RepositoryWalker::new(WalkOptions::default()).walk(repo.path())?;
+        let graph = GraphBuilder.build_with_cache(repo.path(), &rebuilt_artifacts, Some(&cache));
+
+        let resolved = graph.relations.iter().any(|relation| {
+            relation.source.as_str() == "artifact:README.md"
+                && relation.target.as_str() == "artifact:not-yet-created.md"
+        });
+        assert!(
+            resolved,
+            "expected the newly-created target to resolve from a cache-hit analysis"
+        );
+
+        Ok(())
     }
 
     #[test]
@@ -1373,6 +1763,128 @@ mod tests {
                 .iter()
                 .any(|relation| relation.kind == RelationKind::DependsOnPackage
                     && relation.target.as_str() == "package:anyhow")
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_module_paths_are_corrected_by_cargo_metadata_crate_roots()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Before RustWorkspaceAnalyzer was wired in, `rust_source::module_path`
+        // treated the whole repo-relative path as the module path, so
+        // `rust/src/lib.rs` (the crate root, per `cargo_metadata`) wrongly
+        // became module `rust::src` and `rust/src/bin/worker.rs` (its own
+        // binary target root) wrongly became `rust::src::bin::worker`.
+        let root = fixture_root();
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
+        let graph = GraphBuilder.build(&root, &artifacts);
+
+        let has_node = |id: &str| graph.nodes.iter().any(|node| node.id().as_str() == id);
+
+        assert!(
+            has_node("module:"),
+            "expected the lib target's crate root to map to the empty module path"
+        );
+        assert!(
+            has_node("module:worker"),
+            "expected the bin target's own root to map to just its target name"
+        );
+        assert!(
+            !has_node("module:rust::src"),
+            "the old naive whole-path module id must no longer appear"
+        );
+        assert!(
+            !has_node("module:rust::src::bin::worker"),
+            "the old naive whole-path module id must no longer appear"
+        );
+
+        let lib_belongs_to_root = graph.relations.iter().any(|relation| {
+            relation.kind == RelationKind::BelongsToModule
+                && relation.source.as_str() == "artifact:rust/src/lib.rs"
+                && relation.target.as_str() == "module:"
+        });
+        assert!(lib_belongs_to_root);
+
+        Ok(())
+    }
+
+    #[test]
+    fn stdlib_and_prelude_references_become_external_packages_not_unresolved()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let repo = tempfile::TempDir::new()?;
+        std::fs::write(
+            repo.path().join("app.py"),
+            "\
+import os
+import requests
+from __future__ import annotations
+
+def run():
+    os.getenv(\"HOME\")
+",
+        )?;
+        std::fs::write(
+            repo.path().join("lib.rs"),
+            "\
+use std::collections::HashMap;
+use core::fmt::Debug;
+use serde::Serialize;
+
+struct Foo;
+
+impl Debug for Foo {}
+",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(repo.path())?;
+        let graph = GraphBuilder.build(repo.path(), &artifacts);
+
+        let has_node = |id: &str| graph.nodes.iter().any(|node| node.id().as_str() == id);
+
+        // Known stdlib/prelude references resolve to shared external Package
+        // nodes rather than per-file Unresolved noise.
+        assert!(has_node("package:os"), "expected package:os");
+        assert!(
+            has_node("package:__future__"),
+            "expected package:__future__"
+        );
+        assert!(has_node("package:std"), "expected package:std");
+        assert!(has_node("package:Debug"), "expected package:Debug");
+        assert!(
+            !has_node("unresolved:os"),
+            "os should not be Unresolved once classified as stdlib"
+        );
+        assert!(
+            !has_node("unresolved:__future__"),
+            "__future__ should not be Unresolved once classified as stdlib"
+        );
+        assert!(
+            !has_node("unresolved:std::collections::HashMap"),
+            "std:: use path should not be Unresolved once classified as stdlib"
+        );
+        assert!(
+            !has_node("unresolved:Debug"),
+            "Debug should not be Unresolved once classified as a prelude type"
+        );
+
+        // Genuinely unknown third-party references still fall through to
+        // Unresolved -- this is a classification split, not a blanket
+        // silencer of every import.
+        assert!(
+            has_node("unresolved:requests"),
+            "third-party requests import should remain Unresolved"
+        );
+        assert!(
+            !has_node("package:requests"),
+            "third-party requests import must not be misclassified as stdlib"
+        );
+        assert!(
+            graph
+                .nodes
+                .iter()
+                .any(|node| node.id().as_str().starts_with("unresolved:serde")),
+            "third-party serde use path should remain Unresolved"
         );
 
         Ok(())

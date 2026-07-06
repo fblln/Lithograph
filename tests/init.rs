@@ -23,12 +23,31 @@ fn init_writes_docs_and_manifest_for_the_fixture() -> Result<(), Box<dyn Error>>
     assert!(output.contains("modules:"));
     assert!(output.contains("pages written:"));
     assert!(output.contains("changed artifacts:"));
-    assert!(temp.path().join("docs/lithograph/quickstart.md").exists());
-    assert!(temp.path().join("docs/lithograph/architecture.md").exists());
+    assert!(output.contains("reanalyzed artifacts:"));
+    for page in [
+        "overview.md",
+        "quickstart.md",
+        "architecture.md",
+        "workflows.md",
+        "boundaries.md",
+        "configuration.md",
+    ] {
+        assert!(
+            temp.path().join("docs/lithograph").join(page).exists(),
+            "{page}"
+        );
+    }
     assert!(temp.path().join(".lithograph/graph.json").exists());
     assert!(temp.path().join(".lithograph/manifest.json").exists());
     assert!(temp.path().join(".lithograph/snapshot.json").exists());
     assert!(temp.path().join(".lithograph/run.json").exists());
+    assert!(temp.path().join(".lithograph/cache/analysis").is_dir());
+    assert!(temp.path().join(".lithograph/research/brief.json").exists());
+    assert!(
+        temp.path()
+            .join(".lithograph/research/key-modules.json")
+            .exists()
+    );
 
     let run_json = std::fs::read_to_string(temp.path().join(".lithograph/run.json"))?;
     assert!(run_json.contains("\"command\": \"init\""));

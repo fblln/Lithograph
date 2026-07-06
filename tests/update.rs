@@ -25,6 +25,7 @@ fn update_after_init_is_a_no_op_then_regenerates_after_a_change() -> Result<(), 
     let no_op_output = String::from_utf8(no_op.get_output().stdout.clone())?;
     assert!(no_op_output.contains("pages regenerated: 0"));
     assert!(no_op_output.contains("changed artifacts: 0"));
+    assert!(no_op_output.contains("reanalyzed artifacts: 0"));
 
     let readme = temp.path().join("README.md");
     let mut content = std::fs::read_to_string(&readme)?;
@@ -37,6 +38,7 @@ fn update_after_init_is_a_no_op_then_regenerates_after_a_change() -> Result<(), 
         .success();
     let changed_output = String::from_utf8(changed.get_output().stdout.clone())?;
     assert!(changed_output.contains("changed artifacts: 1"));
+    assert!(changed_output.contains("reanalyzed artifacts: 1"));
     assert!(!changed_output.contains("pages regenerated: 0"));
 
     Ok(())

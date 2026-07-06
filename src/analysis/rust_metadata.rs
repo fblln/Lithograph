@@ -98,6 +98,16 @@ impl RustWorkspaceAnalyzer {
             return RustWorkspaceAnalysis::default();
         }
 
+        // `cargo metadata` always reports canonicalized absolute paths
+        // (symlinks resolved, `.`/`..` collapsed) regardless of what path
+        // `--manifest-path` was given. `repo_relative` strips `repo_root` as
+        // a literal prefix, so `repo_root` itself must be canonicalized the
+        // same way first -- otherwise a relative or non-canonical
+        // `repo_root` (the common case for CLI-supplied paths) never
+        // matches, and every path silently falls back to the raw absolute
+        // form instead of a repository-relative one.
+        let repo_root =
+            std::fs::canonicalize(repo_root).unwrap_or_else(|_| repo_root.to_path_buf());
         let manifest_path = repo_root.join(artifact.path.as_str());
         match cargo_metadata::MetadataCommand::new()
             .manifest_path(&manifest_path)
@@ -108,7 +118,7 @@ impl RustWorkspaceAnalyzer {
                 packages: metadata
                     .packages
                     .iter()
-                    .map(|package| build_package(artifact, repo_root, package))
+                    .map(|package| build_package(artifact, &repo_root, package))
                     .collect(),
                 error: None,
             },
@@ -238,6 +248,33 @@ mod tests {
             .find(|dependency| dependency.name == "anyhow")
             .ok_or("anyhow dependency")?;
         assert_eq!(dependency.kind, RustDependencyKind::Normal);
+
+        Ok(())
+    }
+
+    #[test]
+    fn resolves_targets_repo_relative_even_when_repo_root_is_not_canonical()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // `cargo metadata` always reports canonicalized absolute paths, so a
+        // non-canonical (here, plain relative) `repo_root` must still
+        // produce repository-relative target paths, not the raw absolute
+        // paths cargo_metadata resolved internally. `cargo test` runs with
+        // the crate root as the current directory, so this relative path
+        // resolves to the same fixture as `fixture_root()`.
+        let artifact = manifest_artifact("rust/Cargo.toml")?;
+        let relative_root = Path::new("fixtures/polyglot");
+
+        let analysis = RustWorkspaceAnalyzer.analyze(&artifact, relative_root);
+
+        assert!(analysis.error.is_none());
+        let package = &analysis.packages[0];
+        assert_eq!(package.manifest_path, "rust/Cargo.toml");
+        let lib = package
+            .targets
+            .iter()
+            .find(|target| target.kinds.iter().any(|kind| kind == "lib"))
+            .ok_or("lib target")?;
+        assert_eq!(lib.path, "rust/src/lib.rs");
 
         Ok(())
     }

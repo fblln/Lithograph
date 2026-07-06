@@ -1,6 +1,8 @@
 //! Repository analysis primitives.
 
+pub mod cache;
 pub mod dockerfile;
+pub mod external_symbols;
 pub mod generic_text;
 pub mod markdown;
 pub mod profiles;
@@ -9,10 +11,13 @@ pub mod rust_metadata;
 pub mod rust_source;
 pub mod structured;
 
+pub use cache::{AnalysisCache, AnalyzerKind, AnalyzerOutput};
 pub use dockerfile::{
     DockerCommand, DockerCommandKind, DockerCopy, DockerEnv, DockerInstruction,
-    DockerInstructionKind, DockerPort, DockerStage, DockerfileAnalysis, DockerfileAnalyzer,
+    DockerInstructionKind, DockerPort, DockerSingleValue, DockerStage, DockerfileAnalysis,
+    DockerfileAnalyzer,
 };
+pub use external_symbols::{is_python_stdlib_module, is_rust_prelude_type, rust_std_crate};
 pub use generic_text::{FindingConfidence, GenericTextExtractor, TextFinding, TextFindingKind};
 pub use markdown::{
     CodeFence, DriftKind, LinkKind, MarkdownAnalysis, MarkdownAnalyzer, MarkdownCommand,
@@ -36,7 +41,7 @@ pub use rust_metadata::{
 };
 pub use rust_source::{
     RustAnalysis, RustAnalyzer, RustFunction, RustImpl, RustItem, RustMacroInvocation,
-    RustModDeclaration, RustTrait, RustUse,
+    RustModDeclaration, RustReference, RustReferenceKind, RustTrait, RustUse,
 };
 pub use structured::{
     ConfigEntity, ConfigReference, ConfigReferenceKind, StructuredAnalysis, StructuredAnalyzer,

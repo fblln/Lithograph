@@ -5,7 +5,7 @@ use crate::domain::{
     Artifact, ArtifactId, Confidence, EvidenceRef, ModelExposurePolicy, SourceSpan, TextStatus,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use tree_sitter::Node;
 
 /// Deep Python analysis output for one artifact.
@@ -181,8 +181,16 @@ fn build_python_analysis(artifact: &Artifact, root: Node, source: &str) -> Pytho
         );
     }
 
+    let aliases = build_alias_map(&imports);
     let mut references = Vec::new();
-    collect_references(root, artifact, source, &defined_names, &mut references);
+    collect_references(
+        root,
+        artifact,
+        source,
+        &defined_names,
+        &aliases,
+        &mut references,
+    );
 
     PythonAnalysis {
         module_path,
@@ -507,36 +515,70 @@ fn collect_import_name(node: Node, source: &str, names: &mut Vec<PythonImportNam
     }
 }
 
+/// Maps an `as`-aliased local name to the canonical dotted module/attribute
+/// path it stands for, so `import subprocess as sp` lets a later `sp.run(...)`
+/// call resolve the same as an unaliased `subprocess.run(...)` call.
+fn build_alias_map(imports: &[PythonImport]) -> HashMap<String, String> {
+    let mut aliases = HashMap::new();
+    for import in imports {
+        for name in &import.names {
+            let Some(alias) = &name.alias else { continue };
+            let canonical = match &import.module {
+                Some(module) if !module.is_empty() => format!("{module}.{}", name.name),
+                _ => name.name.clone(),
+            };
+            aliases.insert(alias.clone(), canonical);
+        }
+    }
+    aliases
+}
+
+/// Rewrites the leading bound identifier of a dotted callee text through the
+/// alias map, e.g. `"sp.run"` with `sp -> subprocess` becomes `"subprocess.run"`.
+/// Leaves unaliased callees untouched.
+fn canonicalize_callee(callee: &str, aliases: &HashMap<String, String>) -> String {
+    match callee.split_once('.') {
+        Some((head, rest)) => match aliases.get(head) {
+            Some(canonical) => format!("{canonical}.{rest}"),
+            None => callee.to_owned(),
+        },
+        None => aliases
+            .get(callee)
+            .cloned()
+            .unwrap_or_else(|| callee.to_owned()),
+    }
+}
+
 fn collect_references(
     node: Node,
     artifact: &Artifact,
     source: &str,
     defined_names: &HashSet<String>,
+    aliases: &HashMap<String, String>,
     references: &mut Vec<PythonReference>,
 ) {
     if node.kind() == "call"
-        && let Some(reference) = classify_call(node, artifact, source, defined_names)
+        && let Some(reference) = classify_call(node, artifact, source, defined_names, aliases)
     {
         references.push(reference);
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_references(child, artifact, source, defined_names, references);
+        collect_references(child, artifact, source, defined_names, aliases, references);
     }
 }
 
-// ponytail: callee classification matches literal dotted call text
-// ("os.environ.get", "subprocess.run", ...) rather than resolving import
-// aliases, so `import subprocess as sp; sp.run(...)` is not recognized.
-// Upgrade to alias-aware resolution if that pattern shows up in real repos.
 fn classify_call(
     node: Node,
     artifact: &Artifact,
     source: &str,
     defined_names: &HashSet<String>,
+    aliases: &HashMap<String, String>,
 ) -> Option<PythonReference> {
     let function = node.child_by_field_name("function")?;
     let callee = node_text(function, source);
+    let canonical = canonicalize_callee(callee, aliases);
+    let canonical = canonical.as_str();
     let first_arg = first_positional_argument(node);
 
     let (kind, value, confidence) = if defined_names.contains(callee) {
@@ -545,10 +587,10 @@ fn classify_call(
             callee.to_owned(),
             Confidence::High,
         )
-    } else if matches!(callee, "os.environ.get" | "os.getenv") {
+    } else if matches!(canonical, "os.environ.get" | "os.getenv") {
         literal_or_dynamic(first_arg, source, PythonReferenceKind::EnvRead)
     } else if matches!(
-        callee,
+        canonical,
         "subprocess.run"
             | "subprocess.call"
             | "subprocess.Popen"
@@ -557,18 +599,18 @@ fn classify_call(
             | "os.system"
     ) {
         literal_or_dynamic(first_arg, source, PythonReferenceKind::Subprocess)
-    } else if matches!(callee, "importlib.import_module" | "__import__") {
+    } else if matches!(canonical, "importlib.import_module" | "__import__") {
         let value = first_arg
             .and_then(|arg| string_literal_value(arg, source))
-            .unwrap_or_else(|| callee.to_owned());
+            .unwrap_or_else(|| canonical.to_owned());
         (PythonReferenceKind::DynamicImport, value, Confidence::Low)
-    } else if callee.starts_with("ctypes.") {
+    } else if canonical.starts_with("ctypes.") {
         (
             PythonReferenceKind::Ctypes,
-            callee.to_owned(),
+            canonical.to_owned(),
             Confidence::Low,
         )
-    } else if matches!(callee, "open" | "Path") {
+    } else if matches!(canonical, "open" | "Path") {
         literal_or_dynamic(first_arg, source, PythonReferenceKind::ConfigPath)
     } else {
         return None;
@@ -808,6 +850,52 @@ class Worker(Base, metaclass=Meta):
         let relative = &analysis.imports[3];
         assert_eq!(relative.relative_level, 2);
         assert_eq!(relative.module.as_deref(), Some("pkg"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn python_analyzer_resolves_aliased_imports_in_reference_classification()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let artifact = python_artifact("app/aliased.py")?;
+        let text = "\
+import subprocess as sp
+import os as o
+from os import system as sys_call
+import importlib as il
+
+def run():
+    sp.run(\"echo hi\")
+    o.environ.get(\"HOME\")
+    sys_call(\"echo hi\")
+    il.import_module(\"pkg.mod\")
+";
+        let analysis = PythonAnalyzer.analyze(&artifact, text);
+
+        assert!(analysis.references.iter().any(|reference| {
+            reference.kind == PythonReferenceKind::Subprocess
+                && reference.value == "echo hi"
+                && reference.confidence == Confidence::High
+        }));
+        assert!(analysis.references.iter().any(|reference| {
+            reference.kind == PythonReferenceKind::EnvRead
+                && reference.value == "HOME"
+                && reference.confidence == Confidence::High
+        }));
+        let subprocess_calls = analysis
+            .references
+            .iter()
+            .filter(|reference| {
+                reference.kind == PythonReferenceKind::Subprocess && reference.value == "echo hi"
+            })
+            .count();
+        assert_eq!(
+            subprocess_calls, 2,
+            "expected both sp.run(...) and the `from os import system as sys_call` alias to resolve"
+        );
+        assert!(analysis.references.iter().any(|reference| {
+            reference.kind == PythonReferenceKind::DynamicImport && reference.value == "pkg.mod"
+        }));
 
         Ok(())
     }

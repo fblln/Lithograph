@@ -1,12 +1,16 @@
 //! `init` orchestration: wires scan, analysis, graph, module planning,
 //! generation, evidence validation, and writes into one product loop.
 
+use crate::analysis::AnalysisCache;
 use crate::domain::{Artifact, EvidenceRef};
 use crate::generation::{ContextBuilder, LanguageModel, ModelError, PageRenderer, RenderError};
 use crate::graph::{Graph, GraphBuilder, GraphIssue, GraphValidator};
 use crate::inventory::{RepositoryWalker, WalkError, WalkOptions};
-use crate::manifest::{DocumentationPage, PageManifest, PageManifestBuilder, TaskKind};
+use crate::manifest::{
+    DocumentationPage, GenerationTask, PageManifest, PageManifestBuilder, TaskKind,
+};
 use crate::plan::{DocumentationModule, ModulePlanner};
+use crate::research::{ResearchBrief, ResearchBuilder};
 use crate::run::{RepositorySnapshot, RunMetadata};
 use crate::storage::JsonStore;
 use std::collections::BTreeMap;
@@ -21,24 +25,38 @@ fn scan_exclude_globs() -> Vec<String> {
 }
 
 /// Runs the shared scan -> graph -> validate -> plan pipeline used by both
-/// `init` and `update`.
+/// `init` and `update`. `cache` lets an artifact whose content hash was seen
+/// on an earlier run (by either command) skip a fresh read+parse.
 fn scan_and_plan(
     repo_root: &Path,
+    cache: Option<&AnalysisCache>,
+    semantic_grouping: bool,
 ) -> Result<(Vec<Artifact>, Graph, Vec<DocumentationModule>), InitError> {
     let walk_options = WalkOptions {
         exclude_globs: scan_exclude_globs(),
         ..WalkOptions::default()
     };
     let artifacts = RepositoryWalker::new(walk_options).walk(repo_root)?;
-    let graph = GraphBuilder.build(repo_root, &artifacts);
+    let graph = GraphBuilder.build_with_cache(repo_root, &artifacts, cache);
 
     let issues = GraphValidator.validate(&graph, &artifacts);
     if !issues.is_empty() {
         return Err(InitError::GraphInvalid(issues));
     }
 
-    let modules = ModulePlanner.plan(&graph, &artifacts);
+    let modules = if semantic_grouping {
+        ModulePlanner.plan_with_semantic_grouping(&graph, &artifacts)
+    } else {
+        ModulePlanner.plan(&graph, &artifacts)
+    };
     Ok((artifacts, graph, modules))
+}
+
+/// Directory holding cached per-artifact analyzer output, keyed by content
+/// hash. Lives under `.lithograph/`, already excluded from every scan by
+/// [`scan_exclude_globs`].
+fn analysis_cache(repo_root: &Path) -> AnalysisCache {
+    AnalysisCache::new(repo_root.join(".lithograph/cache/analysis"))
 }
 
 /// Counts and output paths from one `init` run.
@@ -59,6 +77,9 @@ pub struct InitReport {
     /// Number of artifacts changed since the previous run (all of them, on
     /// a first run).
     pub changed_artifact_count: usize,
+    /// Number of artifacts actually read and reparsed this run -- the rest
+    /// were served from the analysis cache by unchanged content hash.
+    pub artifacts_reanalyzed_count: usize,
     /// Path written for the graph export.
     pub graph_path: PathBuf,
     /// Path written for the page manifest.
@@ -140,7 +161,20 @@ pub fn run_init(
     model_name: &str,
     prompt_version: &str,
 ) -> Result<InitReport, InitError> {
-    let (artifacts, graph, modules) = scan_and_plan(repo_root)?;
+    run_init_with_options(repo_root, model, model_name, prompt_version, false)
+}
+
+/// Runs the full `init` pipeline with explicit planning options.
+pub fn run_init_with_options(
+    repo_root: &Path,
+    model: &dyn LanguageModel,
+    model_name: &str,
+    prompt_version: &str,
+    semantic_grouping: bool,
+) -> Result<InitReport, InitError> {
+    let cache = analysis_cache(repo_root);
+    let (artifacts, graph, modules) = scan_and_plan(repo_root, Some(&cache), semantic_grouping)?;
+    let research = ResearchBuilder.build(&artifacts, &graph, &modules);
     let modules_by_id: BTreeMap<&str, &DocumentationModule> = modules
         .iter()
         .map(|module| (module.id.as_str(), module))
@@ -169,12 +203,13 @@ pub fn run_init(
                     .ok_or_else(|| InitError::Message(format!("no planned module {module_id}")))?;
                 ContextBuilder.build_module_context(module, &graph, &artifacts, repo_root)
             }
-            TaskKind::Quickstart => {
-                ContextBuilder.build_summary_context(TaskKind::Quickstart, &modules, &graph)
-            }
-            TaskKind::Architecture => {
-                ContextBuilder.build_summary_context(TaskKind::Architecture, &modules, &graph)
-            }
+            _ => ContextBuilder.build_summary_context(
+                task.kind,
+                &modules,
+                &graph,
+                &artifacts,
+                Some(&research),
+            ),
         };
 
         let request = context.clone().into_request(model_name, prompt_version);
@@ -209,6 +244,7 @@ pub fn run_init(
 
     let graph_path = lithograph_dir.join("graph.json");
     JsonStore.write_if_changed(&graph_path, &graph)?;
+    write_research_artifacts(&lithograph_dir, &research)?;
     let manifest_path = lithograph_dir.join("manifest.json");
     JsonStore.write_if_changed(&manifest_path, &manifest)?;
     JsonStore.write_if_changed(&snapshot_path, &snapshot)?;
@@ -226,6 +262,7 @@ pub fn run_init(
         page_count: manifest.pages.len(),
         pages_written: written_pages.len(),
         changed_artifact_count: run_metadata.changed_artifacts.len(),
+        artifacts_reanalyzed_count: cache.misses(),
         graph_path,
         manifest_path,
         run_metadata_path,
@@ -249,6 +286,9 @@ pub struct UpdateReport {
     pub pages_regenerated: usize,
     /// Number of artifacts changed since the previous run.
     pub changed_artifact_count: usize,
+    /// Number of artifacts actually read and reparsed this run -- the rest
+    /// were served from the analysis cache by unchanged content hash.
+    pub artifacts_reanalyzed_count: usize,
     /// Path written for the graph export.
     pub graph_path: PathBuf,
     /// Path written for the page manifest.
@@ -262,12 +302,12 @@ pub struct UpdateReport {
 /// (a page with no previous entry, e.g. a brand-new module, always counts
 /// as changed). `input_hash` is itself a hash over a page's dependencies'
 /// content, so comparing it before/after is a complete, self-contained way
-/// to detect "dependencies or ancestors changed" (AC2): quickstart and
-/// architecture pages depend on every module's members, so any module
-/// change already changes their `input_hash` too, with no separate
-/// ancestor-walk needed. Pages that do not need regeneration keep their
-/// previous evidence/output_hash untouched and their file is never
-/// rewritten, so an unrelated page's mtime never changes.
+/// to detect "dependencies or ancestors changed" (AC2): repository-level
+/// pages depend on every module's members, so any module change already
+/// changes their `input_hash` too, with no separate ancestor-walk needed.
+/// Pages that do not need regeneration keep their previous evidence/output_hash
+/// untouched and their file is never rewritten, so an unrelated page's mtime
+/// never changes.
 ///
 /// Falls back to full generation (like `init`) when no previous manifest
 /// exists yet.
@@ -276,6 +316,17 @@ pub fn run_update(
     model: &dyn LanguageModel,
     model_name: &str,
     prompt_version: &str,
+) -> Result<UpdateReport, InitError> {
+    run_update_with_options(repo_root, model, model_name, prompt_version, false)
+}
+
+/// Runs `update` with explicit planning options.
+pub fn run_update_with_options(
+    repo_root: &Path,
+    model: &dyn LanguageModel,
+    model_name: &str,
+    prompt_version: &str,
+    semantic_grouping: bool,
 ) -> Result<UpdateReport, InitError> {
     let lithograph_dir = repo_root.join(".lithograph");
     let manifest_path = lithograph_dir.join("manifest.json");
@@ -292,8 +343,20 @@ pub fn run_update(
                 .collect()
         })
         .unwrap_or_default();
+    let previous_tasks_by_page_id: BTreeMap<&str, &GenerationTask> = previous_manifest
+        .as_ref()
+        .map(|manifest| {
+            manifest
+                .tasks
+                .iter()
+                .map(|task| (task.page_id.as_str(), task))
+                .collect()
+        })
+        .unwrap_or_default();
 
-    let (artifacts, graph, modules) = scan_and_plan(repo_root)?;
+    let cache = analysis_cache(repo_root);
+    let (artifacts, graph, modules) = scan_and_plan(repo_root, Some(&cache), semantic_grouping)?;
+    let research = ResearchBuilder.build(&artifacts, &graph, &modules);
     let modules_by_id: BTreeMap<&str, &DocumentationModule> = modules
         .iter()
         .map(|module| (module.id.as_str(), module))
@@ -313,8 +376,10 @@ pub fn run_update(
             .input_hash
             .clone();
         let previous_page = previous_pages_by_id.get(task.page_id.as_str());
-        let needs_regeneration =
-            previous_page.is_none_or(|previous| previous.input_hash != current_input_hash);
+        let previous_task = previous_tasks_by_page_id.get(task.page_id.as_str());
+        let needs_regeneration = previous_page
+            .is_none_or(|previous| previous.input_hash != current_input_hash)
+            || previous_task.is_none_or(|previous| !task.is_version_compatible_with(previous));
 
         if !needs_regeneration {
             if let Some(previous) = previous_page {
@@ -348,12 +413,13 @@ pub fn run_update(
                     .ok_or_else(|| InitError::Message(format!("no planned module {module_id}")))?;
                 ContextBuilder.build_module_context(module, &graph, &artifacts, repo_root)
             }
-            TaskKind::Quickstart => {
-                ContextBuilder.build_summary_context(TaskKind::Quickstart, &modules, &graph)
-            }
-            TaskKind::Architecture => {
-                ContextBuilder.build_summary_context(TaskKind::Architecture, &modules, &graph)
-            }
+            _ => ContextBuilder.build_summary_context(
+                task.kind,
+                &modules,
+                &graph,
+                &artifacts,
+                Some(&research),
+            ),
         };
 
         let request = context.clone().into_request(model_name, prompt_version);
@@ -384,6 +450,7 @@ pub fn run_update(
 
     let graph_path = lithograph_dir.join("graph.json");
     JsonStore.write_if_changed(&graph_path, &graph)?;
+    write_research_artifacts(&lithograph_dir, &research)?;
     JsonStore.write_if_changed(&manifest_path, &manifest)?;
     JsonStore.write_if_changed(&snapshot_path, &snapshot)?;
     let run_metadata_path = lithograph_dir.join("run.json");
@@ -397,6 +464,7 @@ pub fn run_update(
         page_count: manifest.pages.len(),
         pages_regenerated: written_pages.len(),
         changed_artifact_count: run_metadata.changed_artifacts.len(),
+        artifacts_reanalyzed_count: cache.misses(),
         graph_path,
         manifest_path,
         run_metadata_path,
@@ -415,6 +483,29 @@ pub fn manifest_evidence(manifest_path: &Path) -> Result<Vec<EvidenceRef>, InitE
         .collect())
 }
 
+fn write_research_artifacts(
+    lithograph_dir: &Path,
+    research: &ResearchBrief,
+) -> Result<(), InitError> {
+    let research_dir = lithograph_dir.join("research");
+    JsonStore.write_if_changed(&research_dir.join("brief.json"), research)?;
+    JsonStore.write_if_changed(
+        &research_dir.join("system-context.json"),
+        &research.system_context,
+    )?;
+    JsonStore.write_if_changed(&research_dir.join("workflows.json"), &research.workflows)?;
+    JsonStore.write_if_changed(&research_dir.join("boundaries.json"), &research.boundaries)?;
+    JsonStore.write_if_changed(
+        &research_dir.join("configuration.json"),
+        &research.configuration,
+    )?;
+    JsonStore.write_if_changed(
+        &research_dir.join("key-modules.json"),
+        &research.key_modules,
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{run_init, run_update};
@@ -426,7 +517,7 @@ mod tests {
     }
 
     #[test]
-    fn init_writes_quickstart_architecture_module_pages_graph_and_manifest()
+    fn init_writes_repository_and_module_pages_graph_and_manifest()
     -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::TempDir::new()?;
         copy_dir(&fixture_root(), temp.path())?;
@@ -437,11 +528,19 @@ mod tests {
         assert!(report.graph_node_count > 0);
         assert!(report.graph_relation_count > 0);
         assert_eq!(report.module_count, 11);
-        assert_eq!(report.page_count, report.module_count + 2);
+        assert_eq!(report.page_count, report.module_count + 6);
         assert_eq!(report.pages_written, report.page_count);
 
+        assert!(temp.path().join("docs/lithograph/overview.md").exists());
         assert!(temp.path().join("docs/lithograph/quickstart.md").exists());
         assert!(temp.path().join("docs/lithograph/architecture.md").exists());
+        assert!(temp.path().join("docs/lithograph/workflows.md").exists());
+        assert!(temp.path().join("docs/lithograph/boundaries.md").exists());
+        assert!(
+            temp.path()
+                .join("docs/lithograph/configuration.md")
+                .exists()
+        );
         assert!(temp.path().join(".lithograph/graph.json").exists());
         assert!(temp.path().join(".lithograph/manifest.json").exists());
 
@@ -515,6 +614,25 @@ mod tests {
 
         assert_eq!(report.pages_regenerated, 0);
         assert_eq!(report.changed_artifact_count, 0);
+        assert_eq!(report.artifacts_reanalyzed_count, 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn update_regenerates_when_prompt_version_changes_without_source_changes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(&fixture_root(), temp.path())?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+
+        let report = super::run_update(temp.path(), &MockModel, "mock", "v2")?;
+        let manifest_json = std::fs::read_to_string(temp.path().join(".lithograph/manifest.json"))?;
+
+        assert_eq!(report.changed_artifact_count, 0);
+        assert_eq!(report.pages_regenerated, report.page_count);
+        assert!(manifest_json.contains("\"prompt_version\": \"v2\""));
+        assert!(manifest_json.contains("\"context_schema_version\""));
 
         Ok(())
     }
@@ -547,15 +665,16 @@ mod tests {
         let report = run_update(temp.path(), &MockModel, "mock", "v1")?;
 
         assert_eq!(report.changed_artifact_count, 1);
+        assert_eq!(report.artifacts_reanalyzed_count, 1);
         assert_eq!(std::fs::read_to_string(&python_page)?, python_hash_before);
         assert_ne!(std::fs::read_to_string(&rust_page)?, rust_hash_before);
         assert_ne!(
             std::fs::read_to_string(&quickstart_page)?,
             quickstart_before
         );
-        // Rust crate page + quickstart + architecture regenerate; the
+        // Rust crate page + every repository-level page regenerates; the
         // unrelated Python package page does not.
-        assert_eq!(report.pages_regenerated, 3);
+        assert_eq!(report.pages_regenerated, 7);
 
         Ok(())
     }

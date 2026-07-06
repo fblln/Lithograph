@@ -2,9 +2,10 @@
 //! traits, functions, impls, and macro invocations.
 
 use crate::domain::{
-    Artifact, ArtifactId, EvidenceRef, ModelExposurePolicy, SourceSpan, TextStatus,
+    Artifact, ArtifactId, Confidence, EvidenceRef, ModelExposurePolicy, SourceSpan, TextStatus,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use tree_sitter::Node;
 
 /// Deep Rust analysis output for one `.rs` artifact.
@@ -30,6 +31,8 @@ pub struct RustAnalysis {
     pub impls: Vec<RustImpl>,
     /// Macro invocations anywhere in the file.
     pub macro_invocations: Vec<RustMacroInvocation>,
+    /// Heuristic cross-artifact references (env reads, subprocess spawns).
+    pub references: Vec<RustReference>,
     /// True when the parse tree contains recovered syntax errors.
     pub has_syntax_errors: bool,
 }
@@ -120,6 +123,28 @@ pub struct RustMacroInvocation {
     /// Macro name, without the trailing `!`.
     pub name: String,
     /// Evidence for the invocation.
+    pub evidence: EvidenceRef,
+}
+
+/// Heuristic cross-artifact reference category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RustReferenceKind {
+    /// `std::env::var`/`std::env::var_os` environment variable read.
+    EnvRead,
+    /// `std::process::Command::new` command invocation.
+    Subprocess,
+}
+
+/// One heuristic reference extracted from a call expression.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RustReference {
+    /// Reference category.
+    pub kind: RustReferenceKind,
+    /// Extracted literal value, or a best-effort raw expression when dynamic.
+    pub value: String,
+    /// Confidence in the extracted value.
+    pub confidence: Confidence,
+    /// Evidence for the call expression.
     pub evidence: EvidenceRef,
 }
 
@@ -229,6 +254,10 @@ fn build_rust_analysis(artifact: &Artifact, root: Node, source: &str) -> RustAna
     let mut macro_invocations = Vec::new();
     collect_macro_invocations(root, artifact, source, &mut macro_invocations);
 
+    let aliases = build_use_alias_map(&uses);
+    let mut references = Vec::new();
+    collect_rust_references(root, artifact, source, &aliases, &mut references);
+
     RustAnalysis {
         module_path,
         is_crate_root,
@@ -240,6 +269,7 @@ fn build_rust_analysis(artifact: &Artifact, root: Node, source: &str) -> RustAna
         functions,
         impls,
         macro_invocations,
+        references,
         has_syntax_errors: root.has_error(),
     }
 }
@@ -511,6 +541,119 @@ fn collect_macro_invocations(
     }
 }
 
+/// Maps a locally-bound `use` name to the canonical path it stands for, so
+/// `use std::env; env::var(...)` lets a later call resolve the same as an
+/// unaliased `std::env::var(...)` call. The bound name is the `as` alias
+/// when present, otherwise the path's last segment (wildcard imports bind no
+/// single name and are skipped).
+fn build_use_alias_map(uses: &[RustUse]) -> HashMap<String, String> {
+    let mut aliases = HashMap::new();
+    for use_ in uses {
+        let bound_name = use_.alias.clone().or_else(|| {
+            let last = use_.path.rsplit("::").next()?;
+            (last != "*").then(|| last.to_owned())
+        });
+        if let Some(bound_name) = bound_name {
+            aliases.insert(bound_name, use_.path.clone());
+        }
+    }
+    aliases
+}
+
+/// Rewrites the leading bound identifier of a dotted callee text through the
+/// alias map, e.g. `"env::var"` with `env -> std::env` becomes
+/// `"std::env::var"`. Leaves unaliased callees untouched.
+fn canonicalize_rust_callee(callee: &str, aliases: &HashMap<String, String>) -> String {
+    match callee.split_once("::") {
+        Some((head, rest)) => match aliases.get(head) {
+            Some(canonical) => format!("{canonical}::{rest}"),
+            None => callee.to_owned(),
+        },
+        None => aliases
+            .get(callee)
+            .cloned()
+            .unwrap_or_else(|| callee.to_owned()),
+    }
+}
+
+fn collect_rust_references(
+    node: Node,
+    artifact: &Artifact,
+    source: &str,
+    aliases: &HashMap<String, String>,
+    references: &mut Vec<RustReference>,
+) {
+    if node.kind() == "call_expression"
+        && let Some(reference) = classify_rust_call(node, artifact, source, aliases)
+    {
+        references.push(reference);
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_rust_references(child, artifact, source, aliases, references);
+    }
+}
+
+fn classify_rust_call(
+    node: Node,
+    artifact: &Artifact,
+    source: &str,
+    aliases: &HashMap<String, String>,
+) -> Option<RustReference> {
+    let function = node.child_by_field_name("function")?;
+    let callee = node_text(function, source);
+    let canonical = canonicalize_rust_callee(callee, aliases);
+    let first_arg = node
+        .child_by_field_name("arguments")
+        .and_then(|arguments| arguments.named_child(0));
+
+    let (kind, value, confidence) =
+        if matches!(canonical.as_str(), "std::env::var" | "std::env::var_os") {
+            rust_literal_or_dynamic(first_arg, source, RustReferenceKind::EnvRead)
+        } else if canonical == "std::process::Command::new" {
+            rust_literal_or_dynamic(first_arg, source, RustReferenceKind::Subprocess)
+        } else {
+            return None;
+        };
+
+    Some(RustReference {
+        kind,
+        value,
+        confidence,
+        evidence: evidence(artifact, node),
+    })
+}
+
+fn rust_literal_or_dynamic(
+    arg: Option<Node>,
+    source: &str,
+    kind: RustReferenceKind,
+) -> (RustReferenceKind, String, Confidence) {
+    let literal = arg
+        .filter(|node| node.kind() == "string_literal")
+        .map(|node| rust_string_literal_value(node, source));
+    match literal {
+        Some(value) => (kind, value, Confidence::High),
+        None => {
+            let raw = arg
+                .map(|node| node_text(node, source).to_owned())
+                .unwrap_or_else(|| "<dynamic>".to_owned());
+            (kind, raw, Confidence::Low)
+        }
+    }
+}
+
+fn rust_string_literal_value(node: Node, source: &str) -> String {
+    let mut value = String::new();
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "string_content" {
+            value.push_str(node_text(child, source));
+        }
+    }
+    value
+}
+
 fn field_text<'a>(node: Node<'a>, field: &str, source: &'a str) -> Option<&'a str> {
     node.child_by_field_name(field)
         .map(|child| node_text(child, source))
@@ -608,6 +751,69 @@ mod tests {
                 .iter()
                 .any(|invocation| invocation.name == "format")
         );
+
+        // `use std::env;` + `env::var(...)` resolves through the use-alias
+        // map the same as a fully-qualified `std::env::var(...)` call would.
+        assert!(analysis.references.iter().any(|reference| {
+            reference.kind == super::RustReferenceKind::EnvRead
+                && reference.value == "RIDGELINE_CACHE_DIR"
+                && reference.confidence == crate::domain::Confidence::High
+        }));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_analyzer_extracts_env_and_subprocess_references()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use super::RustReferenceKind;
+        use crate::domain::Confidence;
+
+        let artifact = rust_artifact("app/worker.rs")?;
+        let text = "\
+use std::process::Command;
+
+fn var(_key: &str) -> Option<String> {
+    None
+}
+
+fn run(dynamic_key: &str) {
+    std::env::var_os(\"PATH\");
+    std::env::var(dynamic_key);
+    Command::new(\"git\").arg(\"status\");
+    var(\"not_a_real_env_read\");
+}
+";
+        let analysis = RustAnalyzer.analyze(&artifact, text);
+
+        assert!(analysis.references.iter().any(|reference| {
+            reference.kind == RustReferenceKind::EnvRead
+                && reference.value == "PATH"
+                && reference.confidence == Confidence::High
+        }));
+        assert!(
+            analysis.references.iter().any(|reference| {
+                reference.kind == RustReferenceKind::EnvRead
+                    && reference.confidence == Confidence::Low
+            }),
+            "expected a low-confidence EnvRead for the non-literal std::env::var argument"
+        );
+        assert!(analysis.references.iter().any(|reference| {
+            reference.kind == RustReferenceKind::Subprocess
+                && reference.value == "git"
+                && reference.confidence == Confidence::High
+        }));
+
+        // A locally-defined `var(...)` function -- unrelated to
+        // `std::env::var` and never imported from it -- must not be
+        // misclassified as an env read just because its name matches.
+        let env_read_values: Vec<&str> = analysis
+            .references
+            .iter()
+            .filter(|reference| reference.kind == RustReferenceKind::EnvRead)
+            .map(|reference| reference.value.as_str())
+            .collect();
+        assert!(!env_read_values.contains(&"not_a_real_env_read"));
 
         Ok(())
     }

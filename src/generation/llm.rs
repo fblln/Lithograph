@@ -93,10 +93,25 @@ impl LanguageModel for MockModel {
 fn mock_page(request: &ModelRequest) -> PageGeneration {
     let title = mock_title(request.task_kind);
     let context_lines = request.user_prompt.lines().count();
+    let evidence_refs = first_evidence_ref(&request.user_prompt)
+        .into_iter()
+        .collect::<Vec<_>>();
+    let evidence_section = if evidence_refs.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n\n## Source Evidence\n{}",
+            evidence_refs
+                .iter()
+                .map(|reference| format!("- `{reference}`"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
+    };
     let body = format!(
         "# {title}\n\n\
          <!-- lithograph mock model: task={:?} model={} prompt_version={} input_hash={} -->\n\n\
-         Deterministic mock content generated from {context_lines} line(s) of context.\n",
+         Deterministic mock content generated from {context_lines} line(s) of context.{evidence_section}\n",
         request.task_kind, request.model, request.prompt_version, request.input_hash,
     );
 
@@ -106,16 +121,30 @@ fn mock_page(request: &ModelRequest) -> PageGeneration {
             "Mock summary for {:?} task with input hash {}.",
             request.task_kind, request.input_hash
         ),
-        evidence_refs: Vec::new(),
+        evidence_refs,
         unresolved_questions: Vec::new(),
         body,
     }
 }
 
+fn first_evidence_ref(user_prompt: &str) -> Option<String> {
+    user_prompt.lines().find_map(|line| {
+        let line = line.trim().trim_start_matches("- ");
+        line.strip_prefix("EVIDENCE:")
+            .map(str::trim)
+            .filter(|reference| !reference.is_empty())
+            .map(str::to_owned)
+    })
+}
+
 fn mock_title(task_kind: TaskKind) -> String {
     match task_kind {
+        TaskKind::Overview => "Overview".to_owned(),
         TaskKind::Quickstart => "Quickstart".to_owned(),
         TaskKind::Architecture => "Architecture".to_owned(),
+        TaskKind::Workflows => "Workflows".to_owned(),
+        TaskKind::Boundaries => "Boundaries".to_owned(),
+        TaskKind::Configuration => "Configuration".to_owned(),
         TaskKind::ModulePage => "Module".to_owned(),
     }
 }
@@ -148,6 +177,21 @@ mod tests {
         assert!(first.body.contains("abc123"));
         assert!(first.body.contains("v1"));
         assert_eq!(first.title, "Module");
+
+        Ok(())
+    }
+
+    #[test]
+    fn mock_model_cites_first_context_evidence() -> Result<(), Box<dyn std::error::Error>> {
+        let page = MockModel.generate_json(&request(
+            TaskKind::Overview,
+            "hash",
+            "summary\n- EVIDENCE: README.md\n- EVIDENCE: src/lib.rs",
+        ))?;
+
+        assert_eq!(page.evidence_refs, vec!["README.md".to_owned()]);
+        assert!(page.body.contains("## Source Evidence"));
+        assert!(page.body.contains("README.md"));
 
         Ok(())
     }

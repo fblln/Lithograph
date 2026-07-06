@@ -123,6 +123,22 @@ struct OpenFence {
 }
 
 impl MarkdownAnalyzer {
+    /// Recomputes `source_paths[].exists` against the current filesystem.
+    /// Existence depends on the whole repository's file listing, not this
+    /// Markdown artifact's own bytes, so a cached analysis (reused because
+    /// this artifact's content is unchanged) must still have this refreshed
+    /// after loading -- a referenced path elsewhere being added or removed
+    /// must be reflected even when the reference itself didn't change.
+    pub fn refresh_path_existence(
+        analysis: &mut MarkdownAnalysis,
+        repo_root: &Path,
+        artifact_path: &RepoPath,
+    ) {
+        for path_ref in &mut analysis.source_paths {
+            path_ref.exists = referenced_path_exists(repo_root, artifact_path, &path_ref.path);
+        }
+    }
+
     /// Extracts Markdown structure and drift signals.
     pub fn analyze(&self, artifact: &Artifact, text: &str, repo_root: &Path) -> MarkdownAnalysis {
         if artifact.text_status != TextStatus::Text

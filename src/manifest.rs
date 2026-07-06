@@ -26,17 +26,44 @@ pub struct DocumentationPage {
     pub input_hash: String,
     /// Hash of the last written output. `None` until the page is rendered.
     pub output_hash: Option<String>,
+    /// Prompt template version used for this page kind.
+    pub prompt_version: String,
+    /// Context schema version used to construct model input for this page kind.
+    pub context_schema_version: String,
 }
 
 /// Documentation page category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskKind {
+    /// Repository-wide overview page.
+    Overview,
     /// Repository-wide quickstart page.
     Quickstart,
-    /// Repository-wide architecture/overview page.
+    /// Repository-wide architecture page.
     Architecture,
+    /// Repository-wide workflow page.
+    Workflows,
+    /// Repository-wide boundary/interface page.
+    Boundaries,
+    /// Repository-wide configuration/deployment page.
+    Configuration,
     /// One module's leaf documentation page.
     ModulePage,
+}
+
+impl TaskKind {
+    /// Stable context schema version for this page category.
+    pub fn context_schema_version(self) -> &'static str {
+        match self {
+            Self::Overview => "overview-context-v1",
+            Self::Quickstart => "quickstart-context-v1",
+            Self::Architecture => "architecture-context-v1",
+            Self::Workflows => "workflows-context-v1",
+            Self::Boundaries => "boundaries-context-v1",
+            Self::Configuration => "configuration-context-v1",
+            Self::ModulePage => "module-context-v1",
+        }
+    }
 }
 
 /// One bounded model-generation task for a page.
@@ -53,8 +80,18 @@ pub struct GenerationTask {
     pub input_hash: String,
     /// Prompt template version used for this task.
     pub prompt_version: String,
+    /// Context schema version used for this task.
+    pub context_schema_version: String,
     /// Model identifier used for this task.
     pub model: String,
+}
+
+impl GenerationTask {
+    /// True when a previous task with the same page id can reuse output.
+    pub fn is_version_compatible_with(&self, previous: &Self) -> bool {
+        self.prompt_version == previous.prompt_version
+            && self.context_schema_version == previous.context_schema_version
+    }
 }
 
 /// The complete page/task manifest for one documentation run.
@@ -97,8 +134,8 @@ impl PageManifest {
 /// Builds a [`PageManifest`] from a deterministic module plan.
 ///
 /// One [`DocumentationPage`]/[`GenerationTask`] pair is created per module,
-/// plus a quickstart and architecture page/task pair that depend on every
-/// module (they summarize the whole repository).
+/// plus repository-wide pages that depend on every module (they summarize
+/// the whole repository).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PageManifestBuilder;
 
@@ -128,6 +165,8 @@ impl PageManifestBuilder {
                 evidence: Vec::new(),
                 input_hash: module.input_hash.clone(),
                 output_hash: None,
+                prompt_version: prompt_version.to_owned(),
+                context_schema_version: TaskKind::ModulePage.context_schema_version().to_owned(),
             });
             tasks.push(GenerationTask {
                 id: format!("task:{page_id}"),
@@ -135,6 +174,7 @@ impl PageManifestBuilder {
                 page_id,
                 input_hash: module.input_hash.clone(),
                 prompt_version: prompt_version.to_owned(),
+                context_schema_version: TaskKind::ModulePage.context_schema_version().to_owned(),
                 model: model.to_owned(),
             });
         }
@@ -147,6 +187,11 @@ impl PageManifestBuilder {
 
         for (kind, id, path) in [
             (
+                TaskKind::Overview,
+                "page:overview",
+                "docs/lithograph/overview.md",
+            ),
+            (
                 TaskKind::Quickstart,
                 "page:quickstart",
                 "docs/lithograph/quickstart.md",
@@ -155,6 +200,21 @@ impl PageManifestBuilder {
                 TaskKind::Architecture,
                 "page:architecture",
                 "docs/lithograph/architecture.md",
+            ),
+            (
+                TaskKind::Workflows,
+                "page:workflows",
+                "docs/lithograph/workflows.md",
+            ),
+            (
+                TaskKind::Boundaries,
+                "page:boundaries",
+                "docs/lithograph/boundaries.md",
+            ),
+            (
+                TaskKind::Configuration,
+                "page:configuration",
+                "docs/lithograph/configuration.md",
             ),
         ] {
             pages.push(DocumentationPage {
@@ -165,6 +225,8 @@ impl PageManifestBuilder {
                 evidence: Vec::new(),
                 input_hash: repository_hash.clone(),
                 output_hash: None,
+                prompt_version: prompt_version.to_owned(),
+                context_schema_version: kind.context_schema_version().to_owned(),
             });
             tasks.push(GenerationTask {
                 id: format!("task:{id}"),
@@ -172,6 +234,7 @@ impl PageManifestBuilder {
                 page_id: id.to_owned(),
                 input_hash: repository_hash.clone(),
                 prompt_version: prompt_version.to_owned(),
+                context_schema_version: kind.context_schema_version().to_owned(),
                 model: model.to_owned(),
             });
         }
@@ -215,28 +278,27 @@ mod tests {
     }
 
     #[test]
-    fn builds_one_page_per_module_plus_quickstart_and_architecture()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn builds_one_page_per_module_plus_repository_pages() -> Result<(), Box<dyn std::error::Error>>
+    {
         let manifest = fixture_manifest()?;
 
-        assert!(
-            manifest
-                .pages
-                .iter()
-                .any(|page| page.id == "page:quickstart")
-        );
-        assert!(
-            manifest
-                .pages
-                .iter()
-                .any(|page| page.id == "page:architecture")
-        );
+        for id in [
+            "page:overview",
+            "page:quickstart",
+            "page:architecture",
+            "page:workflows",
+            "page:boundaries",
+            "page:configuration",
+        ] {
+            assert!(manifest.pages.iter().any(|page| page.id == id), "{id}");
+        }
         let module_pages = manifest
             .pages
             .iter()
             .filter(|page| page.module_id.is_some())
             .count();
         assert_eq!(module_pages, 11);
+        assert_eq!(manifest.pages.len(), module_pages + 6);
         assert_eq!(manifest.tasks.len(), manifest.pages.len());
         assert!(
             manifest
@@ -290,8 +352,16 @@ mod tests {
         let affected = manifest.pages_affected_by(&changed);
 
         assert!(affected.contains(&module_page.id));
-        assert!(affected.contains("page:quickstart"));
-        assert!(affected.contains("page:architecture"));
+        for id in [
+            "page:overview",
+            "page:quickstart",
+            "page:architecture",
+            "page:workflows",
+            "page:boundaries",
+            "page:configuration",
+        ] {
+            assert!(affected.contains(id), "{id}");
+        }
 
         let unrelated: BTreeSet<_> = [crate::graph::GraphNodeId::new("artifact:does-not-exist")]
             .into_iter()
