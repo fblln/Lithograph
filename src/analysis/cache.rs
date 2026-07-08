@@ -8,7 +8,8 @@
 use crate::analysis::{
     ActionsProfile, CargoProfile, ComposeProfile, DockerfileAnalysis, MarkdownAnalysis,
     PyProjectProfile, PythonAnalysis, RequirementsProfile, RustAnalysis, RustWorkspaceAnalysis,
-    StructuredAnalysis, StructuredFormat, TextFinding,
+    StructuredAnalysis, StructuredFormat, SyntaxIndexedLanguage, TextFinding,
+    TreeSitterAdapterOutput,
 };
 use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};
@@ -17,7 +18,7 @@ use std::path::PathBuf;
 
 /// Bump when analyzer output semantics or serialization change in a way that
 /// should force fresh analyzer output instead of reusing old cache entries.
-pub const ANALYSIS_CACHE_VERSION: u32 = 1;
+pub const ANALYSIS_CACHE_VERSION: u32 = 2;
 
 /// Tags which analyzer produced an [`AnalyzerOutput`], so a cache lookup can
 /// reject a stale entry whose artifact has since been reclassified to a
@@ -47,6 +48,8 @@ pub enum AnalyzerKind {
     PyProject,
     /// `StructuredAnalyzer`, for one specific format.
     Structured(StructuredFormat),
+    /// `TreeSitterParserAdapter`, for one specific syntax-indexed language.
+    SyntaxIndexed(SyntaxIndexedLanguage),
     /// `GenericTextExtractor`.
     GenericText,
 }
@@ -83,6 +86,11 @@ pub enum AnalyzerOutput {
     /// Carries its own [`StructuredFormat`] alongside the analysis, since
     /// `StructuredAnalysis` itself does not record which format produced it.
     Structured(StructuredFormat, StructuredAnalysis),
+    /// [`TreeSitterParserAdapter`](crate::analysis::TreeSitterParserAdapter)
+    /// output. Carries its own [`SyntaxIndexedLanguage`] alongside the
+    /// output, since `TreeSitterAdapterOutput` only records a `&str`
+    /// language id, not this cache-key-safe `Copy` discriminant.
+    SyntaxIndexed(SyntaxIndexedLanguage, TreeSitterAdapterOutput),
     /// [`GenericTextExtractor`](crate::analysis::GenericTextExtractor) output.
     GenericText(Vec<TextFinding>),
 }
@@ -102,6 +110,7 @@ impl AnalyzerOutput {
             Self::RustWorkspace(_) => AnalyzerKind::RustWorkspace,
             Self::PyProject(_) => AnalyzerKind::PyProject,
             Self::Structured(format, _) => AnalyzerKind::Structured(*format),
+            Self::SyntaxIndexed(language, _) => AnalyzerKind::SyntaxIndexed(*language),
             Self::GenericText(_) => AnalyzerKind::GenericText,
         }
     }

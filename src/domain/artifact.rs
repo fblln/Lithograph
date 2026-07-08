@@ -184,6 +184,8 @@ pub enum AnalyzerSelection {
     Specialized(String),
     /// Structured format analyzer by stable name.
     Structured(String),
+    /// Generic tree-sitter syntax-indexed analyzer, by registry language id.
+    SyntaxIndexed(String),
     /// Generic text fallback analyzer.
     GenericText,
     /// Metadata-only opaque analyzer.

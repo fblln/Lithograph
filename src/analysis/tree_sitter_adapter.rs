@@ -3,9 +3,23 @@
 //! this typed baseline.
 
 use crate::domain::SourceSpan;
+use serde::{Deserialize, Serialize};
+
+/// Definition node kinds shared by the TypeScript and TSX grammars, which
+/// only differ in JSX syntax support, not in declaration shape.
+const TS_DEFINITION_KINDS: &[&str] = &[
+    "class_declaration",
+    "abstract_class_declaration",
+    "interface_declaration",
+    "function_declaration",
+    "generator_function_declaration",
+    "enum_declaration",
+    "type_alias_declaration",
+    "method_definition",
+];
 
 /// Coarse parse status for adapter output.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TreeSitterParseStatus {
     /// A tree-sitter parser produced an AST.
     Parsed,
@@ -18,7 +32,7 @@ pub enum TreeSitterParseStatus {
 }
 
 /// One syntax fact extracted from a tree-sitter node.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TreeSitterSyntaxFact {
     /// Tree-sitter node kind.
     pub kind: String,
@@ -29,7 +43,7 @@ pub struct TreeSitterSyntaxFact {
 }
 
 /// Comment extracted from a tree-sitter syntax tree.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TreeSitterComment {
     /// Comment text.
     pub text: String,
@@ -38,7 +52,7 @@ pub struct TreeSitterComment {
 }
 
 /// Syntax error extracted from a tree-sitter syntax tree.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TreeSitterSyntaxError {
     /// Error node kind.
     pub kind: String,
@@ -47,7 +61,7 @@ pub struct TreeSitterSyntaxError {
 }
 
 /// Typed baseline output from one parser adapter.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TreeSitterAdapterOutput {
     /// Stable language id.
     pub language_id: String,
@@ -130,6 +144,241 @@ impl TreeSitterParserAdapter {
         }
     }
 
+    /// Adapter for C syntax facts.
+    pub fn c() -> Self {
+        Self {
+            language_id: "c",
+            language: tree_sitter_c::LANGUAGE.into(),
+            definition_kinds: &[
+                "function_definition",
+                "struct_specifier",
+                "union_specifier",
+                "enum_specifier",
+                "type_definition",
+            ],
+            import_kinds: &["preproc_include"],
+            symbol_kinds: &["identifier", "type_identifier", "field_identifier"],
+            comment_kinds: &["comment"],
+        }
+    }
+
+    /// Adapter for C++ syntax facts.
+    pub fn cpp() -> Self {
+        Self {
+            language_id: "cpp",
+            language: tree_sitter_cpp::LANGUAGE.into(),
+            definition_kinds: &[
+                "function_definition",
+                "class_specifier",
+                "struct_specifier",
+                "union_specifier",
+                "enum_specifier",
+                "namespace_definition",
+                "template_declaration",
+            ],
+            import_kinds: &["preproc_include", "using_declaration"],
+            symbol_kinds: &[
+                "identifier",
+                "type_identifier",
+                "field_identifier",
+                "namespace_identifier",
+            ],
+            comment_kinds: &["comment"],
+        }
+    }
+
+    /// Adapter for C# syntax facts.
+    pub fn csharp() -> Self {
+        Self {
+            language_id: "csharp",
+            language: tree_sitter_c_sharp::LANGUAGE.into(),
+            definition_kinds: &[
+                "class_declaration",
+                "interface_declaration",
+                "struct_declaration",
+                "record_declaration",
+                "enum_declaration",
+                "method_declaration",
+                "constructor_declaration",
+                "delegate_declaration",
+            ],
+            import_kinds: &["using_directive"],
+            symbol_kinds: &["identifier"],
+            comment_kinds: &["comment"],
+        }
+    }
+
+    /// Adapter for Java syntax facts.
+    pub fn java() -> Self {
+        Self {
+            language_id: "java",
+            language: tree_sitter_java::LANGUAGE.into(),
+            definition_kinds: &[
+                "class_declaration",
+                "interface_declaration",
+                "enum_declaration",
+                "record_declaration",
+                "annotation_type_declaration",
+                "method_declaration",
+                "constructor_declaration",
+            ],
+            import_kinds: &["import_declaration"],
+            symbol_kinds: &["identifier", "type_identifier", "scoped_identifier"],
+            comment_kinds: &["line_comment", "block_comment"],
+        }
+    }
+
+    /// Adapter for Kotlin syntax facts.
+    pub fn kotlin() -> Self {
+        Self {
+            language_id: "kotlin",
+            language: tree_sitter_kotlin_ng::LANGUAGE.into(),
+            definition_kinds: &[
+                "class_declaration",
+                "object_declaration",
+                "function_declaration",
+                "property_declaration",
+            ],
+            import_kinds: &["import"],
+            symbol_kinds: &["identifier"],
+            comment_kinds: &["line_comment", "block_comment"],
+        }
+    }
+
+    /// Adapter for Go syntax facts.
+    pub fn go() -> Self {
+        Self {
+            language_id: "go",
+            language: tree_sitter_go::LANGUAGE.into(),
+            definition_kinds: &[
+                "function_declaration",
+                "method_declaration",
+                "type_declaration",
+                "const_declaration",
+                "var_declaration",
+            ],
+            import_kinds: &["import_declaration"],
+            symbol_kinds: &[
+                "identifier",
+                "type_identifier",
+                "field_identifier",
+                "package_identifier",
+            ],
+            comment_kinds: &["comment"],
+        }
+    }
+
+    /// Adapter for PHP syntax facts.
+    pub fn php() -> Self {
+        Self {
+            language_id: "php",
+            language: tree_sitter_php::LANGUAGE_PHP.into(),
+            definition_kinds: &[
+                "function_definition",
+                "class_declaration",
+                "interface_declaration",
+                "trait_declaration",
+                "enum_declaration",
+                "method_declaration",
+            ],
+            import_kinds: &[
+                "namespace_use_declaration",
+                "include_expression",
+                "include_once_expression",
+            ],
+            symbol_kinds: &["name", "qualified_name"],
+            comment_kinds: &["comment"],
+        }
+    }
+
+    /// Adapter for TypeScript syntax facts.
+    pub fn typescript() -> Self {
+        Self {
+            language_id: "typescript",
+            language: tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+            definition_kinds: TS_DEFINITION_KINDS,
+            import_kinds: &["import_statement"],
+            symbol_kinds: &["identifier", "type_identifier"],
+            comment_kinds: &["comment"],
+        }
+    }
+
+    /// Adapter for TSX syntax facts.
+    pub fn tsx() -> Self {
+        Self {
+            language_id: "tsx",
+            language: tree_sitter_typescript::LANGUAGE_TSX.into(),
+            definition_kinds: TS_DEFINITION_KINDS,
+            import_kinds: &["import_statement"],
+            symbol_kinds: &["identifier", "type_identifier"],
+            comment_kinds: &["comment"],
+        }
+    }
+
+    /// Adapter for JavaScript (and JSX) syntax facts.
+    pub fn javascript() -> Self {
+        Self {
+            language_id: "javascript",
+            language: tree_sitter_javascript::LANGUAGE.into(),
+            definition_kinds: &[
+                "class_declaration",
+                "function_declaration",
+                "generator_function_declaration",
+                "method_definition",
+            ],
+            import_kinds: &["import_statement"],
+            symbol_kinds: &["identifier"],
+            comment_kinds: &["comment"],
+        }
+    }
+
+    /// Adapter for HTML syntax facts. HTML has no import-like construct, so
+    /// `imports` is always empty.
+    pub fn html() -> Self {
+        Self {
+            language_id: "html",
+            language: tree_sitter_html::LANGUAGE.into(),
+            definition_kinds: &["element", "script_element", "style_element"],
+            import_kinds: &[],
+            symbol_kinds: &["tag_name", "attribute_name"],
+            comment_kinds: &["comment"],
+        }
+    }
+
+    /// Adapter for CSS syntax facts.
+    pub fn css() -> Self {
+        Self {
+            language_id: "css",
+            language: tree_sitter_css::LANGUAGE.into(),
+            definition_kinds: &["rule_set", "at_rule"],
+            import_kinds: &["import_statement"],
+            symbol_kinds: &["class_selector", "id_selector"],
+            comment_kinds: &["comment"],
+        }
+    }
+
+    /// Adapter for SQL syntax facts. SQL has no import-like construct, so
+    /// `imports` is always empty.
+    pub fn sql() -> Self {
+        Self {
+            language_id: "sql",
+            language: tree_sitter_sequel::LANGUAGE.into(),
+            definition_kinds: &[
+                "create_table",
+                "create_view",
+                "create_materialized_view",
+                "create_function",
+                "create_index",
+                "create_type",
+                "create_schema",
+                "create_trigger",
+            ],
+            import_kinds: &[],
+            symbol_kinds: &["identifier"],
+            comment_kinds: &["comment"],
+        }
+    }
+
     /// Stable language id for this adapter.
     pub fn language_id(&self) -> &'static str {
         self.language_id
@@ -163,6 +412,103 @@ impl TreeSitterParserAdapter {
         };
         collect_node_facts(self, tree.root_node(), source, &mut output);
         output
+    }
+}
+
+/// `Copy`-able identifier for a language wired through the generic
+/// syntax-indexed graph path (see `graph::builder`). Unlike
+/// [`LanguageRegistryEntry::id`](crate::inventory::language::LanguageRegistryEntry),
+/// which is a `&'static str`, this is a plain enum so it can be used as an
+/// [`AnalyzerKind`](crate::analysis::AnalyzerKind) cache-key discriminant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SyntaxIndexedLanguage {
+    /// C.
+    C,
+    /// C++.
+    Cpp,
+    /// C#.
+    CSharp,
+    /// Java.
+    Java,
+    /// Kotlin.
+    Kotlin,
+    /// Go.
+    Go,
+    /// PHP.
+    Php,
+    /// TypeScript.
+    TypeScript,
+    /// TSX.
+    Tsx,
+    /// JavaScript (and JSX).
+    JavaScript,
+    /// HTML.
+    Html,
+    /// CSS.
+    Css,
+    /// SQL.
+    Sql,
+}
+
+impl SyntaxIndexedLanguage {
+    /// Looks up the variant matching a
+    /// [`LanguageRegistryEntry::id`](crate::inventory::language::LanguageRegistryEntry::id).
+    pub fn from_registry_id(id: &str) -> Option<Self> {
+        Some(match id {
+            "c" => Self::C,
+            "cpp" => Self::Cpp,
+            "c_sharp" => Self::CSharp,
+            "java" => Self::Java,
+            "kotlin" => Self::Kotlin,
+            "go" => Self::Go,
+            "php" => Self::Php,
+            "typescript" => Self::TypeScript,
+            "tsx" => Self::Tsx,
+            "javascript" => Self::JavaScript,
+            "html" => Self::Html,
+            "css" => Self::Css,
+            "sql" => Self::Sql,
+            _ => return None,
+        })
+    }
+
+    /// The [`LanguageRegistryEntry::id`](crate::inventory::language::LanguageRegistryEntry::id)
+    /// matching this variant. Inverse of [`Self::from_registry_id`].
+    pub fn registry_id(self) -> &'static str {
+        match self {
+            Self::C => "c",
+            Self::Cpp => "cpp",
+            Self::CSharp => "c_sharp",
+            Self::Java => "java",
+            Self::Kotlin => "kotlin",
+            Self::Go => "go",
+            Self::Php => "php",
+            Self::TypeScript => "typescript",
+            Self::Tsx => "tsx",
+            Self::JavaScript => "javascript",
+            Self::Html => "html",
+            Self::Css => "css",
+            Self::Sql => "sql",
+        }
+    }
+
+    /// Builds the tree-sitter adapter for this language.
+    pub fn adapter(self) -> TreeSitterParserAdapter {
+        match self {
+            Self::C => TreeSitterParserAdapter::c(),
+            Self::Cpp => TreeSitterParserAdapter::cpp(),
+            Self::CSharp => TreeSitterParserAdapter::csharp(),
+            Self::Java => TreeSitterParserAdapter::java(),
+            Self::Kotlin => TreeSitterParserAdapter::kotlin(),
+            Self::Go => TreeSitterParserAdapter::go(),
+            Self::Php => TreeSitterParserAdapter::php(),
+            Self::TypeScript => TreeSitterParserAdapter::typescript(),
+            Self::Tsx => TreeSitterParserAdapter::tsx(),
+            Self::JavaScript => TreeSitterParserAdapter::javascript(),
+            Self::Html => TreeSitterParserAdapter::html(),
+            Self::Css => TreeSitterParserAdapter::css(),
+            Self::Sql => TreeSitterParserAdapter::sql(),
+        }
     }
 }
 
@@ -347,5 +693,152 @@ mod tests {
         assert_eq!(rust.functions[0].name, "hello");
 
         Ok(())
+    }
+
+    /// One case per broad-wave language family: source, whether it declares
+    /// an import-like construct, and the adapter under test. Each case
+    /// asserts a parsed status, at least one definition fact, at least one
+    /// comment fact, and (when applicable) at least one import fact --
+    /// mirroring LIT-22.2.3 AC1/AC2 without duplicating a full grammar test
+    /// suite per language.
+    fn broad_wave_cases() -> Vec<(&'static str, &'static str, bool, TreeSitterParserAdapter)> {
+        vec![
+            (
+                "c",
+                "// leading comment\n#include <stdio.h>\nstruct Point { int x; int y; };\nint add(int a, int b) { return a + b; }\n",
+                true,
+                TreeSitterParserAdapter::c(),
+            ),
+            (
+                "cpp",
+                "// leading comment\n#include <vector>\nnamespace app { class Greeter { public: void hello(); }; }\n",
+                true,
+                TreeSitterParserAdapter::cpp(),
+            ),
+            (
+                "csharp",
+                "// leading comment\nusing System;\nnamespace App { class Greeter { void Hello() {} } }\n",
+                true,
+                TreeSitterParserAdapter::csharp(),
+            ),
+            (
+                "java",
+                "// leading comment\nimport java.util.List;\nclass Greeter { void hello() {} }\n",
+                true,
+                TreeSitterParserAdapter::java(),
+            ),
+            (
+                "kotlin",
+                "// leading comment\nimport kotlin.collections.List\n\nclass Greeter {\n    fun hello() {}\n}\n",
+                true,
+                TreeSitterParserAdapter::kotlin(),
+            ),
+            (
+                "go",
+                "// leading comment\npackage main\nimport \"fmt\"\nfunc hello() {}\n",
+                true,
+                TreeSitterParserAdapter::go(),
+            ),
+            (
+                "php",
+                "<?php\n// leading comment\nnamespace App;\nuse Foo\\Bar;\nclass Greeter { function hello() {} }\n",
+                true,
+                TreeSitterParserAdapter::php(),
+            ),
+            (
+                "typescript",
+                "// leading comment\nimport { List } from \"immutable\";\nclass Greeter { hello(): void {} }\n",
+                true,
+                TreeSitterParserAdapter::typescript(),
+            ),
+            (
+                "tsx",
+                "// leading comment\nimport { List } from \"immutable\";\nclass Greeter { hello(): void {} }\n",
+                true,
+                TreeSitterParserAdapter::tsx(),
+            ),
+            (
+                "javascript",
+                "// leading comment\nimport { List } from \"immutable\";\nclass Greeter { hello() {} }\n",
+                true,
+                TreeSitterParserAdapter::javascript(),
+            ),
+            (
+                "html",
+                "<!-- leading comment -->\n<html><body><div class=\"greeter\">Hello</div></body></html>\n",
+                false,
+                TreeSitterParserAdapter::html(),
+            ),
+            (
+                "css",
+                "/* leading comment */\n@import url(\"base.css\");\n.greeter { color: red; }\n",
+                true,
+                TreeSitterParserAdapter::css(),
+            ),
+            (
+                "sql",
+                "-- leading comment\nCREATE TABLE greeter (id INT PRIMARY KEY);\n",
+                false,
+                TreeSitterParserAdapter::sql(),
+            ),
+        ]
+    }
+
+    #[test]
+    fn broad_wave_adapters_extract_definitions_and_comments() {
+        for (label, source, _expects_import, adapter) in broad_wave_cases() {
+            let output = adapter.parse(source);
+            assert_eq!(
+                output.status,
+                TreeSitterParseStatus::Parsed,
+                "{label} failed to parse"
+            );
+            assert!(
+                !output.definitions.is_empty(),
+                "{label} produced no definitions"
+            );
+            assert!(!output.comments.is_empty(), "{label} produced no comments");
+        }
+    }
+
+    #[test]
+    fn broad_wave_adapters_extract_imports_where_the_language_has_them() {
+        for (label, source, expects_import, adapter) in broad_wave_cases() {
+            let output = adapter.parse(source);
+            assert_eq!(
+                !output.imports.is_empty(),
+                expects_import,
+                "{label} import expectation mismatch"
+            );
+        }
+    }
+
+    #[test]
+    fn syntax_indexed_language_round_trips_registry_ids() {
+        for id in [
+            "c",
+            "cpp",
+            "c_sharp",
+            "java",
+            "kotlin",
+            "go",
+            "php",
+            "typescript",
+            "tsx",
+            "javascript",
+            "html",
+            "css",
+            "sql",
+        ] {
+            let Some(language) = super::SyntaxIndexedLanguage::from_registry_id(id) else {
+                unreachable!("missing SyntaxIndexedLanguage mapping for {id}");
+            };
+            assert_eq!(language.registry_id(), id);
+            assert_eq!(
+                language.adapter().parse("").status,
+                TreeSitterParseStatus::Parsed
+            );
+        }
+        assert!(super::SyntaxIndexedLanguage::from_registry_id("ruby").is_none());
     }
 }

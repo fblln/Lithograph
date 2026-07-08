@@ -49,6 +49,7 @@ pub use structured::{
     StructuredFormat,
 };
 pub use tree_sitter_adapter::{
-    TreeSitterAdapterOutput, TreeSitterComment, TreeSitterParseStatus, TreeSitterParserAdapter,
-    TreeSitterSyntaxError, TreeSitterSyntaxFact, parse_with_optional_adapter,
+    SyntaxIndexedLanguage, TreeSitterAdapterOutput, TreeSitterComment, TreeSitterParseStatus,
+    TreeSitterParserAdapter, TreeSitterSyntaxError, TreeSitterSyntaxFact,
+    parse_with_optional_adapter,
 };

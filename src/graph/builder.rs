@@ -8,8 +8,9 @@ use crate::analysis::{
     MarkdownAnalysis, MarkdownAnalyzer, PyProjectAnalyzer, PyProjectProfile, PythonAnalysis,
     PythonAnalyzer, PythonImportKind, PythonReferenceKind, RequirementsAnalyzer,
     RequirementsProfile, RustAnalysis, RustAnalyzer, RustReferenceKind, RustWorkspaceAnalysis,
-    RustWorkspaceAnalyzer, StructuredAnalysis, StructuredAnalyzer, StructuredFormat, TextFinding,
-    TextFindingKind, is_python_stdlib_module, python, rust_source, rust_std_crate,
+    RustWorkspaceAnalyzer, StructuredAnalysis, StructuredAnalyzer, StructuredFormat,
+    SyntaxIndexedLanguage, TextFinding, TextFindingKind, TreeSitterAdapterOutput,
+    is_python_stdlib_module, python, rust_source, rust_std_crate,
 };
 use crate::domain::{
     AnalyzerSelection, Artifact, ArtifactId, Confidence, EvidenceRef, ModelExposurePolicy,
@@ -169,6 +170,9 @@ fn analyzer_kind(artifact: &Artifact) -> Option<AnalyzerKind> {
         {
             Some(AnalyzerKind::Structured(structured_format(format)))
         }
+        (AnalyzerSelection::SyntaxIndexed(id), _) => {
+            SyntaxIndexedLanguage::from_registry_id(id).map(AnalyzerKind::SyntaxIndexed)
+        }
         (AnalyzerSelection::GenericText, _) => Some(AnalyzerKind::GenericText),
         _ => None,
     }
@@ -214,6 +218,9 @@ fn compute_fresh(
         }
         AnalyzerKind::Structured(format) => {
             AnalyzerOutput::Structured(format, StructuredAnalyzer.analyze(artifact, text, format))
+        }
+        AnalyzerKind::SyntaxIndexed(language) => {
+            AnalyzerOutput::SyntaxIndexed(language, language.adapter().parse(text))
         }
         AnalyzerKind::GenericText => {
             AnalyzerOutput::GenericText(GenericTextExtractor.extract(artifact, text))
@@ -499,6 +506,9 @@ impl BuilderState {
             AnalyzerOutput::PyProject(profile) => self.process_pyproject(profile, &node),
             AnalyzerOutput::Structured(_, analysis) => {
                 self.process_structured(artifact, analysis, &node);
+            }
+            AnalyzerOutput::SyntaxIndexed(language, output) => {
+                self.process_syntax_indexed(artifact, language, output, &node);
             }
             AnalyzerOutput::GenericText(findings) => {
                 self.process_generic_text(artifact, &findings, &node);
@@ -1172,6 +1182,81 @@ impl BuilderState {
         }
     }
 
+    /// Resolves a generic tree-sitter [`TreeSitterAdapterOutput`] (LIT-22.2.3)
+    /// into a `Module` node, one `Symbol` node per definition fact, and an
+    /// `Imports` relation per import fact. Unlike Python/Rust's specialized
+    /// processing, this never resolves an import target to a known module or
+    /// package -- it always lands on an `Unresolved` node with
+    /// `RelationResolution::SyntaxOnly` provenance, since cross-file
+    /// resolution for these languages is LIT-22.3's hybrid resolver, not
+    /// this syntax-only pass (AC3: never overclaim `HybridResolved`).
+    fn process_syntax_indexed(
+        &mut self,
+        artifact: &Artifact,
+        language: SyntaxIndexedLanguage,
+        output: TreeSitterAdapterOutput,
+        artifact_node: &GraphNodeId,
+    ) {
+        let module_id = self.module(
+            artifact.path.as_str(),
+            ModuleLanguage::SyntaxIndexed(language),
+            file_evidence(artifact),
+        );
+        self.relate(
+            artifact_node.clone(),
+            module_id,
+            RelationKind::BelongsToModule,
+            Confidence::High,
+            vec![file_evidence(artifact)],
+        );
+
+        let registry_id = language.registry_id();
+
+        for definition in &output.definitions {
+            let evidence = syntax_fact_evidence(artifact, definition.span.clone());
+            let qualified = format!(
+                "{}::{}@L{}",
+                artifact.path, definition.kind, definition.span.start_line
+            );
+            let symbol_id = self.insert(GraphNode::Symbol(SymbolNode {
+                id: GraphNodeId::new(format!("symbol:{qualified}")),
+                kind: SymbolKind::Definition,
+                qualified_name: qualified,
+                doc: None,
+                evidence: evidence.clone(),
+            }));
+            self.relate_with_provenance(
+                artifact_node.clone(),
+                symbol_id,
+                RelationKind::Contains,
+                Confidence::High,
+                vec![evidence],
+                Some(format_provenance(
+                    registry_id,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
+            );
+        }
+
+        for import in &output.imports {
+            let evidence = syntax_fact_evidence(artifact, import.span.clone());
+            let target = self.unresolved(&import.text);
+            self.relate_with_provenance(
+                artifact_node.clone(),
+                target,
+                RelationKind::Imports,
+                Confidence::Low,
+                vec![evidence],
+                Some(format_provenance(
+                    registry_id,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::Low,
+                )),
+            );
+        }
+    }
+
     fn process_cargo(&mut self, profile: CargoProfile, artifact_node: &GraphNodeId) {
         let Some(package) = &profile.package else {
             return;
@@ -1559,6 +1644,10 @@ fn generic_finding_evidence(artifact: &Artifact, line: u32) -> EvidenceRef {
     }
 }
 
+fn syntax_fact_evidence(artifact: &Artifact, span: crate::domain::SourceSpan) -> EvidenceRef {
+    EvidenceRef::file(ArtifactId::from_path(&artifact.path), artifact.path.clone()).with_span(span)
+}
+
 fn artifact_provenance(
     artifact: &Artifact,
     resolution: RelationResolution,
@@ -1888,18 +1977,21 @@ mod tests {
         assert_eq!(provenance.resolver_strategy, "specialized-hybrid");
         assert_eq!(provenance.confidence, python_import.confidence);
 
-        let tsx_fallback = graph
+        // App.tsx is now syntax-indexed (LIT-22.2.3): its import is a
+        // syntax-only fact, not a generic-text fallback finding.
+        let tsx_import = graph
             .relations
             .iter()
             .find(|relation| {
-                relation.source.as_str() == "artifact:web/src/App.tsx"
+                relation.kind == RelationKind::Imports
+                    && relation.source.as_str() == "artifact:web/src/App.tsx"
                     && relation.provenance.as_ref().is_some_and(|provenance| {
                         provenance.language.as_deref() == Some("tsx")
-                            && provenance.resolution == RelationResolution::Fallback
+                            && provenance.resolution == RelationResolution::SyntaxOnly
                     })
             })
-            .ok_or_else(|| std::io::Error::other("missing tsx fallback relation"))?;
-        assert_eq!(tsx_fallback.confidence, crate::domain::Confidence::Low);
+            .ok_or_else(|| std::io::Error::other("missing tsx syntax-indexed import relation"))?;
+        assert_eq!(tsx_import.confidence, crate::domain::Confidence::Low);
 
         Ok(())
     }

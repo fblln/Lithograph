@@ -106,6 +106,10 @@ pub enum SymbolKind {
     Enum,
     /// Rust trait.
     Trait,
+    /// Definition-like syntax fact from a generic syntax-indexed language
+    /// (see LIT-22.2.3), e.g. a class, function, or struct in a language
+    /// with a tree-sitter adapter but no specialized deep analyzer.
+    Definition,
 }
 
 /// Code symbol node.
@@ -198,6 +202,9 @@ pub enum ModuleLanguage {
     Python,
     /// Rust module.
     Rust,
+    /// A generic syntax-indexed language (see LIT-22.2.3), backed by a
+    /// tree-sitter adapter but not yet a specialized deep analyzer.
+    SyntaxIndexed(crate::analysis::SyntaxIndexedLanguage),
 }
 
 /// Source module node.

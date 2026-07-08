@@ -474,36 +474,71 @@ mod tests {
     #[test]
     fn phase_one_registry_languages_and_formats_are_classified()
     -> Result<(), Box<dyn std::error::Error>> {
+        // LIT-22.2.3: each of these now has a wired tree-sitter adapter, so
+        // it classifies as syntax-indexed by registry id (which differs
+        // from the display name for c_sharp) rather than a generic-text
+        // fallback.
         let cases = [
-            ("web/src/app.tsx", "tsx", ArtifactCategory::SourceCode),
+            (
+                "web/src/app.tsx",
+                "tsx",
+                "tsx",
+                ArtifactCategory::SourceCode,
+            ),
             (
                 "web/src/component.jsx",
                 "javascript",
+                "javascript",
                 ArtifactCategory::SourceCode,
             ),
-            ("cmd/server.go", "go", ArtifactCategory::SourceCode),
+            ("cmd/server.go", "go", "go", ArtifactCategory::SourceCode),
             (
                 "src/main/java/App.java",
+                "java",
                 "java",
                 ArtifactCategory::SourceCode,
             ),
             (
                 "src/main/kotlin/App.kt",
                 "kotlin",
+                "kotlin",
                 ArtifactCategory::SourceCode,
             ),
-            ("src/Program.cs", "csharp", ArtifactCategory::SourceCode),
-            ("public/index.php", "php", ArtifactCategory::SourceCode),
-            ("schema/tables.sql", "sql", ArtifactCategory::DatabaseSchema),
-            ("web/styles/site.css", "css", ArtifactCategory::StaticAsset),
+            (
+                "src/Program.cs",
+                "csharp",
+                "c_sharp",
+                ArtifactCategory::SourceCode,
+            ),
+            (
+                "public/index.php",
+                "php",
+                "php",
+                ArtifactCategory::SourceCode,
+            ),
+            (
+                "schema/tables.sql",
+                "sql",
+                "sql",
+                ArtifactCategory::DatabaseSchema,
+            ),
+            (
+                "web/styles/site.css",
+                "css",
+                "css",
+                ArtifactCategory::StaticAsset,
+            ),
         ];
 
-        for (path, format, category) in cases {
+        for (path, format, registry_id, category) in cases {
             let classification = classify(path, TextStatus::Text, Some(""))?;
             assert_eq!(classification.detected_format.as_deref(), Some(format));
             assert_eq!(classification.category, category);
-            assert_eq!(classification.support_tier, SupportTier::GenericText);
-            assert_eq!(classification.analyzer, AnalyzerSelection::GenericText);
+            assert_eq!(classification.support_tier, SupportTier::StructuredFormat);
+            assert_eq!(
+                classification.analyzer,
+                AnalyzerSelection::SyntaxIndexed(registry_id.to_owned())
+            );
         }
 
         let migration = classify("db/migrations/001_init.sql", TextStatus::Text, Some(""))?;

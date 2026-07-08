@@ -953,9 +953,11 @@ mod tests {
 
         assert_eq!(python.tier, LanguageSupportTier::HybridResolved);
         assert_eq!(python.target_tier, LanguageSupportTier::HybridResolved);
-        assert_eq!(go.tier, LanguageSupportTier::Detected);
+        // go now has a wired tree-sitter adapter (LIT-22.2.3): syntax-indexed
+        // today, hybrid resolution is still LIT-22.3's job.
+        assert_eq!(go.tier, LanguageSupportTier::SyntaxIndexed);
         assert_eq!(go.target_tier, LanguageSupportTier::HybridResolved);
-        assert_eq!(sql.tier, LanguageSupportTier::Detected);
+        assert_eq!(sql.tier, LanguageSupportTier::SyntaxIndexed);
         assert_eq!(sql.target_tier, LanguageSupportTier::SyntaxIndexed);
 
         Ok(())

@@ -5,7 +5,7 @@ use std::sync::LazyLock;
 
 /// Bump when registry entries, extension mappings, tiers, or analyzer routing
 /// change in a way that should invalidate graph planning inputs.
-pub const LANGUAGE_REGISTRY_VERSION: u32 = 2;
+pub const LANGUAGE_REGISTRY_VERSION: u32 = 3;
 
 /// Agent-facing index support level represented by the registry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -52,6 +52,9 @@ impl LanguageRegistryEntry {
             AnalyzerSelectionTemplate::Structured => {
                 AnalyzerSelection::Structured(self.name.to_owned())
             }
+            AnalyzerSelectionTemplate::SyntaxIndexed => {
+                AnalyzerSelection::SyntaxIndexed(self.id.to_owned())
+            }
             AnalyzerSelectionTemplate::GenericText => AnalyzerSelection::GenericText,
             AnalyzerSelectionTemplate::Opaque => AnalyzerSelection::Opaque,
         }
@@ -65,6 +68,8 @@ pub enum AnalyzerSelectionTemplate {
     Specialized,
     /// Structured format analyzer.
     Structured,
+    /// Generic tree-sitter syntax-indexed analyzer.
+    SyntaxIndexed,
     /// Generic text analyzer.
     GenericText,
     /// Opaque metadata-only analyzer.
@@ -87,16 +92,16 @@ pub static LANGUAGE_REGISTRY: LazyLock<Vec<LanguageRegistryEntry>> = LazyLock::n
 const CODEBASE_MEMORY_REGISTRY: &[LanguageRegistryEntry] = &[
     hybrid_current("python", &["py"]),
     hybrid_current("rust", &["rs"]),
-    hybrid_target("typescript", &["ts", "mts", "cts"]),
-    hybrid_target("tsx", &["tsx"]),
-    hybrid_target("javascript", &["js", "jsx", "mjs", "cjs"]),
-    hybrid_target("go", &["go"]),
-    hybrid_target("java", &["java"]),
-    hybrid_target("kotlin", &["kt", "kts"]),
-    hybrid_target_with_id("c_sharp", "csharp", &["cs"]),
-    hybrid_target("php", &["php"]),
-    hybrid_target("c", &["c"]),
-    hybrid_target_with_id(
+    syntax_indexed_hybrid_target("typescript", &["ts", "mts", "cts"]),
+    syntax_indexed_hybrid_target("tsx", &["tsx"]),
+    syntax_indexed_hybrid_target("javascript", &["js", "jsx", "mjs", "cjs"]),
+    syntax_indexed_hybrid_target("go", &["go"]),
+    syntax_indexed_hybrid_target("java", &["java"]),
+    syntax_indexed_hybrid_target("kotlin", &["kt", "kts"]),
+    syntax_indexed_hybrid_target_with_id("c_sharp", "csharp", &["cs"]),
+    syntax_indexed_hybrid_target("php", &["php"]),
+    syntax_indexed_hybrid_target("c", &["c"]),
+    syntax_indexed_hybrid_target_with_id(
         "cpp",
         "cpp",
         &[
@@ -128,9 +133,9 @@ const CODEBASE_MEMORY_REGISTRY: &[LanguageRegistryEntry] = &[
         ArtifactCategory::ContinuousIntegration,
         &[],
     ),
-    syntax_target("sql", "sql", ArtifactCategory::DatabaseSchema, &["sql"]),
-    syntax_target("html", "html", ArtifactCategory::Template, &["html", "htm"]),
-    syntax_target("css", "css", ArtifactCategory::StaticAsset, &["css"]),
+    syntax_indexed_current("sql", "sql", ArtifactCategory::DatabaseSchema, &["sql"]),
+    syntax_indexed_current("html", "html", ArtifactCategory::Template, &["html", "htm"]),
+    syntax_indexed_current("css", "css", ArtifactCategory::StaticAsset, &["css"]),
     syntax_target("scss", "scss", ArtifactCategory::StaticAsset, &["scss"]),
     syntax_target("bash", "bash", ArtifactCategory::Script, &["bash", "sh"]),
     syntax_target(
@@ -747,14 +752,17 @@ const fn hybrid_current_with_id(
     }
 }
 
-const fn hybrid_target(
+/// A source language with a wired [`TreeSitterParserAdapter`](crate::analysis::TreeSitterParserAdapter)
+/// (`current_tier: SyntaxIndexed`) still awaiting cross-file hybrid
+/// resolution (`target_tier: HybridResolved`, see LIT-22.3).
+const fn syntax_indexed_hybrid_target(
     name: &'static str,
     extensions: &'static [&'static str],
 ) -> LanguageRegistryEntry {
-    hybrid_target_with_id(name, name, extensions)
+    syntax_indexed_hybrid_target_with_id(name, name, extensions)
 }
 
-const fn hybrid_target_with_id(
+const fn syntax_indexed_hybrid_target_with_id(
     id: &'static str,
     name: &'static str,
     extensions: &'static [&'static str],
@@ -763,11 +771,34 @@ const fn hybrid_target_with_id(
         id,
         name,
         category: ArtifactCategory::SourceCode,
-        support_tier: SupportTier::GenericText,
-        current_tier: RegistryIndexTier::Detected,
+        support_tier: SupportTier::StructuredFormat,
+        current_tier: RegistryIndexTier::SyntaxIndexed,
         target_tier: RegistryIndexTier::HybridResolved,
-        analyzer: AnalyzerSelectionTemplate::GenericText,
-        resolver_strategy: "generic-text-fallback",
+        analyzer: AnalyzerSelectionTemplate::SyntaxIndexed,
+        resolver_strategy: "syntax-indexed-treesitter",
+        extensions,
+    }
+}
+
+/// A structured/query format with a wired
+/// [`TreeSitterParserAdapter`](crate::analysis::TreeSitterParserAdapter) and
+/// no further hybrid-resolution target (`current_tier` ==  `target_tier` ==
+/// `SyntaxIndexed`), e.g. HTML, CSS, and SQL.
+const fn syntax_indexed_current(
+    id: &'static str,
+    name: &'static str,
+    category: ArtifactCategory,
+    extensions: &'static [&'static str],
+) -> LanguageRegistryEntry {
+    LanguageRegistryEntry {
+        id,
+        name,
+        category,
+        support_tier: SupportTier::StructuredFormat,
+        current_tier: RegistryIndexTier::SyntaxIndexed,
+        target_tier: RegistryIndexTier::SyntaxIndexed,
+        analyzer: AnalyzerSelectionTemplate::SyntaxIndexed,
+        resolver_strategy: "syntax-indexed-treesitter",
         extensions,
     }
 }
@@ -864,15 +895,15 @@ mod tests {
         let cases = [
             ("py", "python", RegistryIndexTier::HybridResolved),
             ("rs", "rust", RegistryIndexTier::HybridResolved),
-            ("ts", "typescript", RegistryIndexTier::Detected),
-            ("tsx", "tsx", RegistryIndexTier::Detected),
-            ("js", "javascript", RegistryIndexTier::Detected),
-            ("jsx", "javascript", RegistryIndexTier::Detected),
-            ("go", "go", RegistryIndexTier::Detected),
-            ("java", "java", RegistryIndexTier::Detected),
-            ("kt", "kotlin", RegistryIndexTier::Detected),
-            ("cs", "csharp", RegistryIndexTier::Detected),
-            ("php", "php", RegistryIndexTier::Detected),
+            ("ts", "typescript", RegistryIndexTier::SyntaxIndexed),
+            ("tsx", "tsx", RegistryIndexTier::SyntaxIndexed),
+            ("js", "javascript", RegistryIndexTier::SyntaxIndexed),
+            ("jsx", "javascript", RegistryIndexTier::SyntaxIndexed),
+            ("go", "go", RegistryIndexTier::SyntaxIndexed),
+            ("java", "java", RegistryIndexTier::SyntaxIndexed),
+            ("kt", "kotlin", RegistryIndexTier::SyntaxIndexed),
+            ("cs", "csharp", RegistryIndexTier::SyntaxIndexed),
+            ("php", "php", RegistryIndexTier::SyntaxIndexed),
         ];
 
         for (extension, name, current_tier) in cases {
@@ -900,14 +931,17 @@ mod tests {
         );
 
         let go = by_name("go").ok_or_else(|| std::io::Error::other("missing go registry entry"))?;
-        assert_eq!(go.support_tier, SupportTier::GenericText);
-        assert_eq!(go.current_tier, RegistryIndexTier::Detected);
+        assert_eq!(go.support_tier, SupportTier::StructuredFormat);
+        assert_eq!(go.current_tier, RegistryIndexTier::SyntaxIndexed);
         assert_eq!(go.target_tier, RegistryIndexTier::HybridResolved);
-        assert_eq!(go.analyzer_selection(), AnalyzerSelection::GenericText);
+        assert_eq!(
+            go.analyzer_selection(),
+            AnalyzerSelection::SyntaxIndexed("go".to_owned())
+        );
 
         let sql =
             by_name("sql").ok_or_else(|| std::io::Error::other("missing sql registry entry"))?;
-        assert_eq!(sql.current_tier, RegistryIndexTier::Detected);
+        assert_eq!(sql.current_tier, RegistryIndexTier::SyntaxIndexed);
         assert_eq!(sql.target_tier, RegistryIndexTier::SyntaxIndexed);
 
         Ok(())
@@ -933,6 +967,37 @@ mod tests {
             .ok_or_else(|| std::io::Error::other("missing prisma registry entry"))?;
         assert_eq!(prisma.current_tier, RegistryIndexTier::Detected);
         assert_eq!(prisma.target_tier, RegistryIndexTier::SyntaxIndexed);
+
+        Ok(())
+    }
+
+    #[test]
+    fn every_current_tier_above_detected_has_a_runnable_analyzer()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // LIT-22.2.3 AC3: a registry entry may only claim `SyntaxIndexed` or
+        // `HybridResolved` for `current_tier` when some analyzer actually
+        // backs that claim -- a specialized analyzer (python/rust), a
+        // structured-format analyzer, or a wired tree-sitter adapter. Every
+        // other entry (the long tail of grammar ids with no adapter yet)
+        // must stay at `Detected`, never overclaim.
+        for entry in LANGUAGE_REGISTRY.iter() {
+            if entry.current_tier == RegistryIndexTier::Detected {
+                continue;
+            }
+            let backed = matches!(
+                entry.analyzer,
+                super::AnalyzerSelectionTemplate::Specialized
+                    | super::AnalyzerSelectionTemplate::Structured
+                    | super::AnalyzerSelectionTemplate::SyntaxIndexed
+            );
+            if !backed {
+                return Err(std::io::Error::other(format!(
+                    "registry entry {} claims current_tier {:?} without a backing analyzer",
+                    entry.id, entry.current_tier
+                ))
+                .into());
+            }
+        }
 
         Ok(())
     }
