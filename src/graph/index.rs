@@ -293,6 +293,46 @@ impl<'a> KnowledgeIndex<'a> {
         })
     }
 
+    /// Traces everything that (transitively) depends on the node matching
+    /// `params.query` -- "what breaks if this changes." A thin wrapper over
+    /// [`Self::trace`] that always uses [`TraceDirection::Inbound`]
+    /// regardless of `params.direction`, since "impact" only ever means
+    /// upstream dependents, never downstream dependencies.
+    pub fn impact_analysis(&self, params: &TraceParams) -> Option<TraceResult> {
+        self.trace(&TraceParams {
+            query: params.query.clone(),
+            depth: params.depth,
+            direction: TraceDirection::Inbound,
+        })
+    }
+
+    /// Symbol nodes with no inbound relation anywhere in the graph -- never
+    /// called, implemented, referenced, or used. A heuristic (it can't see
+    /// true entry points like a `main` function or reflection-based
+    /// dynamic dispatch), not a certainty; callers should treat the result
+    /// as candidates to review, not a definite deletion list.
+    pub fn find_dead_code(&self) -> Vec<SearchResult> {
+        // `Contains` (an artifact/class defining this symbol) is structural,
+        // not a use -- every symbol has exactly one, so counting it would
+        // make every symbol look "referenced" and this method useless.
+        let mut referenced: BTreeSet<&GraphNodeId> = BTreeSet::new();
+        for relation in &self.graph.relations {
+            if relation.kind != RelationKind::Contains {
+                referenced.insert(&relation.target);
+            }
+        }
+        let degree = self.degree_index();
+        let mut dead: Vec<SearchResult> = self
+            .graph
+            .nodes
+            .iter()
+            .filter(|node| matches!(node, GraphNode::Symbol(_)) && !referenced.contains(node.id()))
+            .map(|node| search_result(node, &degree))
+            .collect();
+        dead.sort_by(|a, b| a.name.cmp(&b.name).then(a.id.cmp(&b.id)));
+        dead
+    }
+
     /// Returns a compact architecture summary over the graph.
     pub fn architecture(&self) -> ArchitectureSummary {
         let degree = self.degree_index();
@@ -692,6 +732,70 @@ mod tests {
             .collect();
         assert!(names.contains(&"GET /users/{id}"));
         assert!(names.contains(&"Greeter.SayHello"));
+
+        Ok(())
+    }
+
+    /// LIT-22.4.1 AC1: `find_dead_code` flags an uncalled function and
+    /// excludes a called one; `impact_analysis` always traces inbound
+    /// regardless of the `direction` passed in, and reports no results for
+    /// a query matching no node.
+    #[test]
+    fn find_dead_code_and_impact_analysis_behave_as_documented()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("app.py"),
+            "def used():\n    return 1\n\n\ndef unused():\n    return 2\n\n\ndef caller():\n    return used()\n",
+        )?;
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+        let index = KnowledgeIndex::new(&graph);
+
+        let dead_names: Vec<String> = index
+            .find_dead_code()
+            .into_iter()
+            .map(|result| result.name)
+            .collect();
+        assert!(dead_names.iter().any(|name| name.ends_with("::unused")));
+        assert!(!dead_names.iter().any(|name| name.ends_with("::used")));
+
+        let used_id = index
+            .search(&SearchParams {
+                label: Some("Symbol".to_owned()),
+                query: Some("app::used".to_owned()),
+                limit: 1,
+            })
+            .into_iter()
+            .next()
+            .ok_or("missing used() symbol")?
+            .id;
+        let impact = index
+            .impact_analysis(&TraceParams {
+                query: used_id.as_str().to_owned(),
+                depth: 2,
+                direction: TraceDirection::Outbound,
+            })
+            .ok_or("missing impact result")?;
+        // `Calls` relations are attributed to the containing artifact, not
+        // the specific calling symbol, so `used()`'s only caller is
+        // `app.py` itself, not a `caller` symbol node.
+        assert!(
+            impact
+                .visited
+                .iter()
+                .any(|hop| hop.node.file_path.as_deref() == Some("app.py"))
+        );
+
+        assert!(
+            index
+                .impact_analysis(&TraceParams {
+                    query: "no-such-node".to_owned(),
+                    depth: 1,
+                    direction: TraceDirection::Both,
+                })
+                .is_none()
+        );
 
         Ok(())
     }

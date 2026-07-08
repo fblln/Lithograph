@@ -2,6 +2,9 @@
 
 use crate::ask::WikiSearch;
 use crate::graph::{Graph, GraphStore, KnowledgeIndex, SearchParams, TraceDirection, TraceParams};
+use crate::inventory::{RepositoryWalker, WalkOptions};
+use crate::run::RepositorySnapshot;
+use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::io::{BufRead, Write};
@@ -74,7 +77,7 @@ impl WikiMcpServer {
                 let value: Value = serde_json::from_str(&std::fs::read_to_string(path)?)?;
                 Ok(value)
             }
-            "get_graph_schema" => {
+            "get_schema" | "get_graph_schema" => {
                 let graph = self.load_graph()?;
                 Ok(serde_json::to_value(KnowledgeIndex::new(&graph).schema())?)
             }
@@ -93,6 +96,21 @@ impl WikiMcpServer {
                     None => Err(format!("no graph node matched `{}`", params.query).into()),
                 }
             }
+            "impact_analysis" => {
+                let graph = self.load_graph()?;
+                let params = trace_params(&request.params)?;
+                match KnowledgeIndex::new(&graph).impact_analysis(&params) {
+                    Some(trace) => Ok(serde_json::to_value(trace)?),
+                    None => Err(format!("no graph node matched `{}`", params.query).into()),
+                }
+            }
+            "find_dead_code" => {
+                let graph = self.load_graph()?;
+                Ok(serde_json::to_value(
+                    KnowledgeIndex::new(&graph).find_dead_code(),
+                )?)
+            }
+            "detect_changes" => Ok(serde_json::to_value(self.detect_changes()?)?),
             "get_architecture" => {
                 let graph = self.load_graph()?;
                 Ok(serde_json::to_value(
@@ -118,6 +136,27 @@ impl WikiMcpServer {
 
     fn load_graph(&self) -> Result<Graph, Box<dyn std::error::Error>> {
         Ok(GraphStore::new(&self.repo_root).load()?.graph)
+    }
+
+    /// Artifact paths added, removed, or content-changed since the last
+    /// `init`/`update` run's `.lithograph/snapshot.json`. Reuses that
+    /// snapshot's own pipeline metadata (rather than the current binary's)
+    /// so a version bump alone never reports every file as "changed" --
+    /// this only ever reports real content differences.
+    fn detect_changes(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        let snapshot_path = self.repo_root.join(".lithograph/snapshot.json");
+        let previous: Option<RepositorySnapshot> = JsonStore.read(&snapshot_path)?;
+        let walk_options = WalkOptions {
+            exclude_globs: crate::orchestrate::scan_exclude_globs(),
+            ..WalkOptions::default()
+        };
+        let artifacts = RepositoryWalker::new(walk_options).walk(&self.repo_root)?;
+        let pipeline = previous
+            .as_ref()
+            .map(|snapshot| snapshot.pipeline.clone())
+            .unwrap_or_default();
+        let current = RepositorySnapshot::from_artifacts(&artifacts, pipeline);
+        Ok(current.changed_since(previous.as_ref()))
     }
 
     /// Runs a JSON-line request loop until EOF.
@@ -296,6 +335,88 @@ mod tests {
         );
         assert!(answer.result.is_some());
         assert!(answer.error.is_none());
+
+        Ok(())
+    }
+
+    /// LIT-22.4.1 AC1/AC2/AC3: `get_schema` (the `get_graph_schema` alias),
+    /// `impact_analysis`, `find_dead_code`, and `detect_changes` each
+    /// return a typed success response, and `impact_analysis` returns a
+    /// validation error for a query that matches no graph node.
+    #[test]
+    fn handles_new_query_tools_and_validation_errors() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let server = WikiMcpServer::new(temp.path());
+
+        let schema = server.handle(McpRequest {
+            id: json!(1),
+            tool: "get_schema".to_owned(),
+            params: json!({}),
+        });
+        assert!(
+            schema
+                .result
+                .as_ref()
+                .is_some_and(|value| value.get("node_labels").is_some())
+        );
+        assert!(schema.error.is_none());
+
+        let dead_code = server.handle(McpRequest {
+            id: json!(2),
+            tool: "find_dead_code".to_owned(),
+            params: json!({}),
+        });
+        assert!(dead_code.result.as_ref().is_some_and(Value::is_array));
+        assert!(dead_code.error.is_none());
+
+        let changes = server.handle(McpRequest {
+            id: json!(3),
+            tool: "detect_changes".to_owned(),
+            params: json!({}),
+        });
+        // No new snapshot has been written since `run_init`'s own, so
+        // nothing has changed relative to it.
+        assert_eq!(changes.result, Some(json!([])));
+        assert!(changes.error.is_none());
+
+        let impact = server.handle(McpRequest {
+            id: json!(4),
+            tool: "impact_analysis".to_owned(),
+            params: json!({ "query": "src/python_app/service.py" }),
+        });
+        assert!(
+            impact
+                .result
+                .as_ref()
+                .is_some_and(|value| value.get("visited").is_some())
+        );
+        assert!(impact.error.is_none());
+
+        let impact_error = server.handle(McpRequest {
+            id: json!(5),
+            tool: "impact_analysis".to_owned(),
+            params: json!({ "query": "no-such-node-anywhere" }),
+        });
+        assert!(impact_error.result.is_none());
+        assert!(
+            impact_error
+                .error
+                .as_ref()
+                .is_some_and(|error| error.contains("no graph node matched"))
+        );
+
+        let trace_missing_query = server.handle(McpRequest {
+            id: json!(6),
+            tool: "trace_path".to_owned(),
+            params: json!({}),
+        });
+        assert!(trace_missing_query.result.is_none());
+        assert!(trace_missing_query.error.is_some());
 
         Ok(())
     }

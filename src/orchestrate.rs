@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 /// Exclude patterns shared by every scan: Lithograph's own output must
 /// never become input to its next run, or every run would document (and
 /// hash-invalidate on) the previous run's generated pages and metadata.
-fn scan_exclude_globs() -> Vec<String> {
+pub(crate) fn scan_exclude_globs() -> Vec<String> {
     vec!["docs/lithograph/**".to_owned(), ".lithograph/**".to_owned()]
 }
 
