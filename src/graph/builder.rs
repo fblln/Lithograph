@@ -5,12 +5,12 @@ use crate::analysis::{
     ActionsProfile, ActionsProfileAnalyzer, ActionsStepHint, AnalysisCache, AnalyzerKind,
     AnalyzerOutput, CargoProfile, CargoProfileAnalyzer, ComposeProfile, ComposeProfileAnalyzer,
     ConfigReferenceKind, DockerfileAnalysis, DockerfileAnalyzer, GenericTextExtractor,
-    MarkdownAnalysis, MarkdownAnalyzer, PyProjectAnalyzer, PyProjectProfile, PythonAnalysis,
-    PythonAnalyzer, PythonImportKind, PythonReferenceKind, RequirementsAnalyzer,
-    RequirementsProfile, RustAnalysis, RustAnalyzer, RustReferenceKind, RustWorkspaceAnalysis,
-    RustWorkspaceAnalyzer, StructuredAnalysis, StructuredAnalyzer, StructuredFormat,
-    SyntaxIndexedLanguage, TextFinding, TextFindingKind, TreeSitterAdapterOutput,
-    is_python_stdlib_module, python, rust_source, rust_std_crate,
+    MarkdownAnalysis, MarkdownAnalyzer, PackageManifestAnalysis, PackageManifestFormat,
+    PyProjectAnalyzer, PyProjectProfile, PythonAnalysis, PythonAnalyzer, PythonImportKind,
+    PythonReferenceKind, RequirementsAnalyzer, RequirementsProfile, RustAnalysis, RustAnalyzer,
+    RustReferenceKind, RustWorkspaceAnalysis, RustWorkspaceAnalyzer, StructuredAnalysis,
+    StructuredAnalyzer, StructuredFormat, SyntaxIndexedLanguage, TextFinding, TextFindingKind,
+    TreeSitterAdapterOutput, is_python_stdlib_module, python, rust_source, rust_std_crate,
 };
 use crate::domain::{
     AnalyzerSelection, Artifact, ArtifactId, Confidence, EvidenceRef, ModelExposurePolicy,
@@ -145,6 +145,9 @@ fn analyzer_kind(artifact: &Artifact) -> Option<AnalyzerKind> {
         (AnalyzerSelection::Specialized(format), _) if format == "requirements-txt" => {
             Some(AnalyzerKind::Requirements)
         }
+        (AnalyzerSelection::Specialized(format), _) => {
+            PackageManifestFormat::from_format_id(format).map(AnalyzerKind::PackageManifest)
+        }
         (AnalyzerSelection::Structured(format), _) if format == "dockerfile" => {
             Some(AnalyzerKind::Dockerfile)
         }
@@ -221,6 +224,9 @@ fn compute_fresh(
         }
         AnalyzerKind::SyntaxIndexed(language) => {
             AnalyzerOutput::SyntaxIndexed(language, language.adapter().parse(text))
+        }
+        AnalyzerKind::PackageManifest(format) => {
+            AnalyzerOutput::PackageManifest(format, format.analyze(artifact, text))
         }
         AnalyzerKind::GenericText => {
             AnalyzerOutput::GenericText(GenericTextExtractor.extract(artifact, text))
@@ -509,6 +515,9 @@ impl BuilderState {
             }
             AnalyzerOutput::SyntaxIndexed(language, output) => {
                 self.process_syntax_indexed(artifact, language, output, &node);
+            }
+            AnalyzerOutput::PackageManifest(format, analysis) => {
+                self.process_package_manifest(format, analysis, &node);
             }
             AnalyzerOutput::GenericText(findings) => {
                 self.process_generic_text(artifact, &findings, &node);
@@ -1339,6 +1348,57 @@ impl BuilderState {
                 vec![requirement.evidence.clone()],
                 Some(format_provenance(
                     "requirements-txt",
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
+            );
+        }
+    }
+
+    /// Resolves a [`PackageManifestAnalysis`] (LIT-22.2.4) into a local
+    /// `Package` node (when the format declares one) and one external
+    /// `Package` node per dependency, mirroring `process_cargo`/
+    /// `process_pyproject`. Dependencies attach to the local package node
+    /// when one exists (so `DependsOnPackage` reads package-to-package, like
+    /// Cargo/pyproject), falling back to the artifact node otherwise (e.g.
+    /// Gradle, which has no in-file local package name).
+    fn process_package_manifest(
+        &mut self,
+        format: PackageManifestFormat,
+        analysis: PackageManifestAnalysis,
+        artifact_node: &GraphNodeId,
+    ) {
+        let format_id = format.format_id();
+        let local_package_id = analysis.local_package.map(|local| {
+            let package_id = self.package(&local.name, false);
+            self.relate_with_provenance(
+                artifact_node.clone(),
+                package_id.clone(),
+                RelationKind::BelongsToPackage,
+                Confidence::High,
+                vec![local.evidence],
+                Some(format_provenance(
+                    format_id,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
+            );
+            package_id
+        });
+
+        for dependency in analysis.dependencies {
+            let dependency_id = self.package(&dependency.name, true);
+            let source = local_package_id
+                .clone()
+                .unwrap_or_else(|| artifact_node.clone());
+            self.relate_with_provenance(
+                source,
+                dependency_id,
+                RelationKind::DependsOnPackage,
+                Confidence::High,
+                vec![dependency.evidence],
+                Some(format_provenance(
+                    format_id,
                     RelationResolution::SyntaxOnly,
                     Confidence::High,
                 )),
@@ -2185,6 +2245,111 @@ impl Drop for Route {
             }),
             "Implements must not target package nodes"
         );
+
+        Ok(())
+    }
+
+    /// LIT-22.2.4 AC1/AC2/AC4: an isolated repo (not the shared polyglot
+    /// fixture, to avoid golden-snapshot churn across the rest of the test
+    /// suite) exercising every wired package manifest format end to end --
+    /// local vs. external `Package` nodes and `DependsOnPackage` edges.
+    #[test]
+    fn package_manifests_produce_local_and_external_package_nodes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        let root = temp.path();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name": "acme-web", "version": "1.0.0", "dependencies": {"react": "^18.0.0"}}"#,
+        )?;
+        std::fs::write(
+            root.join("go.mod"),
+            "module github.com/acme/svc\n\nrequire github.com/gin-gonic/gin v1.9.1\n",
+        )?;
+        std::fs::write(
+            root.join("composer.json"),
+            r#"{"name": "acme/php-app", "require": {"guzzlehttp/guzzle": "^7.0"}}"#,
+        )?;
+        std::fs::write(
+            root.join("pom.xml"),
+            "<project><groupId>com.acme</groupId><artifactId>svc</artifactId><version>1.0</version>\
+             <dependencies><dependency><groupId>org.apache.commons</groupId>\
+             <artifactId>commons-lang3</artifactId><version>3.14.0</version></dependency>\
+             </dependencies></project>",
+        )?;
+        std::fs::write(
+            root.join("build.gradle"),
+            "dependencies {\n    implementation(\"com.squareup.okhttp3:okhttp:4.12.0\")\n}\n",
+        )?;
+        std::fs::create_dir_all(root.join("dotnet"))?;
+        std::fs::write(
+            root.join("dotnet/App.csproj"),
+            r#"<Project Sdk="Microsoft.NET.Sdk"><ItemGroup>
+                <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+            </ItemGroup></Project>"#,
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(root)?;
+        let graph = GraphBuilder.build(root, &artifacts);
+
+        let expectations = [
+            ("acme-web", false, "react", true),
+            (
+                "github.com/acme/svc",
+                false,
+                "github.com/gin-gonic/gin",
+                true,
+            ),
+            ("acme/php-app", false, "guzzlehttp/guzzle", true),
+            (
+                "com.acme:svc",
+                false,
+                "org.apache.commons:commons-lang3",
+                true,
+            ),
+            ("com.squareup.okhttp3:okhttp", true, "", false),
+            ("App", false, "Newtonsoft.Json", true),
+        ];
+        for (local_name, local_is_external, dependency_name, has_dependency) in expectations {
+            let local = graph
+                .nodes
+                .iter()
+                .find_map(|node| match node {
+                    GraphNode::Package(package) if package.name == local_name => Some(package),
+                    _ => None,
+                })
+                .ok_or_else(|| std::io::Error::other(format!("missing package {local_name}")))?;
+            assert_eq!(
+                local.is_external, local_is_external,
+                "{local_name} is_external mismatch"
+            );
+
+            if !has_dependency {
+                continue;
+            }
+            let dependency = graph
+                .nodes
+                .iter()
+                .find_map(|node| match node {
+                    GraphNode::Package(package) if package.name == dependency_name => Some(package),
+                    _ => None,
+                })
+                .ok_or_else(|| {
+                    std::io::Error::other(format!("missing dependency {dependency_name}"))
+                })?;
+            assert!(dependency.is_external, "{dependency_name} must be external");
+            assert!(
+                graph.relations.iter().any(|relation| {
+                    relation.kind == RelationKind::DependsOnPackage
+                        && relation.target == dependency.id
+                        && relation
+                            .provenance
+                            .as_ref()
+                            .is_some_and(|p| p.resolution == RelationResolution::SyntaxOnly)
+                }),
+                "missing DependsOnPackage relation to {dependency_name}"
+            );
+        }
 
         Ok(())
     }

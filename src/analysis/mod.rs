@@ -5,6 +5,7 @@ pub mod dockerfile;
 pub mod external_symbols;
 pub mod generic_text;
 pub mod markdown;
+pub mod packages;
 pub mod profiles;
 pub mod python;
 pub mod rust_metadata;
@@ -23,6 +24,10 @@ pub use generic_text::{FindingConfidence, GenericTextExtractor, TextFinding, Tex
 pub use markdown::{
     CodeFence, DriftKind, LinkKind, MarkdownAnalysis, MarkdownAnalyzer, MarkdownCommand,
     MarkdownDrift, MarkdownHeading, MarkdownLink, MarkdownPathReference,
+};
+pub use packages::{
+    ComposerAnalyzer, CsprojAnalyzer, GoModAnalyzer, GradleAnalyzer, MavenPomAnalyzer,
+    NpmPackageAnalyzer, PackageDependency, PackageManifestAnalysis, PackageManifestFormat,
 };
 pub use profiles::{
     ActionsJob, ActionsProfile, ActionsProfileAnalyzer, ActionsStep, ActionsStepHint,

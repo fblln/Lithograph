@@ -125,6 +125,11 @@ fn exact_filename_rule(path: &str) -> Option<Classification> {
         "docker-compose.yml" | "docker-compose.yaml" | "compose.yml" | "compose.yaml" => Some(
             structured(ArtifactCategory::ContainerDefinition, "docker-compose"),
         ),
+        "package.json" => Some(package_manifest("npm")),
+        "go.mod" => Some(package_manifest("go-mod")),
+        "composer.json" => Some(package_manifest("composer")),
+        "pom.xml" => Some(package_manifest("maven")),
+        "build.gradle" | "build.gradle.kts" => Some(package_manifest("gradle")),
         _ => None,
     }
 }
@@ -168,6 +173,7 @@ fn extension_rule(path: &str, text_status: TextStatus) -> Option<Classification>
             Some(static_asset(extension, text_status))
         }
         "bin" | "dat" | "wasm" | "so" | "dylib" | "dll" | "exe" => Some(binary_asset(extension)),
+        "csproj" => Some(package_manifest("csproj")),
         _ => by_extension(extension).map(registry),
     }
 }
@@ -273,6 +279,21 @@ fn structured(category: ArtifactCategory, format: &str) -> Classification {
         Some(format),
         SupportTier::StructuredFormat,
         AnalyzerSelection::Structured(format.to_owned()),
+    )
+}
+
+/// Classification for a package manifest routed to a
+/// [`PackageManifestAnalyzer`](crate::analysis::packages) implementation
+/// (see LIT-22.2.4). Unlike `structured()`, this always uses
+/// `AnalyzerSelection::Specialized`, since each package manifest format has
+/// its own unambiguous format id (no shared-format filename disambiguation
+/// like `Cargo.toml`/`pyproject.toml` need for `"toml"`).
+fn package_manifest(format: &str) -> Classification {
+    Classification::new(
+        ArtifactCategory::PackageManifest,
+        Some(format),
+        SupportTier::StructuredFormat,
+        AnalyzerSelection::Specialized(format.to_owned()),
     )
 }
 

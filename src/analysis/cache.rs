@@ -7,9 +7,9 @@
 
 use crate::analysis::{
     ActionsProfile, CargoProfile, ComposeProfile, DockerfileAnalysis, MarkdownAnalysis,
-    PyProjectProfile, PythonAnalysis, RequirementsProfile, RustAnalysis, RustWorkspaceAnalysis,
-    StructuredAnalysis, StructuredFormat, SyntaxIndexedLanguage, TextFinding,
-    TreeSitterAdapterOutput,
+    PackageManifestAnalysis, PackageManifestFormat, PyProjectProfile, PythonAnalysis,
+    RequirementsProfile, RustAnalysis, RustWorkspaceAnalysis, StructuredAnalysis, StructuredFormat,
+    SyntaxIndexedLanguage, TextFinding, TreeSitterAdapterOutput,
 };
 use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ use std::path::PathBuf;
 
 /// Bump when analyzer output semantics or serialization change in a way that
 /// should force fresh analyzer output instead of reusing old cache entries.
-pub const ANALYSIS_CACHE_VERSION: u32 = 2;
+pub const ANALYSIS_CACHE_VERSION: u32 = 3;
 
 /// Tags which analyzer produced an [`AnalyzerOutput`], so a cache lookup can
 /// reject a stale entry whose artifact has since been reclassified to a
@@ -50,6 +50,8 @@ pub enum AnalyzerKind {
     Structured(StructuredFormat),
     /// `TreeSitterParserAdapter`, for one specific syntax-indexed language.
     SyntaxIndexed(SyntaxIndexedLanguage),
+    /// A `PackageManifestFormat` analyzer, for one specific manifest format.
+    PackageManifest(PackageManifestFormat),
     /// `GenericTextExtractor`.
     GenericText,
 }
@@ -91,6 +93,10 @@ pub enum AnalyzerOutput {
     /// output, since `TreeSitterAdapterOutput` only records a `&str`
     /// language id, not this cache-key-safe `Copy` discriminant.
     SyntaxIndexed(SyntaxIndexedLanguage, TreeSitterAdapterOutput),
+    /// A package manifest analyzer's output (LIT-22.2.4). Carries its own
+    /// [`PackageManifestFormat`] alongside the analysis, matching the
+    /// `Structured`/`SyntaxIndexed` pattern above.
+    PackageManifest(PackageManifestFormat, PackageManifestAnalysis),
     /// [`GenericTextExtractor`](crate::analysis::GenericTextExtractor) output.
     GenericText(Vec<TextFinding>),
 }
@@ -111,6 +117,7 @@ impl AnalyzerOutput {
             Self::PyProject(_) => AnalyzerKind::PyProject,
             Self::Structured(format, _) => AnalyzerKind::Structured(*format),
             Self::SyntaxIndexed(language, _) => AnalyzerKind::SyntaxIndexed(*language),
+            Self::PackageManifest(format, _) => AnalyzerKind::PackageManifest(*format),
             Self::GenericText(_) => AnalyzerKind::GenericText,
         }
     }

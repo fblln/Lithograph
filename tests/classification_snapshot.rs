@@ -38,7 +38,7 @@ src/python_app/__init__.py|SourceCode|python|DeepLanguage|Text|Specialized(pytho
 src/python_app/service.py|SourceCode|python|DeepLanguage|Text|Specialized(python)|Allowed|0|0
 vendor/example/lib.rs|SourceCode|rust|DeepLanguage|Text|Specialized(rust)|Allowed|0|100
 web/index.html|Template|html|StructuredFormat|Text|SyntaxIndexed(html)|Allowed|0|0
-web/package.json|Configuration|json|StructuredFormat|Text|Structured(json)|Allowed|0|0
+web/package.json|PackageManifest|npm|StructuredFormat|Text|Specialized(npm)|Allowed|0|0
 web/src/App.tsx|SourceCode|tsx|StructuredFormat|Text|SyntaxIndexed(tsx)|Allowed|0|0"
     );
 

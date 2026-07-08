@@ -920,7 +920,7 @@ mod tests {
         assert_eq!(
             snapshot,
             "\
-module-plan:configuration:configuration|Configuration|Configuration|21|295
+module-plan:configuration:configuration|Configuration|Configuration|23|295
 module-plan:directory:assets|Directory|assets|2|64
 module-plan:directory:data|Directory|data|1|9
 module-plan:directory:generated|Directory|generated|3|37

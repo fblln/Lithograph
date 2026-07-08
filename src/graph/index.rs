@@ -357,6 +357,47 @@ impl<'a> KnowledgeIndex<'a> {
         }
     }
 
+    /// Typed package-map lookup for import resolvers (LIT-22.2.4 AC3):
+    /// returns every package `package_name` declares a `DependsOnPackage`
+    /// edge to, local or external. `package_name` matches a `Package` node's
+    /// name exactly (e.g. a registry id from a manifest analyzer), not a
+    /// substring.
+    pub fn package_dependencies(&self, package_name: &str) -> Vec<PackageSummary> {
+        let degree = self.degree_index();
+        let node_by_id = self.node_by_id();
+        let Some(source_id) = self.graph.nodes.iter().find_map(|node| match node {
+            GraphNode::Package(package) if package.name == package_name => Some(node.id()),
+            _ => None,
+        }) else {
+            return Vec::new();
+        };
+
+        let mut dependencies: Vec<PackageSummary> = self
+            .graph
+            .relations
+            .iter()
+            .filter(|relation| {
+                relation.kind == RelationKind::DependsOnPackage && &relation.source == source_id
+            })
+            .filter_map(|relation| {
+                let node = node_by_id.get(&relation.target)?;
+                let GraphNode::Package(package) = node else {
+                    return None;
+                };
+                let (in_degree, out_degree) = degree.get(node.id()).copied().unwrap_or((0, 0));
+                Some(PackageSummary {
+                    name: package.name.clone(),
+                    is_external: package.is_external,
+                    in_degree,
+                    out_degree,
+                })
+            })
+            .collect();
+        dependencies.sort_by(|a, b| a.name.cmp(&b.name));
+        dependencies.dedup_by(|a, b| a.name == b.name);
+        dependencies
+    }
+
     fn find_root(&self, query: &str) -> Option<&GraphNode> {
         let query_lower = query.to_lowercase();
         self.graph
@@ -577,6 +618,39 @@ mod tests {
         let architecture = index.architecture();
         assert!(!architecture.hotspots.is_empty());
         assert_eq!(architecture.schema, schema);
+
+        Ok(())
+    }
+
+    /// LIT-22.2.4 AC3: `package_dependencies` is the typed API an import
+    /// resolver uses to look up a package's declared dependencies.
+    #[test]
+    fn package_dependencies_looks_up_declared_dependencies_by_name()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("package.json"),
+            r#"{"name": "acme-web", "dependencies": {"react": "^18.0.0", "lodash": "^4.0.0"}}"#,
+        )?;
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+        let index = KnowledgeIndex::new(&graph);
+
+        let dependencies = index.package_dependencies("acme-web");
+        assert_eq!(dependencies.len(), 2);
+        assert!(dependencies.iter().all(|dependency| dependency.is_external));
+        assert!(
+            dependencies
+                .iter()
+                .any(|dependency| dependency.name == "react")
+        );
+        assert!(
+            dependencies
+                .iter()
+                .any(|dependency| dependency.name == "lodash")
+        );
+
+        assert!(index.package_dependencies("does-not-exist").is_empty());
 
         Ok(())
     }
