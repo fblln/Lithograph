@@ -13,6 +13,7 @@ pub mod generation;
 pub mod golden;
 pub mod graph;
 pub mod inventory;
+pub mod knowledge_agent;
 pub mod manifest;
 pub mod mcp;
 pub mod mermaid;
