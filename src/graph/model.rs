@@ -264,6 +264,30 @@ pub enum RelationKind {
     References,
 }
 
+/// How a relation was extracted or resolved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RelationResolution {
+    /// Parser or structured syntax identified the relation, with no cross-file refinement.
+    SyntaxOnly,
+    /// Generic text or heuristic fallback identified the relation.
+    Fallback,
+    /// Syntax facts were refined against package/module/reference indexes.
+    HybridResolved,
+}
+
+/// Provenance for a graph relation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RelationProvenance {
+    /// Detected language or format responsible for the relation, when known.
+    pub language: Option<String>,
+    /// Stable resolver strategy label.
+    pub resolver_strategy: String,
+    /// Relation extraction/resolution level.
+    pub resolution: RelationResolution,
+    /// Confidence assigned by that resolver.
+    pub confidence: Confidence,
+}
+
 /// One relation between two graph nodes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Relation {
@@ -279,6 +303,9 @@ pub struct Relation {
     pub confidence: Confidence,
     /// Evidence supporting this relation.
     pub evidence: Vec<EvidenceRef>,
+    /// Resolver provenance for this relation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<RelationProvenance>,
 }
 
 /// The complete typed semantic graph for one repository snapshot.

@@ -1,6 +1,7 @@
 //! Minimal deterministic MCP-like JSON-line server over generated wiki data.
 
 use crate::ask::WikiSearch;
+use crate::graph::{Graph, GraphStore, KnowledgeIndex, SearchParams, TraceDirection, TraceParams};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::io::{BufRead, Write};
@@ -11,7 +12,7 @@ use std::path::{Path, PathBuf};
 pub struct McpRequest {
     /// Client-provided request id.
     pub id: Value,
-    /// Tool name: read_wiki_structure, read_wiki_contents, or ask_question.
+    /// Tool name: read_wiki_structure, read_wiki_contents, graph tools, or ask_question.
     pub tool: String,
     /// Optional request parameters.
     #[serde(default)]
@@ -66,6 +67,38 @@ impl WikiMcpServer {
         match request.tool.as_str() {
             "read_wiki_structure" => Ok(serde_json::to_value(export.structure)?),
             "read_wiki_contents" => Ok(serde_json::to_value(export.contents)?),
+            "read_research_memory" => {
+                let path = self
+                    .repo_root
+                    .join(".lithograph/research/agent-memory.json");
+                let value: Value = serde_json::from_str(&std::fs::read_to_string(path)?)?;
+                Ok(value)
+            }
+            "get_graph_schema" => {
+                let graph = self.load_graph()?;
+                Ok(serde_json::to_value(KnowledgeIndex::new(&graph).schema())?)
+            }
+            "search_graph" => {
+                let graph = self.load_graph()?;
+                let params = search_params(&request.params);
+                Ok(serde_json::to_value(
+                    KnowledgeIndex::new(&graph).search(&params),
+                )?)
+            }
+            "trace_path" => {
+                let graph = self.load_graph()?;
+                let params = trace_params(&request.params)?;
+                match KnowledgeIndex::new(&graph).trace(&params) {
+                    Some(trace) => Ok(serde_json::to_value(trace)?),
+                    None => Err(format!("no graph node matched `{}`", params.query).into()),
+                }
+            }
+            "get_architecture" => {
+                let graph = self.load_graph()?;
+                Ok(serde_json::to_value(
+                    KnowledgeIndex::new(&graph).architecture(),
+                )?)
+            }
             "ask_question" => {
                 let question = request
                     .params
@@ -81,6 +114,10 @@ impl WikiMcpServer {
                 "message": format!("unknown tool `{other}`")
             })),
         }
+    }
+
+    fn load_graph(&self) -> Result<Graph, Box<dyn std::error::Error>> {
+        Ok(GraphStore::new(&self.repo_root).load()?.graph)
     }
 
     /// Runs a JSON-line request loop until EOF.
@@ -109,11 +146,62 @@ impl WikiMcpServer {
     }
 }
 
+fn search_params(params: &Value) -> SearchParams {
+    SearchParams {
+        label: params
+            .get("label")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        query: params
+            .get("query")
+            .or_else(|| params.get("name_pattern"))
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        limit: params
+            .get("limit")
+            .and_then(Value::as_u64)
+            .and_then(|value| usize::try_from(value).ok())
+            .unwrap_or_default(),
+    }
+}
+
+fn trace_params(params: &Value) -> Result<TraceParams, Box<dyn std::error::Error>> {
+    let query = params
+        .get("query")
+        .or_else(|| params.get("node_id"))
+        .or_else(|| params.get("name"))
+        .or_else(|| params.get("function_name"))
+        .and_then(Value::as_str)
+        .ok_or("trace_path requires params.query, params.node_id, params.name, or params.function_name")?
+        .to_owned();
+    let direction = match params
+        .get("direction")
+        .and_then(Value::as_str)
+        .unwrap_or("both")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "inbound" | "in" => TraceDirection::Inbound,
+        "outbound" | "out" => TraceDirection::Outbound,
+        _ => TraceDirection::Both,
+    };
+    Ok(TraceParams {
+        query,
+        depth: params
+            .get("depth")
+            .and_then(Value::as_u64)
+            .and_then(|value| usize::try_from(value).ok())
+            .unwrap_or_default(),
+        direction,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{McpRequest, WikiMcpServer};
     use crate::generation::MockModel;
     use crate::orchestrate::run_init;
+    use serde_json::Value;
     use serde_json::json;
     use std::io::Cursor;
     use std::path::Path;
@@ -134,13 +222,78 @@ mod tests {
             tool: "read_wiki_structure".to_owned(),
             params: json!({}),
         });
-        let answer = server.handle(McpRequest {
+        let research = server.handle(McpRequest {
             id: json!(2),
+            tool: "read_research_memory".to_owned(),
+            params: json!({}),
+        });
+        let schema = server.handle(McpRequest {
+            id: json!(3),
+            tool: "get_graph_schema".to_owned(),
+            params: json!({}),
+        });
+        let search = server.handle(McpRequest {
+            id: json!(4),
+            tool: "search_graph".to_owned(),
+            params: json!({ "label": "Artifact", "query": "python", "limit": 5 }),
+        });
+        let trace_query = search
+            .result
+            .as_ref()
+            .and_then(Value::as_array)
+            .and_then(|items| items.first())
+            .and_then(|item| item.get("id"))
+            .and_then(Value::as_str)
+            .unwrap_or("src/python_app/service.py")
+            .to_owned();
+        let trace = server.handle(McpRequest {
+            id: json!(5),
+            tool: "trace_path".to_owned(),
+            params: json!({ "query": trace_query, "depth": 1 }),
+        });
+        let architecture = server.handle(McpRequest {
+            id: json!(6),
+            tool: "get_architecture".to_owned(),
+            params: json!({}),
+        });
+        let answer = server.handle(McpRequest {
+            id: json!(7),
             tool: "ask_question".to_owned(),
             params: json!({ "question": "source evidence" }),
         });
 
         assert!(structure.result.is_some());
+        assert!(
+            research
+                .result
+                .as_ref()
+                .is_some_and(|value| value.get("architecture").is_some())
+        );
+        assert!(
+            schema
+                .result
+                .as_ref()
+                .is_some_and(|value| value.get("node_labels").is_some())
+        );
+        assert!(
+            search
+                .result
+                .as_ref()
+                .and_then(Value::as_array)
+                .is_some_and(|items| !items.is_empty())
+        );
+        assert!(
+            trace
+                .result
+                .as_ref()
+                .is_some_and(|value| value.get("visited").is_some())
+        );
+        assert!(
+            architecture
+                .result
+                .as_ref()
+                .is_some_and(|value| value.get("hotspots").is_some())
+        );
         assert!(answer.result.is_some());
         assert!(answer.error.is_none());
 

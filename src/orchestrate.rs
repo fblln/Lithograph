@@ -4,14 +4,14 @@
 use crate::analysis::AnalysisCache;
 use crate::domain::{Artifact, EvidenceRef};
 use crate::generation::{ContextBuilder, LanguageModel, ModelError, PageRenderer, RenderError};
-use crate::graph::{Graph, GraphBuilder, GraphIssue, GraphValidator};
+use crate::graph::{Graph, GraphBuilder, GraphIssue, GraphStore, GraphValidator};
 use crate::inventory::{RepositoryWalker, WalkError, WalkOptions};
 use crate::manifest::{
     DocumentationPage, GenerationTask, PageManifest, PageManifestBuilder, TaskKind,
 };
 use crate::plan::{DocumentationModule, ModulePlanner};
 use crate::research::{ResearchBrief, ResearchBuilder};
-use crate::run::{RepositorySnapshot, RunMetadata};
+use crate::run::{PipelineInvalidationMetadata, RepositorySnapshot, RunMetadata, RunMetadataInput};
 use crate::storage::JsonStore;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -232,18 +232,19 @@ pub fn run_init_with_options(
     let snapshot_path = lithograph_dir.join("snapshot.json");
     let previous_snapshot: Option<RepositorySnapshot> = JsonStore.read(&snapshot_path)?;
 
-    let (run_metadata, snapshot) = RunMetadata::compute(
-        "init",
+    let (run_metadata, snapshot) = RunMetadata::compute(RunMetadataInput {
+        command: "init",
         repo_root,
-        &artifacts,
-        &graph,
-        &manifest,
-        &written_pages,
-        previous_snapshot.as_ref(),
-    )?;
+        artifacts: &artifacts,
+        graph: &graph,
+        manifest: &manifest,
+        written_pages: &written_pages,
+        previous_snapshot: previous_snapshot.as_ref(),
+        pipeline: PipelineInvalidationMetadata::current(prompt_version, semantic_grouping),
+    })?;
 
-    let graph_path = lithograph_dir.join("graph.json");
-    JsonStore.write_if_changed(&graph_path, &graph)?;
+    let graph_store_outcome = GraphStore::new(repo_root).save(&graph)?;
+    let graph_path = graph_store_outcome.legacy_graph_path;
     write_research_artifacts(&lithograph_dir, &research)?;
     let manifest_path = lithograph_dir.join("manifest.json");
     JsonStore.write_if_changed(&manifest_path, &manifest)?;
@@ -438,18 +439,19 @@ pub fn run_update_with_options(
         }
     }
 
-    let (run_metadata, snapshot) = RunMetadata::compute(
-        "update",
+    let (run_metadata, snapshot) = RunMetadata::compute(RunMetadataInput {
+        command: "update",
         repo_root,
-        &artifacts,
-        &graph,
-        &manifest,
-        &written_pages,
-        previous_snapshot.as_ref(),
-    )?;
+        artifacts: &artifacts,
+        graph: &graph,
+        manifest: &manifest,
+        written_pages: &written_pages,
+        previous_snapshot: previous_snapshot.as_ref(),
+        pipeline: PipelineInvalidationMetadata::current(prompt_version, semantic_grouping),
+    })?;
 
-    let graph_path = lithograph_dir.join("graph.json");
-    JsonStore.write_if_changed(&graph_path, &graph)?;
+    let graph_store_outcome = GraphStore::new(repo_root).save(&graph)?;
+    let graph_path = graph_store_outcome.legacy_graph_path;
     write_research_artifacts(&lithograph_dir, &research)?;
     JsonStore.write_if_changed(&manifest_path, &manifest)?;
     JsonStore.write_if_changed(&snapshot_path, &snapshot)?;
@@ -489,19 +491,10 @@ fn write_research_artifacts(
 ) -> Result<(), InitError> {
     let research_dir = lithograph_dir.join("research");
     JsonStore.write_if_changed(&research_dir.join("brief.json"), research)?;
-    JsonStore.write_if_changed(
-        &research_dir.join("system-context.json"),
-        &research.system_context,
-    )?;
-    JsonStore.write_if_changed(&research_dir.join("workflows.json"), &research.workflows)?;
-    JsonStore.write_if_changed(&research_dir.join("boundaries.json"), &research.boundaries)?;
+    research.agent_memory.persist(&research_dir)?;
     JsonStore.write_if_changed(
         &research_dir.join("configuration.json"),
         &research.configuration,
-    )?;
-    JsonStore.write_if_changed(
-        &research_dir.join("key-modules.json"),
-        &research.key_modules,
     )?;
     Ok(())
 }
@@ -542,6 +535,7 @@ mod tests {
                 .exists()
         );
         assert!(temp.path().join(".lithograph/graph.json").exists());
+        assert!(temp.path().join(".lithograph/graph/current.json").exists());
         assert!(temp.path().join(".lithograph/manifest.json").exists());
 
         let manifest_json = std::fs::read_to_string(temp.path().join(".lithograph/manifest.json"))?;
@@ -629,7 +623,8 @@ mod tests {
         let report = super::run_update(temp.path(), &MockModel, "mock", "v2")?;
         let manifest_json = std::fs::read_to_string(temp.path().join(".lithograph/manifest.json"))?;
 
-        assert_eq!(report.changed_artifact_count, 0);
+        assert_eq!(report.changed_artifact_count, report.artifact_count);
+        assert_eq!(report.artifacts_reanalyzed_count, 0);
         assert_eq!(report.pages_regenerated, report.page_count);
         assert!(manifest_json.contains("\"prompt_version\": \"v2\""));
         assert!(manifest_json.contains("\"context_schema_version\""));

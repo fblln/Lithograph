@@ -3,9 +3,10 @@
 use crate::agents::{AgentFileOutcome, IntegrateAgentsReport, integrate_agents};
 use crate::ask::{McpExport, WikiSearch, render_ask_table};
 use crate::cli::{
-    AskArgs, Cli, Command, DriftArgs, GoldenArgs, InitArgs, InspectArtifactsArgs, InspectCommand,
-    InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs,
-    McpServerArgs, OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
+    AskArgs, Cli, Command, DriftArgs, GoldenArgs, GraphCommand, GraphExportArgs, GraphImportArgs,
+    GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectGraphArgs,
+    InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs, McpServerArgs,
+    OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
 };
 use crate::domain::Artifact;
 use crate::drift::{DriftDetector, DriftReport};
@@ -13,7 +14,9 @@ use crate::generation::{
     DeepInfraConfig, DeepInfraModel, LanguageModel, MockModel, OpenAiConfig, OpenAiModel,
 };
 use crate::golden::{check_or_update, render_report as render_golden_report};
-use crate::graph::{Graph, GraphBuilder, GraphIssue, GraphNode, GraphValidator};
+use crate::graph::{
+    Graph, GraphArtifactReport, GraphBuilder, GraphIssue, GraphNode, GraphStore, GraphValidator,
+};
 use crate::inventory::{RepositoryWalker, WalkOptions};
 use crate::mcp::WikiMcpServer;
 use crate::mermaid::{render_report as render_mermaid_report, validate as validate_mermaid};
@@ -45,8 +48,70 @@ where
         Some(Command::ValidateMermaid(args)) => execute_validate_mermaid(args, writer),
         Some(Command::McpServer(args)) => execute_mcp_server(args, writer),
         Some(Command::Viewer(args)) => execute_viewer(args, writer),
+        Some(Command::Graph(args)) => execute_graph(args, writer),
         None => Ok(()),
     }
+}
+
+fn execute_graph<W>(command: GraphCommand, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    match command.target {
+        GraphTarget::Export(args) => execute_graph_export(args, writer),
+        GraphTarget::Import(args) => execute_graph_import(args, writer),
+    }
+}
+
+fn execute_graph_export<W>(
+    args: GraphExportArgs,
+    writer: &mut W,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    let report = GraphStore::new(&args.path).export_artifact(&args.output)?;
+    writer.write_all(render_graph_artifact_report("exported", &report).as_bytes())?;
+    Ok(())
+}
+
+fn execute_graph_import<W>(
+    args: GraphImportArgs,
+    writer: &mut W,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    let report = GraphStore::new(&args.path).import_artifact(&args.artifact)?;
+    writer.write_all(render_graph_artifact_report("imported", &report).as_bytes())?;
+    Ok(())
+}
+
+/// Renders a deterministic graph artifact operation summary.
+pub fn render_graph_artifact_report(action: &str, report: &GraphArtifactReport) -> String {
+    format!(
+        "graph artifact {action}\n\
+         artifact: {}\n\
+         snapshot: {}\n\
+         legacy graph: {}\n\
+         format: {}\n\
+         compression: {}\n\
+         checksum: {}\n\
+         schema: {}\n\
+         graph model: {}\n\
+         nodes: {}\n\
+         relations: {}\n",
+        report.artifact_path.display(),
+        report.snapshot_path.display(),
+        report.legacy_graph_path.display(),
+        report.metadata.artifact_format_version,
+        report.metadata.compression,
+        report.metadata.snapshot_checksum,
+        report.metadata.schema_version,
+        report.metadata.graph_model_version,
+        report.metadata.node_count,
+        report.metadata.relation_count,
+    )
 }
 
 fn execute_golden<W>(args: GoldenArgs, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
@@ -631,9 +696,9 @@ impl From<&Artifact> for ArtifactOutputRow {
 mod tests {
     use super::{execute, render_artifacts_json, render_artifacts_table, render_graph_diagnostics};
     use crate::cli::{
-        AskArgs, Cli, Command, DriftArgs, InitArgs, InspectArtifactsArgs, InspectCommand,
-        InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs,
-        OutputFormat,
+        AskArgs, Cli, Command, DriftArgs, GraphCommand, GraphExportArgs, GraphImportArgs,
+        GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectGraphArgs,
+        InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs, OutputFormat,
     };
     use crate::graph::{GraphIssue, GraphIssueKind};
     use crate::inventory::{RepositoryWalker, WalkOptions};
@@ -691,6 +756,69 @@ mod tests {
     }
 
     #[test]
+    fn execute_graph_export_and_import_round_trips_artifact()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = tempfile::TempDir::new()?;
+        let destination = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            source.path(),
+        )?;
+        execute(
+            Cli {
+                command: Some(Command::Init(InitArgs {
+                    path: source.path().to_path_buf(),
+                    prompt_version: "v1".to_owned(),
+                    semantic_grouping: false,
+                })),
+            },
+            &mut Vec::new(),
+        )?;
+        let artifact_path = source.path().join("graph.lithograph-graph.gz");
+
+        let mut export_output = Vec::new();
+        execute(
+            Cli {
+                command: Some(Command::Graph(GraphCommand {
+                    target: GraphTarget::Export(GraphExportArgs {
+                        path: source.path().to_path_buf(),
+                        output: artifact_path.clone(),
+                    }),
+                })),
+            },
+            &mut export_output,
+        )?;
+        let export_output = String::from_utf8(export_output)?;
+
+        let mut import_output = Vec::new();
+        execute(
+            Cli {
+                command: Some(Command::Graph(GraphCommand {
+                    target: GraphTarget::Import(GraphImportArgs {
+                        path: destination.path().to_path_buf(),
+                        artifact: artifact_path.clone(),
+                    }),
+                })),
+            },
+            &mut import_output,
+        )?;
+        let import_output = String::from_utf8(import_output)?;
+
+        assert!(artifact_path.exists());
+        assert!(export_output.contains("graph artifact exported"));
+        assert!(import_output.contains("graph artifact imported"));
+        assert!(
+            destination
+                .path()
+                .join(".lithograph/graph/current.json")
+                .exists()
+        );
+        assert!(destination.path().join(".lithograph/graph.json").exists());
+
+        Ok(())
+    }
+
+    #[test]
     fn execute_ask_and_mcp_export_read_generated_docs() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::TempDir::new()?;
         copy_dir(
@@ -734,11 +862,11 @@ mod tests {
             &mut export_output,
         )?;
         let parsed: serde_json::Value = serde_json::from_slice(&export_output)?;
-        assert!(
-            parsed["tools"]
-                .as_array()
-                .is_some_and(|tools| tools.len() == 3)
-        );
+        assert!(parsed["tools"].as_array().is_some_and(|tools| {
+            tools
+                .iter()
+                .any(|tool| tool.as_str() == Some("read_research_memory"))
+        }));
         assert!(
             parsed["structure"]
                 .as_array()

@@ -44,6 +44,44 @@ pub enum Command {
     McpServer(McpServerArgs),
     /// Generate a lightweight static viewer for generated docs.
     Viewer(ViewerArgs),
+    /// Export or import team-shareable graph artifacts.
+    Graph(GraphCommand),
+}
+
+/// Graph artifact command namespace.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct GraphCommand {
+    /// Graph artifact operation.
+    #[command(subcommand)]
+    pub target: GraphTarget,
+}
+
+/// Graph artifact operations.
+#[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
+pub enum GraphTarget {
+    /// Export the current graph snapshot as a compressed artifact.
+    Export(GraphExportArgs),
+    /// Import a compressed graph artifact into this repository's graph store.
+    Import(GraphImportArgs),
+}
+
+/// Arguments for `graph export`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct GraphExportArgs {
+    /// Repository path with a generated Lithograph graph store.
+    pub path: PathBuf,
+    /// Output compressed artifact path.
+    #[arg(long)]
+    pub output: PathBuf,
+}
+
+/// Arguments for `graph import`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct GraphImportArgs {
+    /// Repository path whose graph store should receive the artifact.
+    pub path: PathBuf,
+    /// Compressed artifact path to import.
+    pub artifact: PathBuf,
 }
 
 /// Arguments for `golden`.
@@ -231,9 +269,10 @@ impl Cli {
 #[cfg(test)]
 mod tests {
     use super::{
-        AskArgs, Cli, Command, DriftArgs, GoldenArgs, InitArgs, InspectArtifactsArgs,
-        InspectCommand, InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs,
-        McpExportArgs, McpServerArgs, OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
+        AskArgs, Cli, Command, DriftArgs, GoldenArgs, GraphCommand, GraphExportArgs,
+        GraphImportArgs, GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand,
+        InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs,
+        McpServerArgs, OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
     };
     use std::path::PathBuf;
 
@@ -442,6 +481,44 @@ mod tests {
             Some(Command::McpExport(McpExportArgs {
                 path: PathBuf::from("fixtures/polyglot"),
                 question: Some("modules".to_owned()),
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_graph_artifact_commands() {
+        assert_eq!(
+            Cli::parse_from_args([
+                "lithograph",
+                "graph",
+                "export",
+                "fixtures/polyglot",
+                "--output",
+                "graph.lithograph-graph.gz",
+            ])
+            .command,
+            Some(Command::Graph(GraphCommand {
+                target: GraphTarget::Export(GraphExportArgs {
+                    path: PathBuf::from("fixtures/polyglot"),
+                    output: PathBuf::from("graph.lithograph-graph.gz"),
+                }),
+            }))
+        );
+
+        assert_eq!(
+            Cli::parse_from_args([
+                "lithograph",
+                "graph",
+                "import",
+                "fixtures/polyglot",
+                "graph.lithograph-graph.gz",
+            ])
+            .command,
+            Some(Command::Graph(GraphCommand {
+                target: GraphTarget::Import(GraphImportArgs {
+                    path: PathBuf::from("fixtures/polyglot"),
+                    artifact: PathBuf::from("graph.lithograph-graph.gz"),
+                }),
             }))
         );
     }

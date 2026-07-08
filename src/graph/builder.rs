@@ -18,8 +18,9 @@ use crate::domain::{
 use crate::graph::model::{
     ArtifactNode, CommandNode, ConfigNode, ConfigNodeKind, ContainerImageNode, DocumentationNode,
     EnvVarNode, Graph, GraphNode, GraphNodeId, ModuleLanguage, ModuleNode, PackageNode, Relation,
-    RelationKind, SymbolKind, SymbolNode, UnresolvedNode,
+    RelationKind, RelationProvenance, RelationResolution, SymbolKind, SymbolNode, UnresolvedNode,
 };
+use crate::inventory::language::by_name as registry_language;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
@@ -309,6 +310,30 @@ impl BuilderState {
         confidence: Confidence,
         evidence: Vec<EvidenceRef>,
     ) {
+        self.relate_with_provenance(
+            source,
+            target,
+            kind,
+            confidence,
+            evidence,
+            Some(RelationProvenance {
+                language: None,
+                resolver_strategy: "graph-builder".to_owned(),
+                resolution: RelationResolution::SyntaxOnly,
+                confidence,
+            }),
+        );
+    }
+
+    fn relate_with_provenance(
+        &mut self,
+        source: GraphNodeId,
+        target: GraphNodeId,
+        kind: RelationKind,
+        confidence: Confidence,
+        evidence: Vec<EvidenceRef>,
+        provenance: Option<RelationProvenance>,
+    ) {
         self.relation_count += 1;
         self.relations.push(Relation {
             id: format!("relation:{}", self.relation_count),
@@ -317,6 +342,7 @@ impl BuilderState {
             kind,
             confidence,
             evidence,
+            provenance,
         });
     }
 
@@ -596,12 +622,17 @@ impl BuilderState {
                         .get(&name.name)
                         .cloned()
                         .unwrap_or_else(|| self.python_external_target(&name.name));
-                    self.relate(
+                    self.relate_with_provenance(
                         artifact_node.clone(),
                         target,
                         RelationKind::Imports,
                         Confidence::High,
                         vec![import.evidence.clone()],
+                        Some(artifact_provenance(
+                            artifact,
+                            RelationResolution::HybridResolved,
+                            Confidence::High,
+                        )),
                     );
                 }
             }
@@ -631,16 +662,20 @@ impl BuilderState {
                             self.unresolved(&marker)
                         }
                     });
-                self.relate(
+                self.relate_with_provenance(
                     artifact_node.clone(),
                     target,
                     RelationKind::Imports,
                     Confidence::High,
                     vec![import.evidence.clone()],
+                    Some(artifact_provenance(
+                        artifact,
+                        RelationResolution::HybridResolved,
+                        Confidence::High,
+                    )),
                 );
             }
         }
-        let _ = artifact;
     }
 
     fn process_python_reference(
@@ -653,12 +688,17 @@ impl BuilderState {
         match reference.kind {
             PythonReferenceKind::Call => {
                 if let Some(target) = symbol_ids.get(&reference.value).cloned() {
-                    self.relate(
+                    self.relate_with_provenance(
                         artifact_node.clone(),
                         target,
                         RelationKind::Calls,
                         reference.confidence,
                         vec![reference.evidence.clone()],
+                        Some(artifact_provenance(
+                            artifact,
+                            RelationResolution::HybridResolved,
+                            reference.confidence,
+                        )),
                     );
                 }
             }
@@ -694,33 +734,48 @@ impl BuilderState {
             }
             PythonReferenceKind::DynamicImport => {
                 let target = self.unresolved(&reference.value);
-                self.relate(
+                self.relate_with_provenance(
                     artifact_node.clone(),
                     target,
                     RelationKind::Imports,
                     reference.confidence,
                     vec![reference.evidence.clone()],
+                    Some(artifact_provenance(
+                        artifact,
+                        RelationResolution::Fallback,
+                        reference.confidence,
+                    )),
                 );
             }
             PythonReferenceKind::Ctypes => {
                 let target = self.unresolved(&reference.value);
-                self.relate(
+                self.relate_with_provenance(
                     artifact_node.clone(),
                     target,
                     RelationKind::References,
                     reference.confidence,
                     vec![reference.evidence.clone()],
+                    Some(artifact_provenance(
+                        artifact,
+                        RelationResolution::Fallback,
+                        reference.confidence,
+                    )),
                 );
             }
             PythonReferenceKind::ConfigPath => {
                 let (target, path_confidence) = self.reference_target(&reference.value);
                 let confidence = reference.confidence.min(path_confidence);
-                self.relate(
+                self.relate_with_provenance(
                     artifact_node.clone(),
                     target,
                     RelationKind::References,
                     confidence,
                     vec![reference.evidence.clone()],
+                    Some(artifact_provenance(
+                        artifact,
+                        RelationResolution::HybridResolved,
+                        confidence,
+                    )),
                 );
             }
         }
@@ -847,12 +902,17 @@ impl BuilderState {
                     Some(crate_name) => self.package(crate_name, true),
                     None => self.unresolved(&use_.path),
                 });
-            self.relate(
+            self.relate_with_provenance(
                 artifact_node.clone(),
                 target,
                 RelationKind::Imports,
                 Confidence::High,
                 vec![use_.evidence.clone()],
+                Some(artifact_provenance(
+                    artifact,
+                    RelationResolution::HybridResolved,
+                    Confidence::High,
+                )),
             );
         }
 
@@ -1118,21 +1178,31 @@ impl BuilderState {
         };
         let Some(name) = &package.name else { return };
         let package_id = self.package(name, false);
-        self.relate(
+        self.relate_with_provenance(
             artifact_node.clone(),
             package_id.clone(),
             RelationKind::BelongsToPackage,
             Confidence::High,
             vec![package.evidence.clone()],
+            Some(format_provenance(
+                "toml",
+                RelationResolution::SyntaxOnly,
+                Confidence::High,
+            )),
         );
         for dependency in &profile.dependencies {
             let dependency_id = self.package(&dependency.name, true);
-            self.relate(
+            self.relate_with_provenance(
                 package_id.clone(),
                 dependency_id,
                 RelationKind::DependsOnPackage,
                 Confidence::High,
                 vec![dependency.evidence.clone()],
+                Some(format_provenance(
+                    "toml",
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
             );
         }
     }
@@ -1143,22 +1213,32 @@ impl BuilderState {
         };
         let Some(name) = &project.name else { return };
         let package_id = self.package(name, false);
-        self.relate(
+        self.relate_with_provenance(
             artifact_node.clone(),
             package_id.clone(),
             RelationKind::BelongsToPackage,
             Confidence::High,
             vec![project.evidence.clone()],
+            Some(format_provenance(
+                "toml",
+                RelationResolution::SyntaxOnly,
+                Confidence::High,
+            )),
         );
         for dependency in &project.dependencies {
             let dependency_name = python_dependency_name(&dependency.requirement);
             let dependency_id = self.package(dependency_name, true);
-            self.relate(
+            self.relate_with_provenance(
                 package_id.clone(),
                 dependency_id,
                 RelationKind::DependsOnPackage,
                 Confidence::High,
                 vec![dependency.evidence.clone()],
+                Some(format_provenance(
+                    "toml",
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
             );
         }
     }
@@ -1166,12 +1246,17 @@ impl BuilderState {
     fn process_requirements(&mut self, profile: RequirementsProfile, artifact_node: &GraphNodeId) {
         for requirement in &profile.requirements {
             let dependency_id = self.package(&requirement.name, true);
-            self.relate(
+            self.relate_with_provenance(
                 artifact_node.clone(),
                 dependency_id,
                 RelationKind::DependsOnPackage,
                 Confidence::High,
                 vec![requirement.evidence.clone()],
+                Some(format_provenance(
+                    "requirements-txt",
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
             );
         }
     }
@@ -1329,12 +1414,17 @@ impl BuilderState {
             match finding.kind {
                 TextFindingKind::EnvironmentVariable => {
                     let target = self.env_var(&finding.value);
-                    self.relate(
+                    self.relate_with_provenance(
                         artifact_node.clone(),
                         target,
                         RelationKind::ReadsEnv,
                         Confidence::Low,
                         vec![evidence],
+                        Some(artifact_provenance(
+                            artifact,
+                            RelationResolution::Fallback,
+                            Confidence::Low,
+                        )),
                     );
                 }
                 TextFindingKind::Command => {
@@ -1344,36 +1434,51 @@ impl BuilderState {
                         &finding.value,
                         evidence.clone(),
                     );
-                    self.relate(
+                    self.relate_with_provenance(
                         artifact_node.clone(),
                         target,
                         RelationKind::RunsCommand,
                         Confidence::Low,
                         vec![evidence],
+                        Some(artifact_provenance(
+                            artifact,
+                            RelationResolution::Fallback,
+                            Confidence::Low,
+                        )),
                     );
                 }
                 TextFindingKind::LocalPath => {
                     let target = self
                         .resolve_path(&finding.value)
                         .unwrap_or_else(|| self.unresolved(&finding.value));
-                    self.relate(
+                    self.relate_with_provenance(
                         artifact_node.clone(),
                         target,
                         RelationKind::References,
                         Confidence::Low,
                         vec![evidence],
+                        Some(artifact_provenance(
+                            artifact,
+                            RelationResolution::Fallback,
+                            Confidence::Low,
+                        )),
                     );
                 }
                 TextFindingKind::Url
                 | TextFindingKind::PackageOrImage
                 | TextFindingKind::ImportOrInclude => {
                     let target = self.unresolved(&finding.value);
-                    self.relate(
+                    self.relate_with_provenance(
                         artifact_node.clone(),
                         target,
                         RelationKind::References,
                         Confidence::Low,
                         vec![evidence],
+                        Some(artifact_provenance(
+                            artifact,
+                            RelationResolution::Fallback,
+                            Confidence::Low,
+                        )),
                     );
                 }
                 TextFindingKind::Section => {}
@@ -1454,6 +1559,45 @@ fn generic_finding_evidence(artifact: &Artifact, line: u32) -> EvidenceRef {
     }
 }
 
+fn artifact_provenance(
+    artifact: &Artifact,
+    resolution: RelationResolution,
+    confidence: Confidence,
+) -> RelationProvenance {
+    let language = artifact.detected_format.clone();
+    let resolver_strategy = language
+        .as_deref()
+        .and_then(registry_language)
+        .map(|entry| entry.resolver_strategy.to_owned())
+        .unwrap_or_else(|| match resolution {
+            RelationResolution::Fallback => "generic-text-fallback".to_owned(),
+            RelationResolution::SyntaxOnly => "syntax-extraction".to_owned(),
+            RelationResolution::HybridResolved => "hybrid-resolution".to_owned(),
+        });
+    RelationProvenance {
+        language,
+        resolver_strategy,
+        resolution,
+        confidence,
+    }
+}
+
+fn format_provenance(
+    language: &str,
+    resolution: RelationResolution,
+    confidence: Confidence,
+) -> RelationProvenance {
+    let resolver_strategy = registry_language(language)
+        .map(|entry| entry.resolver_strategy.to_owned())
+        .unwrap_or_else(|| "syntax-extraction".to_owned());
+    RelationProvenance {
+        language: Some(language.to_owned()),
+        resolver_strategy,
+        resolution,
+        confidence,
+    }
+}
+
 fn file_name(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
@@ -1463,7 +1607,7 @@ mod tests {
     use super::GraphBuilder;
     use crate::analysis::AnalysisCache;
     use crate::graph::GraphValidator;
-    use crate::graph::{GraphNode, RelationKind};
+    use crate::graph::{GraphNode, RelationKind, RelationResolution};
     use crate::inventory::{RepositoryWalker, WalkOptions};
     use std::path::Path;
 
@@ -1715,6 +1859,47 @@ mod tests {
             same_file_call,
             "expected a resolved same-file call relation"
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn relations_store_language_and_resolution_provenance() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let root = fixture_root();
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
+        let graph = GraphBuilder.build(&root, &artifacts);
+
+        let python_import = graph
+            .relations
+            .iter()
+            .find(|relation| {
+                relation.kind == RelationKind::Imports
+                    && relation.source.as_str() == "artifact:src/python_app/__init__.py"
+                    && relation.target.as_str() == "module:src.python_app.service"
+            })
+            .ok_or_else(|| std::io::Error::other("missing python import relation"))?;
+        let provenance = python_import
+            .provenance
+            .as_ref()
+            .ok_or_else(|| std::io::Error::other("missing python import provenance"))?;
+        assert_eq!(provenance.language.as_deref(), Some("python"));
+        assert_eq!(provenance.resolution, RelationResolution::HybridResolved);
+        assert_eq!(provenance.resolver_strategy, "specialized-hybrid");
+        assert_eq!(provenance.confidence, python_import.confidence);
+
+        let tsx_fallback = graph
+            .relations
+            .iter()
+            .find(|relation| {
+                relation.source.as_str() == "artifact:web/src/App.tsx"
+                    && relation.provenance.as_ref().is_some_and(|provenance| {
+                        provenance.language.as_deref() == Some("tsx")
+                            && provenance.resolution == RelationResolution::Fallback
+                    })
+            })
+            .ok_or_else(|| std::io::Error::other("missing tsx fallback relation"))?;
+        assert_eq!(tsx_fallback.confidence, crate::domain::Confidence::Low);
 
         Ok(())
     }

@@ -329,6 +329,8 @@ fn append_research_sections(
     task_kind: TaskKind,
     research: &ResearchBrief,
 ) {
+    append_agent_memory_sections(sections, task_kind, research);
+
     let facts = match task_kind {
         TaskKind::Overview | TaskKind::Architecture => &research.system_context,
         TaskKind::Workflows => &research.workflows,
@@ -358,6 +360,115 @@ fn append_research_sections(
                 .collect::<Vec<_>>()
                 .join("\n")
         ));
+    }
+}
+
+fn append_agent_memory_sections(
+    sections: &mut Vec<String>,
+    task_kind: TaskKind,
+    research: &ResearchBrief,
+) {
+    let memory = &research.agent_memory;
+    match task_kind {
+        TaskKind::Overview => {
+            sections.push(format!(
+                "\n## Agent research: system context\n- Summary: {}\n- Confidence: {}/100\n- Included components: {}",
+                memory.system_context.project_summary,
+                memory.system_context.confidence,
+                join_or_none(&memory.system_context.included_components)
+            ));
+        }
+        TaskKind::Architecture => {
+            let language_lines = memory
+                .architecture
+                .languages
+                .iter()
+                .map(|language| {
+                    format!(
+                        "- {}: {:?} ({} artifact(s))",
+                        language.language, language.tier, language.artifact_count
+                    )
+                })
+                .collect::<Vec<_>>();
+            let domain_lines = memory
+                .domain_modules
+                .modules
+                .iter()
+                .take(20)
+                .map(|module| {
+                    format!(
+                        "- {} ({}) owns {} member(s); evidence: {}",
+                        module.name,
+                        module.kind,
+                        module.member_count,
+                        join_or_none(&module.evidence)
+                    )
+                })
+                .collect::<Vec<_>>();
+            sections.push(format!(
+                "\n## Agent research: architecture memory\n### System context\n{}\n\n### Language support tiers\n{}\n\n### Domain modules\n{}\n\n### Architecture facts\n{}\n\n### Hotspots\n{}",
+                memory.system_context.project_summary,
+                language_lines.join("\n"),
+                domain_lines.join("\n"),
+                bullet_lines(&memory.architecture.architecture_facts),
+                bullet_lines(&memory.architecture.hotspots)
+            ));
+            if !memory.architecture.decisions_and_docs.is_empty() {
+                sections.push(format!(
+                    "\n## Existing architecture knowledge and ADR candidates\n{}",
+                    bullet_lines(&memory.architecture.decisions_and_docs)
+                ));
+            }
+            if let Some(diagram) = &memory.architecture.mermaid {
+                sections.push(format!("\n## Agent-authored C4 seed diagram\n{diagram}"));
+            }
+        }
+        TaskKind::Workflows => {
+            sections.push(format!(
+                "\n## Agent research: workflow memory\n{}",
+                bullet_lines(&memory.workflows.workflows)
+            ));
+        }
+        TaskKind::Boundaries => {
+            sections.push(format!(
+                "\n## Agent research: boundary memory\n{}",
+                bullet_lines(&memory.boundaries.boundaries)
+            ));
+        }
+        TaskKind::Configuration | TaskKind::Quickstart => {
+            if let Some(database) = &memory.database {
+                sections.push(format!(
+                    "\n## Agent research: database memory\n{}",
+                    bullet_lines(&database.database_facts)
+                ));
+            }
+        }
+        TaskKind::ModulePage => {
+            sections.push(format!(
+                "\n## Agent research: key module memory\n{}",
+                bullet_lines(&memory.key_modules.modules)
+            ));
+        }
+    }
+}
+
+fn bullet_lines(lines: &[String]) -> String {
+    if lines.is_empty() {
+        return "- none observed".to_owned();
+    }
+    lines
+        .iter()
+        .take(30)
+        .map(|line| format!("- {line}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn join_or_none(lines: &[String]) -> String {
+    if lines.is_empty() {
+        "none observed".to_owned()
+    } else {
+        lines.iter().take(8).cloned().collect::<Vec<_>>().join(", ")
     }
 }
 
@@ -1076,6 +1187,7 @@ mod tests {
                 kind: RelationKind::ReadsEnv,
                 confidence: crate::domain::Confidence::High,
                 evidence: vec![file_evidence(&secret)],
+                provenance: None,
             }],
         };
         let module = DocumentationModule {

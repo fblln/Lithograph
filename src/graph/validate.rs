@@ -266,6 +266,7 @@ mod tests {
                 kind: RelationKind::Contains,
                 confidence: crate::domain::Confidence::High,
                 evidence: vec![file_evidence(&artifacts[0])],
+                provenance: None,
             }],
         };
 
@@ -300,6 +301,7 @@ mod tests {
                 kind: RelationKind::UsesImage,
                 confidence: crate::domain::Confidence::High,
                 evidence: vec![file_evidence(&artifacts[0])],
+                provenance: None,
             }],
         };
 
@@ -338,6 +340,7 @@ mod tests {
                     kind: RelationKind::UsesImage,
                     confidence: crate::domain::Confidence::High,
                     evidence: vec![oversized_span],
+                    provenance: None,
                 },
                 Relation {
                     id: "relation:2".to_owned(),
@@ -346,6 +349,7 @@ mod tests {
                     kind: RelationKind::UsesImage,
                     confidence: crate::domain::Confidence::High,
                     evidence: vec![missing_artifact],
+                    provenance: None,
                 },
             ],
         };

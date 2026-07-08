@@ -1243,6 +1243,7 @@ dependencies = [
  "camino",
  "cargo_metadata",
  "clap",
+ "flate2",
  "globset",
  "ignore",
  "predicates",
