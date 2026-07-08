@@ -623,6 +623,34 @@ impl BuilderState {
         for reference in &analysis.references {
             self.process_python_reference(artifact, artifact_node, reference, &symbol_ids);
         }
+
+        // Base classes (LIT-22.3.3): only resolves to a same-file class by
+        // bare name -- cross-module base classes stay `Unresolved` rather
+        // than guessing which import they came from (AC3).
+        for class in &analysis.classes {
+            let Some(class_id) = symbol_ids.get(&class.name) else {
+                continue;
+            };
+            for base in &class.bases {
+                let base_name = base.rsplit('.').next().unwrap_or(base.as_str());
+                let target = symbol_ids
+                    .get(base_name)
+                    .cloned()
+                    .unwrap_or_else(|| self.unresolved(base));
+                self.relate_with_provenance(
+                    class_id.clone(),
+                    target,
+                    RelationKind::Inherits,
+                    Confidence::Low,
+                    vec![class.evidence.clone()],
+                    Some(format_provenance(
+                        "python",
+                        RelationResolution::SyntaxOnly,
+                        Confidence::Low,
+                    )),
+                );
+            }
+        }
     }
 
     fn process_python_import(
@@ -977,6 +1005,21 @@ impl BuilderState {
                     vec![reference.evidence.clone()],
                 );
             }
+            RustReferenceKind::Ffi => {
+                let target = self.unresolved(&reference.value);
+                self.relate_with_provenance(
+                    artifact_node.clone(),
+                    target,
+                    RelationKind::Ffi,
+                    reference.confidence,
+                    vec![reference.evidence.clone()],
+                    Some(format_provenance(
+                        "rust",
+                        RelationResolution::SyntaxOnly,
+                        reference.confidence,
+                    )),
+                );
+            }
         }
     }
 
@@ -1255,6 +1298,40 @@ impl BuilderState {
                 artifact_node.clone(),
                 target,
                 RelationKind::Imports,
+                Confidence::Low,
+                vec![evidence],
+                Some(format_provenance(
+                    registry_id,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::Low,
+                )),
+            );
+        }
+
+        // Type references and general use-site references (LIT-22.3.3):
+        // one relation per distinct identifier text per file, deduplicated
+        // (a single-file syntax pass has no scoping/symbol-table context to
+        // tell which occurrence is meaningful, so keeping every occurrence
+        // would just be noise) and targeting `Unresolved` -- this file's
+        // syntax alone can't tell whether `Widget` is a locally-defined
+        // type, an imported one, or a typo, so resolving it correctly is a
+        // hybrid-resolver's job (AC3: never fabricate a match here).
+        let mut seen_symbols: BTreeSet<&str> = BTreeSet::new();
+        for symbol in &output.symbols {
+            if !seen_symbols.insert(symbol.text.as_str()) {
+                continue;
+            }
+            let kind = if symbol.kind == "type_identifier" {
+                RelationKind::TypeRefs
+            } else {
+                RelationKind::Usages
+            };
+            let evidence = syntax_fact_evidence(artifact, symbol.span.clone());
+            let target = self.unresolved(&symbol.text);
+            self.relate_with_provenance(
+                artifact_node.clone(),
+                target,
+                kind,
                 Confidence::Low,
                 vec![evidence],
                 Some(format_provenance(
@@ -1755,8 +1832,9 @@ fn file_name(path: &str) -> &str {
 mod tests {
     use super::GraphBuilder;
     use crate::analysis::AnalysisCache;
+    use crate::domain::Confidence;
     use crate::graph::GraphValidator;
-    use crate::graph::{GraphNode, RelationKind, RelationResolution};
+    use crate::graph::{GraphNode, Relation, RelationKind, RelationResolution};
     use crate::inventory::{RepositoryWalker, WalkOptions};
     use std::path::Path;
 
@@ -2348,6 +2426,137 @@ impl Drop for Route {
                             .is_some_and(|p| p.resolution == RelationResolution::SyntaxOnly)
                 }),
                 "missing DependsOnPackage relation to {dependency_name}"
+            );
+        }
+
+        Ok(())
+    }
+
+    /// LIT-22.3.3 AC1/AC3: a same-file base class resolves to the base
+    /// class's own `Symbol` node; a base class defined elsewhere (no
+    /// same-file evidence) stays `Unresolved` rather than being guessed.
+    #[test]
+    fn python_base_classes_produce_inherits_relations() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("models.py"),
+            "class Base:\n    pass\n\n\nclass Derived(Base):\n    pass\n\n\nclass External(SomeImportedBase):\n    pass\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let inherits: Vec<&Relation> = graph
+            .relations
+            .iter()
+            .filter(|relation| relation.kind == RelationKind::Inherits)
+            .collect();
+        assert_eq!(inherits.len(), 2);
+        let base_symbol_id = graph
+            .nodes
+            .iter()
+            .find_map(|node| match node {
+                GraphNode::Symbol(symbol) if symbol.qualified_name.ends_with("::Base") => {
+                    Some(node.id())
+                }
+                _ => None,
+            })
+            .ok_or("missing Base symbol node")?;
+        assert!(
+            inherits
+                .iter()
+                .any(|relation| &relation.target == base_symbol_id)
+        );
+        assert!(inherits.iter().any(|relation| {
+            graph
+                .nodes
+                .iter()
+                .any(|node| node.id() == &relation.target
+                    && matches!(node, GraphNode::Unresolved(unresolved) if unresolved.value == "SomeImportedBase"))
+        }));
+
+        Ok(())
+    }
+
+    /// LIT-22.3.3 AC1: `extern "C" { ... }` declarations produce `Ffi`
+    /// relations to `Unresolved` nodes (the C symbol they name has no
+    /// corresponding Rust graph node).
+    #[test]
+    fn rust_extern_block_produces_ffi_relations() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(
+            temp.path().join("src/lib.rs"),
+            "extern \"C\" {\n    fn c_add(a: i32, b: i32) -> i32;\n    static VERSION: i32;\n}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let ffi: Vec<&Relation> = graph
+            .relations
+            .iter()
+            .filter(|relation| relation.kind == RelationKind::Ffi)
+            .collect();
+        assert_eq!(ffi.len(), 2);
+        for relation in &ffi {
+            assert_eq!(relation.confidence, Confidence::High);
+            assert!(matches!(
+                graph
+                    .nodes
+                    .iter()
+                    .find(|node| node.id() == &relation.target),
+                Some(GraphNode::Unresolved(_))
+            ));
+        }
+        assert!(ffi.iter().any(|relation| {
+            graph.nodes.iter().any(|node| {
+                node.id() == &relation.target
+                    && matches!(node, GraphNode::Unresolved(u) if u.value == "c_add")
+            })
+        }));
+
+        Ok(())
+    }
+
+    /// LIT-22.3.3 AC1/AC2: syntax-indexed languages (LIT-22.2.3) produce
+    /// `TypeRefs` for `type_identifier` facts and `Usages` for other
+    /// identifier facts, deduplicated per file.
+    #[test]
+    fn syntax_indexed_symbols_produce_type_refs_and_usages()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("widget.ts"),
+            "class Widget {\n    hello(): void {\n        console.log(this);\n    }\n}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::TypeRefs)
+        );
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::Usages)
+        );
+        for relation in graph.relations.iter().filter(|relation| {
+            matches!(relation.kind, RelationKind::TypeRefs | RelationKind::Usages)
+        }) {
+            assert_eq!(relation.confidence, Confidence::Low);
+            assert_eq!(
+                relation
+                    .provenance
+                    .as_ref()
+                    .ok_or("missing provenance")?
+                    .resolution,
+                RelationResolution::SyntaxOnly
             );
         }
 

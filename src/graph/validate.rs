@@ -199,7 +199,11 @@ fn target_kind_allowed(kind: RelationKind, target: NodeKindTag) -> bool {
         RelationKind::UsesImage | RelationKind::BuildsImage | RelationKind::PublishesImage => {
             target == NodeKindTag::Container
         }
-        RelationKind::Implements => matches!(target, NodeKindTag::Symbol),
+        RelationKind::Implements
+        | RelationKind::Inherits
+        | RelationKind::TypeRefs
+        | RelationKind::Usages
+        | RelationKind::Ffi => matches!(target, NodeKindTag::Symbol),
         RelationKind::References => true,
     }
 }
@@ -309,6 +313,92 @@ mod tests {
 
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].kind, GraphIssueKind::InvalidRelationTarget);
+
+        Ok(())
+    }
+
+    /// LIT-22.3.3 AC2/AC3: `Inherits`/`TypeRefs`/`Usages`/`Ffi` accept a
+    /// `Symbol` target or an `Unresolved` one (never fabricated), but
+    /// reject a structurally wrong target kind like `EnvVar`.
+    #[test]
+    fn new_semantic_relation_kinds_enforce_symbol_or_unresolved_targets()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let artifacts = vec![artifact("src/lib.rs", Some(5))?];
+        let base_nodes = vec![
+            GraphNode::Artifact(ArtifactNode {
+                id: GraphNodeId::new("artifact:src/lib.rs"),
+                path: "src/lib.rs".to_owned(),
+                category: ArtifactCategory::SourceCode,
+                evidence: file_evidence(&artifacts[0]),
+            }),
+            GraphNode::Symbol(crate::graph::model::SymbolNode {
+                id: GraphNodeId::new("symbol:Base"),
+                kind: crate::graph::model::SymbolKind::Class,
+                qualified_name: "Base".to_owned(),
+                doc: None,
+                evidence: file_evidence(&artifacts[0]),
+            }),
+            GraphNode::Unresolved(crate::graph::model::UnresolvedNode {
+                id: GraphNodeId::new("unresolved:mystery"),
+                value: "mystery".to_owned(),
+            }),
+            GraphNode::EnvVar(EnvVarNode {
+                id: GraphNodeId::new("env:X"),
+                name: "X".to_owned(),
+            }),
+        ];
+
+        for kind in [
+            RelationKind::Inherits,
+            RelationKind::TypeRefs,
+            RelationKind::Usages,
+            RelationKind::Ffi,
+        ] {
+            let relation = |target: &str, confidence: crate::domain::Confidence| Relation {
+                id: "relation:1".to_owned(),
+                source: GraphNodeId::new("artifact:src/lib.rs"),
+                target: GraphNodeId::new(target),
+                kind,
+                confidence,
+                evidence: vec![file_evidence(&artifacts[0])],
+                provenance: None,
+            };
+
+            let valid_symbol_target = Graph {
+                nodes: base_nodes.clone(),
+                relations: vec![relation("symbol:Base", crate::domain::Confidence::Low)],
+            };
+            assert_eq!(
+                GraphValidator.validate(&valid_symbol_target, &artifacts),
+                Vec::new(),
+                "{kind:?} -> Symbol should be valid"
+            );
+
+            let valid_unresolved_target = Graph {
+                nodes: base_nodes.clone(),
+                relations: vec![relation(
+                    "unresolved:mystery",
+                    crate::domain::Confidence::Low,
+                )],
+            };
+            assert_eq!(
+                GraphValidator.validate(&valid_unresolved_target, &artifacts),
+                Vec::new(),
+                "{kind:?} -> Unresolved should be valid"
+            );
+
+            let invalid_target = Graph {
+                nodes: base_nodes.clone(),
+                relations: vec![relation("env:X", crate::domain::Confidence::High)],
+            };
+            let issues = GraphValidator.validate(&invalid_target, &artifacts);
+            assert_eq!(
+                issues.len(),
+                1,
+                "{kind:?} -> EnvVar should be exactly one issue"
+            );
+            assert_eq!(issues[0].kind, GraphIssueKind::InvalidRelationTarget);
+        }
 
         Ok(())
     }

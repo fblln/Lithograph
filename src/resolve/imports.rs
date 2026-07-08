@@ -364,7 +364,10 @@ mod pipeline_tests {
         let report = HybridResolverPipeline::default_pipeline().resolve(&mut graph);
 
         assert_eq!(report.resolved, 0);
-        assert_eq!(report.still_unresolved, 1);
+        // The file also produces `Usages`/`TypeRefs` relations for its own
+        // identifiers (LIT-22.3.3), which stay unresolved too -- this test
+        // only asserts the `Imports` relation specifically isn't fabricated.
+        assert!(report.still_unresolved >= 1);
         let relation =
             resolved_target(&graph, "src/main/java/App.java").ok_or("missing import relation")?;
         assert!(matches!(

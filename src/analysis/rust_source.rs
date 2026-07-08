@@ -133,6 +133,8 @@ pub enum RustReferenceKind {
     EnvRead,
     /// `std::process::Command::new` command invocation.
     Subprocess,
+    /// A function or static declared inside an `extern "ABI" { ... }` block.
+    Ffi,
 }
 
 /// One heuristic reference extracted from a call expression.
@@ -588,9 +590,43 @@ fn collect_rust_references(
     {
         references.push(reference);
     }
+    if node.kind() == "foreign_mod_item" {
+        collect_foreign_mod_references(node, artifact, source, references);
+    }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         collect_rust_references(child, artifact, source, aliases, references);
+    }
+}
+
+/// Extracts one `Ffi` reference per function/static declared inside an
+/// `extern "ABI" { ... }` block (LIT-22.3.3). The block's own children are
+/// not otherwise walked by `collect_rust_references` for calls (an FFI
+/// declaration has no body to call anything from), so this is the only
+/// place these names are captured.
+fn collect_foreign_mod_references(
+    node: Node,
+    artifact: &Artifact,
+    source: &str,
+    references: &mut Vec<RustReference>,
+) {
+    let Some(body) = node.child_by_field_name("body") else {
+        return;
+    };
+    let mut cursor = body.walk();
+    for child in body.children(&mut cursor) {
+        if !matches!(child.kind(), "function_signature_item" | "static_item") {
+            continue;
+        }
+        let Some(name) = field_text(child, "name", source) else {
+            continue;
+        };
+        references.push(RustReference {
+            kind: RustReferenceKind::Ffi,
+            value: name.to_owned(),
+            confidence: Confidence::High,
+            evidence: evidence(artifact, child),
+        });
     }
 }
 

@@ -267,6 +267,17 @@ pub enum RelationKind {
     PublishesImage,
     /// A type implements a trait.
     Implements,
+    /// A class/type inherits from (extends) a base class/type.
+    Inherits,
+    /// A definition references another type by name (field type, parameter
+    /// type, return type, generic argument).
+    TypeRefs,
+    /// A file-scoped reference to a symbol name that is neither a
+    /// definition nor an import (a use site).
+    Usages,
+    /// A foreign-function-interface boundary: a function or static
+    /// declared `extern` for another ABI.
+    Ffi,
     /// A generic reference (path, URL, dynamic import, ctypes, service dependency).
     References,
 }
