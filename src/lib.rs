@@ -18,6 +18,7 @@ pub mod orchestrate;
 pub mod plan;
 pub mod quality;
 pub mod research;
+pub mod resolve;
 pub mod run;
 pub mod storage;
 pub mod viewer;
