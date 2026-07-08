@@ -115,6 +115,16 @@ impl WikiMcpServer {
                 )?)
             }
             "detect_changes" => Ok(serde_json::to_value(self.detect_changes()?)?),
+            "detect_drift" => {
+                let artifacts =
+                    RepositoryWalker::new(WalkOptions::default()).walk(&self.repo_root)?;
+                let graph = self.load_graph()?;
+                Ok(serde_json::to_value(crate::drift::DriftDetector.scan(
+                    &artifacts,
+                    &graph,
+                    &self.repo_root,
+                ))?)
+            }
             "get_architecture" => {
                 let graph = self.load_graph()?;
                 let aspects = architecture_aspects(&request.params)?;
@@ -505,6 +515,39 @@ mod tests {
                 .error
                 .as_ref()
                 .is_some_and(|error| error.contains("invalid params.aspects"))
+        );
+
+        Ok(())
+    }
+
+    /// LIT-22.5.3 AC3: `detect_drift` is available through the MCP server.
+    #[test]
+    fn detect_drift_reports_findings() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        std::fs::write(
+            temp.path().join("stray.md"),
+            "TODO: document the `/health` endpoint.\n",
+        )?;
+        let server = WikiMcpServer::new(temp.path());
+
+        let response = server.handle(McpRequest {
+            id: json!(1),
+            tool: "detect_drift".to_owned(),
+            params: json!({}),
+        });
+        assert!(response.error.is_none());
+        assert!(
+            response
+                .result
+                .as_ref()
+                .and_then(|value| value.get("findings"))
+                .and_then(Value::as_array)
+                .is_some_and(|findings| !findings.is_empty())
         );
 
         Ok(())
