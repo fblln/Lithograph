@@ -14,11 +14,15 @@
 //! Per-language import resolvers (LIT-22.3.2) plug into this framework by
 //! implementing [`Resolver`]; this module only owns the shared plumbing.
 
+pub mod imports;
+
 use crate::domain::Confidence;
 use crate::graph::{
     Graph, GraphNode, GraphNodeId, Relation, RelationProvenance, RelationResolution,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+
+pub use imports::{LanguageImportResolver, extract_import_reference};
 
 /// Typed indexes over one graph snapshot, built once per pipeline run and
 /// shared by every resolver (AC1: typed syntax/package/module/symbol
@@ -32,6 +36,9 @@ pub struct ResolverContext<'a> {
     pub modules_by_path: BTreeMap<&'a str, &'a GraphNodeId>,
     /// Package node ids by package name.
     pub packages_by_name: BTreeMap<&'a str, &'a GraphNodeId>,
+    /// Names of packages built in-repo (`is_external == false`), a subset
+    /// of `packages_by_name`'s keys.
+    pub local_package_names: BTreeSet<&'a str>,
     /// Symbol node ids by fully qualified name.
     pub symbols_by_qualified_name: BTreeMap<&'a str, &'a GraphNodeId>,
     /// Artifact node ids by repository-relative path.
@@ -43,6 +50,7 @@ impl<'a> ResolverContext<'a> {
     pub fn build(graph: &'a Graph) -> Self {
         let mut modules_by_path = BTreeMap::new();
         let mut packages_by_name = BTreeMap::new();
+        let mut local_package_names = BTreeSet::new();
         let mut symbols_by_qualified_name = BTreeMap::new();
         let mut artifacts_by_path = BTreeMap::new();
 
@@ -53,6 +61,9 @@ impl<'a> ResolverContext<'a> {
                 }
                 GraphNode::Package(package) => {
                     packages_by_name.insert(package.name.as_str(), node.id());
+                    if !package.is_external {
+                        local_package_names.insert(package.name.as_str());
+                    }
                 }
                 GraphNode::Symbol(symbol) => {
                     symbols_by_qualified_name.insert(symbol.qualified_name.as_str(), node.id());
@@ -73,6 +84,7 @@ impl<'a> ResolverContext<'a> {
             graph,
             modules_by_path,
             packages_by_name,
+            local_package_names,
             symbols_by_qualified_name,
             artifacts_by_path,
         }
@@ -137,12 +149,15 @@ impl HybridResolverPipeline {
         Self { resolvers }
     }
 
-    /// The framework's built-in resolvers: cross-referencing an
-    /// `Unresolved` import value against the package map (LIT-22.2.4) and
-    /// against known repository artifact paths. Per-language import-name
-    /// extraction (LIT-22.3.2) adds further resolvers ahead of these two.
+    /// The framework's built-in resolvers, most specific first:
+    /// [`LanguageImportResolver`] (LIT-22.3.2) parses the raw unresolved
+    /// text per source language before matching, so it tries first; the
+    /// two generic exact-match resolvers (LIT-22.3.1) catch anything whose
+    /// raw unresolved value already happens to equal a known package name
+    /// or artifact path verbatim.
     pub fn default_pipeline() -> Self {
         Self::new(vec![
+            Box::new(LanguageImportResolver),
             Box::new(PackageMapResolver),
             Box::new(LocalArtifactPathResolver),
         ])
