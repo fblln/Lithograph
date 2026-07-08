@@ -128,6 +128,30 @@ impl RepositorySnapshot {
     }
 }
 
+/// One explicit pipeline stage (LIT-22.6.1): `init`/`update` run through
+/// these four in order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PipelineStage {
+    /// Repository scan, artifact classification, graph build/validate, and
+    /// documentation module planning.
+    PreprocessIndex,
+    /// Deterministic research fact extraction over the built graph.
+    Research,
+    /// Context building, model generation, and page rendering.
+    Compose,
+    /// Run-metadata computation and writing graph/manifest/snapshot/run output.
+    ValidateOutput,
+}
+
+/// Wall-clock duration of one completed [`PipelineStage`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StageTiming {
+    /// Which stage this measures.
+    pub stage: PipelineStage,
+    /// Elapsed wall-clock time in milliseconds.
+    pub duration_ms: u64,
+}
+
 /// Metadata recorded for one `init`/`update` run.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunMetadata {
@@ -137,6 +161,13 @@ pub struct RunMetadata {
     pub command: String,
     /// Repository git HEAD commit, when the repository is a git checkout.
     pub git_head: Option<String>,
+    /// Per-stage timing for this run (LIT-22.6.1 AC1). Empty when a caller
+    /// builds `RunMetadata` directly rather than through `orchestrate`'s
+    /// pipeline (e.g. existing unit tests) -- set by the pipeline after
+    /// `compute()` returns, since the final stage's own duration isn't
+    /// known until immediately before this metadata is written to disk.
+    #[serde(default)]
+    pub stage_timings: Vec<StageTiming>,
     /// Hash over the current artifact snapshot.
     pub snapshot_hash: String,
     /// Hash over the exported graph.
@@ -194,6 +225,7 @@ impl RunMetadata {
             run_id: run_id(),
             command: command.to_owned(),
             git_head: git_head(repo_root),
+            stage_timings: Vec::new(),
             snapshot_hash: snapshot.hash(),
             graph_hash,
             output_hash: output_hash(manifest),
