@@ -136,6 +136,11 @@ pub enum ConfigNodeKind {
     Job,
     /// Network port.
     Port,
+    /// An HTTP route, gRPC/protobuf RPC, or GraphQL Query/Mutation field
+    /// (LIT-22.3.4). `ConfigNode::name` is `"METHOD path"` for HTTP (e.g.
+    /// `"GET /users/{id}"`), `"service.rpc"` for gRPC, or the GraphQL field
+    /// name.
+    Route,
     /// Other named configuration value.
     Value,
 }

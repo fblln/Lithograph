@@ -1,6 +1,6 @@
 //! Queryable knowledge index over the typed semantic graph.
 
-use crate::graph::{Graph, GraphNode, GraphNodeId, RelationKind};
+use crate::graph::{ConfigNodeKind, Graph, GraphNode, GraphNodeId, RelationKind};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -132,6 +132,10 @@ pub struct ArchitectureSummary {
     pub boundaries: Vec<SearchResult>,
     /// Existing architecture or decision documentation nodes.
     pub architecture_docs: Vec<SearchResult>,
+    /// HTTP routes, gRPC/protobuf RPCs, GraphQL fields, and Compose
+    /// services (LIT-22.3.4 AC3): every `Config` node whose kind is
+    /// `Route` or `Service`.
+    pub service_links: Vec<SearchResult>,
 }
 
 /// Package summary.
@@ -296,6 +300,7 @@ impl<'a> KnowledgeIndex<'a> {
         let mut entry_points = Vec::new();
         let mut boundaries = Vec::new();
         let mut architecture_docs = Vec::new();
+        let mut service_links = Vec::new();
         let mut all_results = Vec::new();
 
         for node in &self.graph.nodes {
@@ -311,6 +316,11 @@ impl<'a> KnowledgeIndex<'a> {
                     if package.is_external {
                         boundaries.push(result.clone());
                     }
+                }
+                GraphNode::Config(config)
+                    if matches!(config.kind, ConfigNodeKind::Route | ConfigNodeKind::Service) =>
+                {
+                    service_links.push(result.clone());
                 }
                 GraphNode::Command(_) | GraphNode::Container(_) => {
                     entry_points.push(result.clone())
@@ -346,6 +356,7 @@ impl<'a> KnowledgeIndex<'a> {
         boundaries.truncate(30);
         packages.sort_by(|a, b| a.name.cmp(&b.name));
         architecture_docs.sort_by(|a, b| a.name.cmp(&b.name));
+        service_links.sort_by(|a, b| a.name.cmp(&b.name));
 
         ArchitectureSummary {
             schema: self.schema(),
@@ -354,6 +365,7 @@ impl<'a> KnowledgeIndex<'a> {
             hotspots,
             boundaries,
             architecture_docs,
+            service_links,
         }
     }
 
@@ -651,6 +663,35 @@ mod tests {
         );
 
         assert!(index.package_dependencies("does-not-exist").is_empty());
+
+        Ok(())
+    }
+
+    /// LIT-22.3.4 AC3: HTTP routes and gRPC/GraphQL facts surface in
+    /// `architecture().service_links`.
+    #[test]
+    fn architecture_summary_includes_service_links() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("service.py"),
+            "@app.get(\"/users/{id}\")\ndef get_user(id):\n    return None\n",
+        )?;
+        std::fs::write(
+            temp.path().join("api.proto"),
+            "service Greeter {\n  rpc SayHello (HelloRequest) returns (HelloReply) {}\n}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+        let architecture = KnowledgeIndex::new(&graph).architecture();
+
+        let names: Vec<&str> = architecture
+            .service_links
+            .iter()
+            .map(|link| link.name.as_str())
+            .collect();
+        assert!(names.contains(&"GET /users/{id}"));
+        assert!(names.contains(&"Greeter.SayHello"));
 
         Ok(())
     }

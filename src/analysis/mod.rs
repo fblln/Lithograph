@@ -7,6 +7,7 @@ pub mod generic_text;
 pub mod markdown;
 pub mod packages;
 pub mod profiles;
+pub mod protocols;
 pub mod python;
 pub mod rust_metadata;
 pub mod rust_source;
@@ -37,6 +38,7 @@ pub use profiles::{
     PyProjectProfile, PythonDependency, PythonProject, PythonRequirement, RequirementsAnalyzer,
     RequirementsProfile,
 };
+pub use protocols::{GraphQlAnalyzer, ProtoAnalyzer, ProtocolFormat, ProtocolRoute};
 pub use python::{
     PythonAnalysis, PythonAnalyzer, PythonClass, PythonFunction, PythonImport, PythonImportKind,
     PythonImportName, PythonReference, PythonReferenceKind,

@@ -5,7 +5,7 @@ use std::sync::LazyLock;
 
 /// Bump when registry entries, extension mappings, tiers, or analyzer routing
 /// change in a way that should invalidate graph planning inputs.
-pub const LANGUAGE_REGISTRY_VERSION: u32 = 3;
+pub const LANGUAGE_REGISTRY_VERSION: u32 = 4;
 
 /// Agent-facing index support level represented by the registry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -203,7 +203,7 @@ const CODEBASE_MEMORY_REGISTRY: &[LanguageRegistryEntry] = &[
         ArtifactCategory::SourceCode,
         &["frag", "glsl", "vert"],
     ),
-    syntax_target(
+    protocol_current(
         "graphql",
         "graphql",
         ArtifactCategory::Configuration,
@@ -263,7 +263,7 @@ const CODEBASE_MEMORY_REGISTRY: &[LanguageRegistryEntry] = &[
         &["ml", "mli"],
     ),
     syntax_target("perl", "perl", ArtifactCategory::SourceCode, &["pl", "pm"]),
-    syntax_target(
+    protocol_current(
         "protobuf",
         "protobuf",
         ArtifactCategory::SourceCode,
@@ -826,6 +826,30 @@ const fn syntax_current_with_id(
         target_tier: RegistryIndexTier::SyntaxIndexed,
         analyzer: AnalyzerSelectionTemplate::Structured,
         resolver_strategy: "structured-syntax",
+        extensions,
+    }
+}
+
+/// A protocol schema format with a wired `ProtoAnalyzer`/`GraphQlAnalyzer`
+/// (LIT-22.3.4): `current_tier` == `target_tier` == `SyntaxIndexed`, like
+/// `syntax_current`, but routed through `AnalyzerSelectionTemplate::Specialized`
+/// since these formats have a dedicated analyzer rather than going through
+/// the generic `StructuredAnalyzer`.
+const fn protocol_current(
+    id: &'static str,
+    name: &'static str,
+    category: ArtifactCategory,
+    extensions: &'static [&'static str],
+) -> LanguageRegistryEntry {
+    LanguageRegistryEntry {
+        id,
+        name,
+        category,
+        support_tier: SupportTier::StructuredFormat,
+        current_tier: RegistryIndexTier::SyntaxIndexed,
+        target_tier: RegistryIndexTier::SyntaxIndexed,
+        analyzer: AnalyzerSelectionTemplate::Specialized,
+        resolver_strategy: "protocol-schema",
         extensions,
     }
 }

@@ -6,11 +6,12 @@ use crate::analysis::{
     AnalyzerOutput, CargoProfile, CargoProfileAnalyzer, ComposeProfile, ComposeProfileAnalyzer,
     ConfigReferenceKind, DockerfileAnalysis, DockerfileAnalyzer, GenericTextExtractor,
     MarkdownAnalysis, MarkdownAnalyzer, PackageManifestAnalysis, PackageManifestFormat,
-    PyProjectAnalyzer, PyProjectProfile, PythonAnalysis, PythonAnalyzer, PythonImportKind,
-    PythonReferenceKind, RequirementsAnalyzer, RequirementsProfile, RustAnalysis, RustAnalyzer,
-    RustReferenceKind, RustWorkspaceAnalysis, RustWorkspaceAnalyzer, StructuredAnalysis,
-    StructuredAnalyzer, StructuredFormat, SyntaxIndexedLanguage, TextFinding, TextFindingKind,
-    TreeSitterAdapterOutput, is_python_stdlib_module, python, rust_source, rust_std_crate,
+    ProtocolFormat, ProtocolRoute, PyProjectAnalyzer, PyProjectProfile, PythonAnalysis,
+    PythonAnalyzer, PythonImportKind, PythonReferenceKind, RequirementsAnalyzer,
+    RequirementsProfile, RustAnalysis, RustAnalyzer, RustReferenceKind, RustWorkspaceAnalysis,
+    RustWorkspaceAnalyzer, StructuredAnalysis, StructuredAnalyzer, StructuredFormat,
+    SyntaxIndexedLanguage, TextFinding, TextFindingKind, TreeSitterAdapterOutput,
+    is_python_stdlib_module, python, rust_source, rust_std_crate,
 };
 use crate::domain::{
     AnalyzerSelection, Artifact, ArtifactId, Confidence, EvidenceRef, ModelExposurePolicy,
@@ -146,7 +147,9 @@ fn analyzer_kind(artifact: &Artifact) -> Option<AnalyzerKind> {
             Some(AnalyzerKind::Requirements)
         }
         (AnalyzerSelection::Specialized(format), _) => {
-            PackageManifestFormat::from_format_id(format).map(AnalyzerKind::PackageManifest)
+            PackageManifestFormat::from_format_id(format)
+                .map(AnalyzerKind::PackageManifest)
+                .or_else(|| ProtocolFormat::from_format_id(format).map(AnalyzerKind::Protocol))
         }
         (AnalyzerSelection::Structured(format), _) if format == "dockerfile" => {
             Some(AnalyzerKind::Dockerfile)
@@ -227,6 +230,9 @@ fn compute_fresh(
         }
         AnalyzerKind::PackageManifest(format) => {
             AnalyzerOutput::PackageManifest(format, format.analyze(artifact, text))
+        }
+        AnalyzerKind::Protocol(format) => {
+            AnalyzerOutput::Protocol(format, format.analyze(artifact, text))
         }
         AnalyzerKind::GenericText => {
             AnalyzerOutput::GenericText(GenericTextExtractor.extract(artifact, text))
@@ -519,6 +525,9 @@ impl BuilderState {
             AnalyzerOutput::PackageManifest(format, analysis) => {
                 self.process_package_manifest(format, analysis, &node);
             }
+            AnalyzerOutput::Protocol(_, routes) => {
+                self.process_protocol_routes(artifact, &routes, &node);
+            }
             AnalyzerOutput::GenericText(findings) => {
                 self.process_generic_text(artifact, &findings, &node);
             }
@@ -607,6 +616,7 @@ impl BuilderState {
                 Confidence::High,
                 vec![function.evidence.clone()],
             );
+            self.process_python_route_decorators(artifact, artifact_node, function);
             symbol_ids.insert(function.name.clone(), id);
         }
 
@@ -725,6 +735,45 @@ impl BuilderState {
         }
     }
 
+    /// Turns a module-level function's decorators that look like an HTTP
+    /// route registration into a first-class `Route` config node
+    /// (LIT-22.3.4 AC1). Class-based views/routers aren't covered -- most
+    /// Flask/FastAPI routes are plain module-level functions, and guessing
+    /// at class-method route registration without more evidence would risk
+    /// false positives.
+    fn process_python_route_decorators(
+        &mut self,
+        artifact: &Artifact,
+        artifact_node: &GraphNodeId,
+        function: &crate::analysis::PythonFunction,
+    ) {
+        for (index, decorator) in function.decorators.iter().enumerate() {
+            let Some((method, path)) = python::parse_route_decorator(decorator) else {
+                continue;
+            };
+            let key = format!("route.{}.{index}", function.name);
+            let route_id = self.config(
+                artifact,
+                &key,
+                ConfigNodeKind::Route,
+                &format!("{method} {path}"),
+                function.evidence.clone(),
+            );
+            self.relate_with_provenance(
+                artifact_node.clone(),
+                route_id,
+                RelationKind::Contains,
+                Confidence::High,
+                vec![function.evidence.clone()],
+                Some(artifact_provenance(
+                    artifact,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
+            );
+        }
+    }
+
     fn process_python_reference(
         &mut self,
         artifact: &Artifact,
@@ -822,6 +871,21 @@ impl BuilderState {
                         artifact,
                         RelationResolution::HybridResolved,
                         confidence,
+                    )),
+                );
+            }
+            PythonReferenceKind::HttpCall => {
+                let target = self.unresolved(&reference.value);
+                self.relate_with_provenance(
+                    artifact_node.clone(),
+                    target,
+                    RelationKind::References,
+                    reference.confidence,
+                    vec![reference.evidence.clone()],
+                    Some(artifact_provenance(
+                        artifact,
+                        RelationResolution::SyntaxOnly,
+                        reference.confidence,
                     )),
                 );
             }
@@ -1476,6 +1540,41 @@ impl BuilderState {
                 vec![dependency.evidence],
                 Some(format_provenance(
                     format_id,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
+            );
+        }
+    }
+
+    /// Turns gRPC/protobuf `service.rpc` and GraphQL `Query`/`Mutation`
+    /// field declarations (LIT-22.3.4 AC1/AC2) into first-class `Route`
+    /// config nodes, the same node kind Python's route decorators produce
+    /// (see `process_python_route_decorators`), so both surface uniformly
+    /// in `KnowledgeIndex::architecture()`'s service links (AC3).
+    fn process_protocol_routes(
+        &mut self,
+        artifact: &Artifact,
+        routes: &[ProtocolRoute],
+        artifact_node: &GraphNodeId,
+    ) {
+        for (index, route) in routes.iter().enumerate() {
+            let key = format!("route.{index}");
+            let route_id = self.config(
+                artifact,
+                &key,
+                ConfigNodeKind::Route,
+                &route.name,
+                route.evidence.clone(),
+            );
+            self.relate_with_provenance(
+                artifact_node.clone(),
+                route_id,
+                RelationKind::Contains,
+                Confidence::High,
+                vec![route.evidence.clone()],
+                Some(artifact_provenance(
+                    artifact,
                     RelationResolution::SyntaxOnly,
                     Confidence::High,
                 )),
@@ -2559,6 +2658,99 @@ impl Drop for Route {
                 RelationResolution::SyntaxOnly
             );
         }
+
+        Ok(())
+    }
+
+    /// LIT-22.3.4 AC1/AC4: a route-decorated handler produces a `Route`
+    /// config node; a literal HTTP client call produces a high-confidence
+    /// reference; a *dynamic* call target (an f-string, not a literal)
+    /// stays low-confidence rather than being reported as if resolved.
+    #[test]
+    fn python_http_routes_and_calls_are_first_class_graph_facts()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("service.py"),
+            "import requests\n\n\n@app.get(\"/users/{id}\")\ndef get_user(id, dynamic_url):\n    requests.get(\"https://auth.example.test/verify\")\n    requests.get(dynamic_url)\n    return None\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let route = graph
+            .nodes
+            .iter()
+            .find_map(|node| match node {
+                GraphNode::Config(config) if config.name == "GET /users/{id}" => Some(config),
+                _ => None,
+            })
+            .ok_or("missing route config node")?;
+        assert_eq!(route.kind, crate::graph::model::ConfigNodeKind::Route);
+        assert!(graph.relations.iter().any(|relation| {
+            relation.kind == RelationKind::Contains && relation.target == route.id
+        }));
+
+        let literal_call = graph
+            .relations
+            .iter()
+            .find(|relation| {
+                relation.kind == RelationKind::References
+                    && graph.nodes.iter().any(|node| {
+                        node.id() == &relation.target
+                            && matches!(node, GraphNode::Unresolved(u) if u.value == "https://auth.example.test/verify")
+                    })
+            })
+            .ok_or("missing literal HTTP call relation")?;
+        assert_eq!(literal_call.confidence, Confidence::High);
+
+        let dynamic_call = graph
+            .relations
+            .iter()
+            .find(|relation| {
+                relation.kind == RelationKind::References && graph.nodes.iter().any(|node| {
+                    node.id() == &relation.target
+                        && matches!(node, GraphNode::Unresolved(u) if u.value.contains("dynamic"))
+                })
+            })
+            .ok_or("missing dynamic HTTP call relation")?;
+        assert_eq!(dynamic_call.confidence, Confidence::Low);
+
+        Ok(())
+    }
+
+    /// LIT-22.3.4 AC2: `.proto` and `.graphql` schema facts produce `Route`
+    /// config nodes.
+    #[test]
+    fn proto_and_graphql_schemas_produce_route_config_nodes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("api.proto"),
+            "service Greeter {\n  rpc SayHello (HelloRequest) returns (HelloReply) {}\n}\n",
+        )?;
+        std::fs::write(
+            temp.path().join("schema.graphql"),
+            "type Query {\n  user(id: ID!): User\n}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let route_names: Vec<&str> = graph
+            .nodes
+            .iter()
+            .filter_map(|node| match node {
+                GraphNode::Config(config)
+                    if config.kind == crate::graph::model::ConfigNodeKind::Route =>
+                {
+                    Some(config.name.as_str())
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(route_names.contains(&"Greeter.SayHello"));
+        assert!(route_names.contains(&"Query.user"));
 
         Ok(())
     }

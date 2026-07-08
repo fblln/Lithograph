@@ -112,6 +112,8 @@ pub enum PythonReferenceKind {
     Ctypes,
     /// `open`/`Path` config or path reference.
     ConfigPath,
+    /// `requests`/`httpx`/`urllib` HTTP client call (LIT-22.3.4).
+    HttpCall,
 }
 
 /// One heuristic reference extracted from a call expression.
@@ -612,6 +614,24 @@ fn classify_call(
         )
     } else if matches!(canonical, "open" | "Path") {
         literal_or_dynamic(first_arg, source, PythonReferenceKind::ConfigPath)
+    } else if matches!(
+        canonical,
+        "requests.get"
+            | "requests.post"
+            | "requests.put"
+            | "requests.delete"
+            | "requests.patch"
+            | "requests.request"
+            | "requests.head"
+            | "httpx.get"
+            | "httpx.post"
+            | "httpx.put"
+            | "httpx.delete"
+            | "httpx.patch"
+            | "httpx.request"
+            | "urllib.request.urlopen"
+    ) {
+        literal_or_dynamic(first_arg, source, PythonReferenceKind::HttpCall)
     } else {
         return None;
     };
@@ -681,9 +701,46 @@ fn evidence(artifact: &Artifact, node: Node) -> EvidenceRef {
     }
 }
 
+/// Parses a decorator's raw text (see [`PythonFunction::decorators`]) for a
+/// common web-framework HTTP route registration -- `@app.get("/users")`,
+/// `@router.route("/users")`, `@app.websocket("/ws")` -- returning
+/// `(METHOD, path)` when it matches (LIT-22.3.4 AC1). `.route(...)` (Flask's
+/// framework-agnostic form) has no verb to read, so it maps to the
+/// synthetic `"ROUTE"` method rather than guessing one. Anything else
+/// (`@dataclass`, `@staticmethod`, `@app.on_event(...)`, ...) returns
+/// `None` -- most decorators aren't routes, and this never guesses a route
+/// from a call shape it doesn't recognize.
+pub(crate) fn parse_route_decorator(text: &str) -> Option<(String, String)> {
+    let call = text.trim();
+    let paren = call.find('(')?;
+    let (callee, args) = call.split_at(paren);
+    let method = match callee.rsplit('.').next()? {
+        "get" => "GET",
+        "post" => "POST",
+        "put" => "PUT",
+        "delete" => "DELETE",
+        "patch" => "PATCH",
+        "websocket" => "WEBSOCKET",
+        "route" => "ROUTE",
+        _ => return None,
+    };
+    let path = decorator_quoted_literal(args)?;
+    Some((method.to_owned(), path))
+}
+
+fn decorator_quoted_literal(text: &str) -> Option<String> {
+    let mut chars = text.char_indices();
+    let (start, quote) = chars.find_map(|(index, character)| {
+        (character == '"' || character == '\'').then_some((index, character))
+    })?;
+    let end = text[start + 1..].find(quote)? + start + 1;
+    let literal = &text[start + 1..end];
+    (!literal.is_empty()).then(|| literal.to_owned())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{PythonAnalyzer, PythonImportKind, PythonReferenceKind};
+    use super::{PythonAnalyzer, PythonImportKind, PythonReferenceKind, parse_route_decorator};
     use crate::domain::{
         Artifact, ArtifactCategory, Confidence, ContentHash, ModelExposurePolicy, RepoPath,
         SupportTier, TextStatus,
@@ -919,6 +976,49 @@ def run():
             super::PythonAnalysis::default()
         );
         assert!(PythonAnalyzer.analyze(&artifact, broken).has_syntax_errors);
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_route_decorator_extracts_method_and_path_or_nothing() {
+        assert_eq!(
+            parse_route_decorator("app.get(\"/users/{id}\")"),
+            Some(("GET".to_owned(), "/users/{id}".to_owned()))
+        );
+        assert_eq!(
+            parse_route_decorator("router.post('/users')"),
+            Some(("POST".to_owned(), "/users".to_owned()))
+        );
+        assert_eq!(
+            parse_route_decorator("app.route(\"/legacy\", methods=[\"GET\", \"POST\"])"),
+            Some(("ROUTE".to_owned(), "/legacy".to_owned()))
+        );
+        assert_eq!(parse_route_decorator("dataclass"), None);
+        assert_eq!(parse_route_decorator("staticmethod"), None);
+        assert_eq!(parse_route_decorator("app.on_event(\"startup\")"), None);
+    }
+
+    #[test]
+    fn http_call_and_route_decorator_references_are_extracted()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let artifact = python_artifact("app/service.py")?;
+        let source = "import requests\n\n\n@app.get(\"/users/{id}\")\ndef get_user(id):\n    return requests.get(\"https://auth.example.test/verify\")\n";
+        let analysis = PythonAnalyzer.analyze(&artifact, source);
+
+        assert!(
+            analysis.functions[0]
+                .decorators
+                .iter()
+                .any(|decorator| decorator == "app.get(\"/users/{id}\")")
+        );
+        assert!(
+            analysis
+                .references
+                .iter()
+                .any(|reference| reference.kind == PythonReferenceKind::HttpCall
+                    && reference.value == "https://auth.example.test/verify")
+        );
 
         Ok(())
     }

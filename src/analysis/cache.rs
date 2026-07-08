@@ -7,9 +7,10 @@
 
 use crate::analysis::{
     ActionsProfile, CargoProfile, ComposeProfile, DockerfileAnalysis, MarkdownAnalysis,
-    PackageManifestAnalysis, PackageManifestFormat, PyProjectProfile, PythonAnalysis,
-    RequirementsProfile, RustAnalysis, RustWorkspaceAnalysis, StructuredAnalysis, StructuredFormat,
-    SyntaxIndexedLanguage, TextFinding, TreeSitterAdapterOutput,
+    PackageManifestAnalysis, PackageManifestFormat, ProtocolFormat, ProtocolRoute,
+    PyProjectProfile, PythonAnalysis, RequirementsProfile, RustAnalysis, RustWorkspaceAnalysis,
+    StructuredAnalysis, StructuredFormat, SyntaxIndexedLanguage, TextFinding,
+    TreeSitterAdapterOutput,
 };
 use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};
@@ -18,7 +19,7 @@ use std::path::PathBuf;
 
 /// Bump when analyzer output semantics or serialization change in a way that
 /// should force fresh analyzer output instead of reusing old cache entries.
-pub const ANALYSIS_CACHE_VERSION: u32 = 3;
+pub const ANALYSIS_CACHE_VERSION: u32 = 4;
 
 /// Tags which analyzer produced an [`AnalyzerOutput`], so a cache lookup can
 /// reject a stale entry whose artifact has since been reclassified to a
@@ -52,6 +53,8 @@ pub enum AnalyzerKind {
     SyntaxIndexed(SyntaxIndexedLanguage),
     /// A `PackageManifestFormat` analyzer, for one specific manifest format.
     PackageManifest(PackageManifestFormat),
+    /// `ProtoAnalyzer`/`GraphQlAnalyzer`, for one specific protocol format.
+    Protocol(ProtocolFormat),
     /// `GenericTextExtractor`.
     GenericText,
 }
@@ -97,6 +100,9 @@ pub enum AnalyzerOutput {
     /// [`PackageManifestFormat`] alongside the analysis, matching the
     /// `Structured`/`SyntaxIndexed` pattern above.
     PackageManifest(PackageManifestFormat, PackageManifestAnalysis),
+    /// [`ProtoAnalyzer`](crate::analysis::ProtoAnalyzer)/[`GraphQlAnalyzer`](crate::analysis::GraphQlAnalyzer)
+    /// output. Carries its own [`ProtocolFormat`], matching the pattern above.
+    Protocol(ProtocolFormat, Vec<ProtocolRoute>),
     /// [`GenericTextExtractor`](crate::analysis::GenericTextExtractor) output.
     GenericText(Vec<TextFinding>),
 }
@@ -118,6 +124,7 @@ impl AnalyzerOutput {
             Self::Structured(format, _) => AnalyzerKind::Structured(*format),
             Self::SyntaxIndexed(language, _) => AnalyzerKind::SyntaxIndexed(*language),
             Self::PackageManifest(format, _) => AnalyzerKind::PackageManifest(*format),
+            Self::Protocol(format, _) => AnalyzerKind::Protocol(*format),
             Self::GenericText(_) => AnalyzerKind::GenericText,
         }
     }
