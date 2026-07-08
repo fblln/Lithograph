@@ -2,6 +2,7 @@
 
 pub mod agents;
 pub mod analysis;
+pub mod architecture;
 pub mod ask;
 pub mod cli;
 pub mod commands;

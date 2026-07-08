@@ -136,6 +136,8 @@ pub struct ArchitectureSummary {
     /// services (LIT-22.3.4 AC3): every `Config` node whose kind is
     /// `Route` or `Service`.
     pub service_links: Vec<SearchResult>,
+    /// Per-artifact architecture layer classification (LIT-22.5.2 AC2).
+    pub layers: Vec<crate::architecture::ArchitectureLayer>,
 }
 
 /// Relation kinds counted as "functional" architecture edges for
@@ -484,6 +486,7 @@ impl<'a> KnowledgeIndex<'a> {
             boundaries,
             architecture_docs,
             service_links,
+            layers: crate::architecture::LayerDetector.detect(self.graph),
         }
     }
 

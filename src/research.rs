@@ -1,6 +1,7 @@
 //! Agent-style repository research artifacts used as the intermediate
 //! memory layer between graph indexing and documentation composition.
 
+use crate::architecture::{ArchitectureLayer, LayerDetector};
 use crate::domain::{Artifact, ArtifactCategory, SupportTier};
 use crate::graph::{Graph, GraphNode, RelationKind};
 use crate::inventory::language::{RegistryIndexTier, by_name as registry_language};
@@ -89,6 +90,8 @@ pub struct DomainModuleFact {
 pub struct ArchitectureReport {
     /// Detected language and format support coverage.
     pub languages: Vec<LanguageSupportFact>,
+    /// Per-artifact architecture layer classification (LIT-22.5.2).
+    pub layers: Vec<ArchitectureLayer>,
     /// Architecture style and container/component clues.
     pub architecture_facts: Vec<String>,
     /// Hotspots or central modules.
@@ -429,6 +432,7 @@ impl KnowledgeAgent for ArchitectureResearcher {
         let hotspots = key_modules(input.modules, input.graph);
         Self::Output {
             languages,
+            layers: LayerDetector.detect(input.graph),
             architecture_facts,
             hotspots,
             decisions_and_docs,
