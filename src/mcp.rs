@@ -1,12 +1,16 @@
 //! Minimal deterministic MCP-like JSON-line server over generated wiki data.
 
 use crate::ask::WikiSearch;
-use crate::graph::{Graph, GraphStore, KnowledgeIndex, SearchParams, TraceDirection, TraceParams};
+use crate::graph::{
+    ArchitectureAspect, Graph, GraphStore, KnowledgeIndex, SearchParams, TraceDirection,
+    TraceParams,
+};
 use crate::inventory::{RepositoryWalker, WalkOptions};
 use crate::run::RepositorySnapshot;
 use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::collections::BTreeSet;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
@@ -113,8 +117,9 @@ impl WikiMcpServer {
             "detect_changes" => Ok(serde_json::to_value(self.detect_changes()?)?),
             "get_architecture" => {
                 let graph = self.load_graph()?;
+                let aspects = architecture_aspects(&request.params)?;
                 Ok(serde_json::to_value(
-                    KnowledgeIndex::new(&graph).architecture(),
+                    KnowledgeIndex::new(&graph).architecture(aspects.as_ref()),
                 )?)
             }
             "ask_question" => {
@@ -233,6 +238,33 @@ fn trace_params(params: &Value) -> Result<TraceParams, Box<dyn std::error::Error
             .unwrap_or_default(),
         direction,
     })
+}
+
+/// Parses `params.aspects` (an array of section names, e.g.
+/// `["packages", "layers"]`) into the typed filter `get_architecture`
+/// passes to [`KnowledgeIndex::architecture`] (LIT-22.4.6 AC2). Absent or
+/// `null` means "every aspect"; an unrecognized name is a validation error,
+/// not a silently-ignored one.
+fn architecture_aspects(
+    params: &Value,
+) -> Result<Option<BTreeSet<ArchitectureAspect>>, Box<dyn std::error::Error>> {
+    let Some(aspects) = params.get("aspects") else {
+        return Ok(None);
+    };
+    if aspects.is_null() {
+        return Ok(None);
+    }
+    let names = aspects
+        .as_array()
+        .ok_or("params.aspects must be an array of section names")?;
+    let parsed = names
+        .iter()
+        .map(|name| {
+            serde_json::from_value::<ArchitectureAspect>(name.clone())
+                .map_err(|error| format!("invalid params.aspects entry {name}: {error}").into())
+        })
+        .collect::<Result<BTreeSet<ArchitectureAspect>, Box<dyn std::error::Error>>>()?;
+    Ok(Some(parsed))
 }
 
 #[cfg(test)]
@@ -417,6 +449,63 @@ mod tests {
         });
         assert!(trace_missing_query.result.is_none());
         assert!(trace_missing_query.error.is_some());
+
+        Ok(())
+    }
+
+    /// LIT-22.4.6 AC2/AC4: `get_architecture` accepts `params.aspects` to
+    /// filter its sections, and rejects an unrecognized aspect name.
+    #[test]
+    fn get_architecture_honors_aspect_filter_and_validates_names()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let server = WikiMcpServer::new(temp.path());
+
+        let full = server.handle(McpRequest {
+            id: json!(1),
+            tool: "get_architecture".to_owned(),
+            params: json!({}),
+        });
+        assert!(full.result.as_ref().is_some_and(
+            |value| value.get("clusters").is_some() && value.get("file_tree").is_some()
+        ));
+
+        let filtered = server.handle(McpRequest {
+            id: json!(2),
+            tool: "get_architecture".to_owned(),
+            params: json!({ "aspects": ["packages"] }),
+        });
+        let filtered_value = filtered.result.ok_or("missing filtered result")?;
+        assert!(
+            filtered_value
+                .get("packages")
+                .and_then(Value::as_array)
+                .is_some_and(|packages| !packages.is_empty())
+        );
+        assert!(
+            filtered_value
+                .get("clusters")
+                .and_then(Value::as_array)
+                .is_some_and(Vec::is_empty)
+        );
+
+        let invalid = server.handle(McpRequest {
+            id: json!(3),
+            tool: "get_architecture".to_owned(),
+            params: json!({ "aspects": ["not-a-real-aspect"] }),
+        });
+        assert!(invalid.result.is_none());
+        assert!(
+            invalid
+                .error
+                .as_ref()
+                .is_some_and(|error| error.contains("invalid params.aspects"))
+        );
 
         Ok(())
     }

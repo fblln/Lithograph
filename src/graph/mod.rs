@@ -9,8 +9,9 @@ pub mod validate;
 
 pub use builder::GraphBuilder;
 pub use index::{
-    ArchitectureSummary, GraphSchema, KnowledgeIndex, LabelCount, PackageSummary, SearchParams,
-    SearchResult, TraceDirection, TraceParams, TraceRelation, TraceResult, TypeCount,
+    ArchitectureAspect, ArchitectureCluster, ArchitectureSummary, FileTreeNode, GraphSchema,
+    KnowledgeIndex, LabelCount, LanguageSummary, PackageSummary, SearchParams, SearchResult,
+    TraceDirection, TraceParams, TraceRelation, TraceResult, TypeCount,
 };
 pub use model::{
     ArtifactNode, CommandNode, ConfigNode, ConfigNodeKind, ContainerImageNode, DocumentationNode,
