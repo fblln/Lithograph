@@ -1,8 +1,10 @@
 //! Command execution and output rendering.
 
+use crate::adr::{AdrRecord, AdrStore, AdrSummary};
 use crate::agents::{AgentFileOutcome, IntegrateAgentsReport, integrate_agents};
 use crate::ask::{McpExport, WikiSearch, render_ask_table};
 use crate::cli::{
+    AdrCommand, AdrCreateArgs, AdrDeleteArgs, AdrGetArgs, AdrListArgs, AdrTarget, AdrUpdateArgs,
     AskArgs, Cli, Command, DriftArgs, GoldenArgs, GraphCommand, GraphExportArgs, GraphImportArgs,
     GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectGraphArgs,
     InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs, McpServerArgs,
@@ -49,8 +51,137 @@ where
         Some(Command::McpServer(args)) => execute_mcp_server(args, writer),
         Some(Command::Viewer(args)) => execute_viewer(args, writer),
         Some(Command::Graph(args)) => execute_graph(args, writer),
+        Some(Command::Adr(command)) => execute_adr(command, writer),
         None => Ok(()),
     }
+}
+
+fn execute_adr<W>(command: AdrCommand, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    match command.target {
+        AdrTarget::Create(args) => execute_adr_create(args, writer),
+        AdrTarget::Get(args) => execute_adr_get(args, writer),
+        AdrTarget::Update(args) => execute_adr_update(args, writer),
+        AdrTarget::Delete(args) => execute_adr_delete(args, writer),
+        AdrTarget::List(args) => execute_adr_list(args, writer),
+    }
+}
+
+fn execute_adr_create<W>(
+    args: AdrCreateArgs,
+    writer: &mut W,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    let record = AdrStore::new(&args.path).create(
+        &args.title,
+        &args.context,
+        &args.decision,
+        args.consequences.as_deref(),
+    )?;
+    write_adr_record(writer, &record, args.format)
+}
+
+fn execute_adr_get<W>(args: AdrGetArgs, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    let record = AdrStore::new(&args.path).get(&args.id)?;
+    write_adr_record(writer, &record, args.format)
+}
+
+fn execute_adr_update<W>(
+    args: AdrUpdateArgs,
+    writer: &mut W,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    let store = AdrStore::new(&args.path);
+    let mut record = store.get(&args.id)?;
+    if let (Some(section), Some(value)) = (&args.section, &args.value) {
+        record = store.update_section(&args.id, section, value)?;
+    }
+    if let Some(status) = args.status {
+        record = store.update_status(&args.id, status.into())?;
+    }
+    write_adr_record(writer, &record, args.format)
+}
+
+fn execute_adr_delete<W>(
+    args: AdrDeleteArgs,
+    writer: &mut W,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    AdrStore::new(&args.path).delete(&args.id)?;
+    writer.write_all(format!("deleted {}\n", args.id).as_bytes())?;
+    Ok(())
+}
+
+fn execute_adr_list<W>(args: AdrListArgs, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    let summaries = AdrStore::new(&args.path).list();
+    let output = match args.format {
+        OutputFormat::Table => render_adr_list_table(&summaries),
+        OutputFormat::Json => {
+            let mut json = serde_json::to_string_pretty(&summaries)?;
+            json.push('\n');
+            json
+        }
+    };
+    writer.write_all(output.as_bytes())?;
+    Ok(())
+}
+
+fn write_adr_record<W>(
+    writer: &mut W,
+    record: &AdrRecord,
+    format: OutputFormat,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    let output = match format {
+        OutputFormat::Table => render_adr_record_table(record),
+        OutputFormat::Json => {
+            let mut json = serde_json::to_string_pretty(record)?;
+            json.push('\n');
+            json
+        }
+    };
+    writer.write_all(output.as_bytes())?;
+    Ok(())
+}
+
+/// Renders one ADR as a deterministic, human-readable table.
+pub fn render_adr_record_table(record: &AdrRecord) -> String {
+    let mut output = format!("{} [{:?}] {}\n", record.id, record.status, record.title);
+    for (section, content) in &record.sections {
+        output.push_str(&format!("- {section}: {content}\n"));
+    }
+    output
+}
+
+/// Renders every ADR as a deterministic, human-readable table.
+pub fn render_adr_list_table(summaries: &[AdrSummary]) -> String {
+    if summaries.is_empty() {
+        return "no ADRs recorded\n".to_owned();
+    }
+    let mut output = format!("{} ADR(s):\n", summaries.len());
+    for summary in summaries {
+        output.push_str(&format!(
+            "{} [{:?}] {}\n",
+            summary.id, summary.status, summary.title
+        ));
+    }
+    output
 }
 
 fn execute_graph<W>(command: GraphCommand, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
@@ -696,9 +827,11 @@ impl From<&Artifact> for ArtifactOutputRow {
 mod tests {
     use super::{execute, render_artifacts_json, render_artifacts_table, render_graph_diagnostics};
     use crate::cli::{
-        AskArgs, Cli, Command, DriftArgs, GraphCommand, GraphExportArgs, GraphImportArgs,
-        GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectGraphArgs,
-        InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs, OutputFormat,
+        AdrCommand, AdrCreateArgs, AdrDeleteArgs, AdrGetArgs, AdrListArgs, AdrStatusArg, AdrTarget,
+        AdrUpdateArgs, AskArgs, Cli, Command, DriftArgs, GraphCommand, GraphExportArgs,
+        GraphImportArgs, GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand,
+        InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs,
+        OutputFormat,
     };
     use crate::graph::{GraphIssue, GraphIssueKind};
     use crate::inventory::{RepositoryWalker, WalkOptions};
@@ -1078,6 +1211,170 @@ mod tests {
 
         assert!(output.contains("\"BrokenLink\""));
         assert!(output.contains("does-not-exist.md"));
+
+        Ok(())
+    }
+
+    /// LIT-22.5.4 AC1/AC4: exercises create -> get -> update section ->
+    /// update status -> list -> delete -> list through the CLI end to end.
+    #[test]
+    fn execute_adr_create_get_update_list_delete_round_trips()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        let path = temp.path().to_path_buf();
+
+        let mut created = Vec::new();
+        execute(
+            Cli {
+                command: Some(Command::Adr(AdrCommand {
+                    target: AdrTarget::Create(AdrCreateArgs {
+                        path: path.clone(),
+                        title: "Use Postgres".to_owned(),
+                        context: "We need a database.".to_owned(),
+                        decision: "Use Postgres.".to_owned(),
+                        consequences: None,
+                        format: OutputFormat::Json,
+                    }),
+                })),
+            },
+            &mut created,
+        )?;
+        let created: crate::adr::AdrRecord = serde_json::from_slice(&created)?;
+        assert_eq!(created.id, "ADR-0001");
+        assert_eq!(created.status, crate::adr::AdrStatus::Proposed);
+
+        let mut got = Vec::new();
+        execute(
+            Cli {
+                command: Some(Command::Adr(AdrCommand {
+                    target: AdrTarget::Get(AdrGetArgs {
+                        path: path.clone(),
+                        id: created.id.clone(),
+                        format: OutputFormat::Table,
+                    }),
+                })),
+            },
+            &mut got,
+        )?;
+        let got = String::from_utf8(got)?;
+        assert!(got.contains("Use Postgres"));
+        assert!(got.contains("Proposed"));
+
+        let mut updated = Vec::new();
+        execute(
+            Cli {
+                command: Some(Command::Adr(AdrCommand {
+                    target: AdrTarget::Update(AdrUpdateArgs {
+                        path: path.clone(),
+                        id: created.id.clone(),
+                        section: Some("consequences".to_owned()),
+                        value: Some("Adds an ops dependency.".to_owned()),
+                        status: Some(AdrStatusArg::Accepted),
+                        format: OutputFormat::Json,
+                    }),
+                })),
+            },
+            &mut updated,
+        )?;
+        let updated: crate::adr::AdrRecord = serde_json::from_slice(&updated)?;
+        assert_eq!(updated.status, crate::adr::AdrStatus::Accepted);
+        assert_eq!(
+            updated.sections.get("consequences").map(String::as_str),
+            Some("Adds an ops dependency.")
+        );
+
+        let mut listed = Vec::new();
+        execute(
+            Cli {
+                command: Some(Command::Adr(AdrCommand {
+                    target: AdrTarget::List(AdrListArgs {
+                        path: path.clone(),
+                        format: OutputFormat::Table,
+                    }),
+                })),
+            },
+            &mut listed,
+        )?;
+        assert!(String::from_utf8(listed)?.contains("ADR-0001"));
+
+        let mut deleted = Vec::new();
+        execute(
+            Cli {
+                command: Some(Command::Adr(AdrCommand {
+                    target: AdrTarget::Delete(AdrDeleteArgs {
+                        path: path.clone(),
+                        id: created.id.clone(),
+                    }),
+                })),
+            },
+            &mut deleted,
+        )?;
+        assert!(String::from_utf8(deleted)?.contains("deleted ADR-0001"));
+
+        let mut listed_after_delete = Vec::new();
+        execute(
+            Cli {
+                command: Some(Command::Adr(AdrCommand {
+                    target: AdrTarget::List(AdrListArgs {
+                        path,
+                        format: OutputFormat::Table,
+                    }),
+                })),
+            },
+            &mut listed_after_delete,
+        )?;
+        assert_eq!(
+            String::from_utf8(listed_after_delete)?,
+            "no ADRs recorded\n"
+        );
+
+        Ok(())
+    }
+
+    /// LIT-22.5.4 AC2/AC4: an unknown section key surfaces as an actionable
+    /// CLI error rather than succeeding silently.
+    #[test]
+    fn execute_adr_update_rejects_unknown_section() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        let path = temp.path().to_path_buf();
+        let mut created = Vec::new();
+        execute(
+            Cli {
+                command: Some(Command::Adr(AdrCommand {
+                    target: AdrTarget::Create(AdrCreateArgs {
+                        path: path.clone(),
+                        title: "Use Postgres".to_owned(),
+                        context: "We need a database.".to_owned(),
+                        decision: "Use Postgres.".to_owned(),
+                        consequences: None,
+                        format: OutputFormat::Json,
+                    }),
+                })),
+            },
+            &mut created,
+        )?;
+        let created: crate::adr::AdrRecord = serde_json::from_slice(&created)?;
+
+        let mut output = Vec::new();
+        let result = execute(
+            Cli {
+                command: Some(Command::Adr(AdrCommand {
+                    target: AdrTarget::Update(AdrUpdateArgs {
+                        path,
+                        id: created.id,
+                        section: Some("not-a-real-section".to_owned()),
+                        value: Some("value".to_owned()),
+                        status: None,
+                        format: OutputFormat::Table,
+                    }),
+                })),
+            },
+            &mut output,
+        );
+        match result {
+            Ok(()) => return Err("expected an unknown-section error".into()),
+            Err(error) => assert!(error.to_string().contains("unknown ADR section")),
+        }
 
         Ok(())
     }

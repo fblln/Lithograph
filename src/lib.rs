@@ -1,5 +1,6 @@
 //! Lithograph CLI library surface.
 
+pub mod adr;
 pub mod agents;
 pub mod analysis;
 pub mod architecture;

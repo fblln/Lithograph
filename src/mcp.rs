@@ -132,6 +132,72 @@ impl WikiMcpServer {
                     KnowledgeIndex::new(&graph).architecture(aspects.as_ref()),
                 )?)
             }
+            "create_adr" => {
+                let params = &request.params;
+                let title = params
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .ok_or("create_adr requires params.title")?;
+                let context = params
+                    .get("context")
+                    .and_then(Value::as_str)
+                    .ok_or("create_adr requires params.context")?;
+                let decision = params
+                    .get("decision")
+                    .and_then(Value::as_str)
+                    .ok_or("create_adr requires params.decision")?;
+                let consequences = params.get("consequences").and_then(Value::as_str);
+                Ok(serde_json::to_value(
+                    crate::adr::AdrStore::new(&self.repo_root).create(
+                        title,
+                        context,
+                        decision,
+                        consequences,
+                    )?,
+                )?)
+            }
+            "get_adr" => {
+                let id = request
+                    .params
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .ok_or("get_adr requires params.id")?;
+                Ok(serde_json::to_value(
+                    crate::adr::AdrStore::new(&self.repo_root).get(id)?,
+                )?)
+            }
+            "update_adr" => {
+                let params = &request.params;
+                let id = params
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .ok_or("update_adr requires params.id")?;
+                let store = crate::adr::AdrStore::new(&self.repo_root);
+                let mut record = store.get(id)?;
+                if let (Some(section), Some(value)) = (
+                    params.get("section").and_then(Value::as_str),
+                    params.get("value").and_then(Value::as_str),
+                ) {
+                    record = store.update_section(id, section, value)?;
+                }
+                if let Some(status) = params.get("status").and_then(Value::as_str) {
+                    let status = adr_status_from_str(status)?;
+                    record = store.update_status(id, status)?;
+                }
+                Ok(serde_json::to_value(record)?)
+            }
+            "delete_adr" => {
+                let id = request
+                    .params
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .ok_or("delete_adr requires params.id")?;
+                crate::adr::AdrStore::new(&self.repo_root).delete(id)?;
+                Ok(json!({ "deleted": id }))
+            }
+            "list_adrs" => Ok(serde_json::to_value(
+                crate::adr::AdrStore::new(&self.repo_root).list(),
+            )?),
             "ask_question" => {
                 let question = request
                     .params
@@ -275,6 +341,13 @@ fn architecture_aspects(
         })
         .collect::<Result<BTreeSet<ArchitectureAspect>, Box<dyn std::error::Error>>>()?;
     Ok(Some(parsed))
+}
+
+/// Parses one `params.status` string into [`crate::adr::AdrStatus`] with a
+/// validation error for an unrecognized value.
+fn adr_status_from_str(status: &str) -> Result<crate::adr::AdrStatus, Box<dyn std::error::Error>> {
+    serde_json::from_value(Value::String(status.to_owned()))
+        .map_err(|error| format!("invalid params.status `{status}`: {error}").into())
 }
 
 #[cfg(test)]
@@ -548,6 +621,125 @@ mod tests {
                 .and_then(|value| value.get("findings"))
                 .and_then(Value::as_array)
                 .is_some_and(|findings| !findings.is_empty())
+        );
+
+        Ok(())
+    }
+
+    /// LIT-22.5.4 AC3/AC4: create/get/update/list/delete ADR operations are
+    /// available through the MCP server, including validation errors.
+    #[test]
+    fn adr_tools_create_get_update_list_delete_round_trip() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let server = WikiMcpServer::new(temp.path());
+
+        let created = server.handle(McpRequest {
+            id: json!(1),
+            tool: "create_adr".to_owned(),
+            params: json!({
+                "title": "Use Postgres",
+                "context": "We need a database.",
+                "decision": "Use Postgres.",
+            }),
+        });
+        let created_value = created.result.ok_or("missing create_adr result")?;
+        let id = created_value
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or("missing id")?
+            .to_owned();
+        assert_eq!(created_value.get("status"), Some(&json!("proposed")));
+
+        let missing_field = server.handle(McpRequest {
+            id: json!(2),
+            tool: "create_adr".to_owned(),
+            params: json!({ "context": "x", "decision": "y" }),
+        });
+        assert!(missing_field.result.is_none());
+        assert!(
+            missing_field
+                .error
+                .as_ref()
+                .is_some_and(|error| error.contains("params.title"))
+        );
+
+        let fetched = server.handle(McpRequest {
+            id: json!(3),
+            tool: "get_adr".to_owned(),
+            params: json!({ "id": id }),
+        });
+        assert_eq!(fetched.result, Some(created_value));
+
+        let updated = server.handle(McpRequest {
+            id: json!(4),
+            tool: "update_adr".to_owned(),
+            params: json!({
+                "id": id,
+                "section": "consequences",
+                "value": "Adds an ops dependency.",
+                "status": "accepted",
+            }),
+        });
+        let updated_value = updated.result.ok_or("missing update_adr result")?;
+        assert_eq!(updated_value.get("status"), Some(&json!("accepted")));
+        assert_eq!(
+            updated_value
+                .get("sections")
+                .and_then(|sections| sections.get("consequences")),
+            Some(&json!("Adds an ops dependency."))
+        );
+
+        let invalid_section = server.handle(McpRequest {
+            id: json!(5),
+            tool: "update_adr".to_owned(),
+            params: json!({ "id": id, "section": "not-a-real-section", "value": "x" }),
+        });
+        assert!(invalid_section.result.is_none());
+        assert!(
+            invalid_section
+                .error
+                .as_ref()
+                .is_some_and(|error| error.contains("unknown ADR section"))
+        );
+
+        let listed = server.handle(McpRequest {
+            id: json!(6),
+            tool: "list_adrs".to_owned(),
+            params: json!({}),
+        });
+        assert_eq!(
+            listed
+                .result
+                .as_ref()
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            Some(1)
+        );
+
+        let deleted = server.handle(McpRequest {
+            id: json!(7),
+            tool: "delete_adr".to_owned(),
+            params: json!({ "id": id }),
+        });
+        assert!(deleted.error.is_none());
+
+        let not_found = server.handle(McpRequest {
+            id: json!(8),
+            tool: "get_adr".to_owned(),
+            params: json!({ "id": id }),
+        });
+        assert!(not_found.result.is_none());
+        assert!(
+            not_found
+                .error
+                .as_ref()
+                .is_some_and(|error| error.contains("no ADR found"))
         );
 
         Ok(())

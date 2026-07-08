@@ -46,6 +46,131 @@ pub enum Command {
     Viewer(ViewerArgs),
     /// Export or import team-shareable graph artifacts.
     Graph(GraphCommand),
+    /// Create, read, update, delete, and list architecture decision records.
+    Adr(AdrCommand),
+}
+
+/// ADR command namespace.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct AdrCommand {
+    /// ADR operation.
+    #[command(subcommand)]
+    pub target: AdrTarget,
+}
+
+/// ADR operations.
+#[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
+pub enum AdrTarget {
+    /// Create a new ADR.
+    Create(AdrCreateArgs),
+    /// Read one ADR by id.
+    Get(AdrGetArgs),
+    /// Update one ADR's section content or status.
+    Update(AdrUpdateArgs),
+    /// Delete one ADR by id.
+    Delete(AdrDeleteArgs),
+    /// List every ADR.
+    List(AdrListArgs),
+}
+
+/// Arguments for `adr create`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct AdrCreateArgs {
+    /// Repository path.
+    pub path: PathBuf,
+    /// Short decision title.
+    #[arg(long)]
+    pub title: String,
+    /// Context section content.
+    #[arg(long)]
+    pub context: String,
+    /// Decision section content.
+    #[arg(long)]
+    pub decision: String,
+    /// Optional consequences section content.
+    #[arg(long)]
+    pub consequences: Option<String>,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Arguments for `adr get`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct AdrGetArgs {
+    /// Repository path.
+    pub path: PathBuf,
+    /// ADR id, e.g. `ADR-0001`.
+    pub id: String,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Arguments for `adr update`. Provide either `--section`/`--value`, or
+/// `--status`, or both.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct AdrUpdateArgs {
+    /// Repository path.
+    pub path: PathBuf,
+    /// ADR id, e.g. `ADR-0001`.
+    pub id: String,
+    /// Section to update: `context`, `decision`, or `consequences`.
+    #[arg(long, requires = "value")]
+    pub section: Option<String>,
+    /// New content for `--section`.
+    #[arg(long, requires = "section")]
+    pub value: Option<String>,
+    /// New lifecycle status.
+    #[arg(long, value_enum)]
+    pub status: Option<AdrStatusArg>,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Arguments for `adr delete`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct AdrDeleteArgs {
+    /// Repository path.
+    pub path: PathBuf,
+    /// ADR id, e.g. `ADR-0001`.
+    pub id: String,
+}
+
+/// Arguments for `adr list`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct AdrListArgs {
+    /// Repository path.
+    pub path: PathBuf,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// CLI-facing mirror of [`crate::adr::AdrStatus`] (clap's `ValueEnum` derive
+/// needs a local type in most configurations here).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum AdrStatusArg {
+    /// Drafted, not yet decided.
+    Proposed,
+    /// Actively in effect.
+    Accepted,
+    /// No longer recommended, but not replaced by a specific other ADR.
+    Deprecated,
+    /// Replaced by a later decision.
+    Superseded,
+}
+
+impl From<AdrStatusArg> for crate::adr::AdrStatus {
+    fn from(value: AdrStatusArg) -> Self {
+        match value {
+            AdrStatusArg::Proposed => Self::Proposed,
+            AdrStatusArg::Accepted => Self::Accepted,
+            AdrStatusArg::Deprecated => Self::Deprecated,
+            AdrStatusArg::Superseded => Self::Superseded,
+        }
+    }
 }
 
 /// Graph artifact command namespace.
@@ -269,10 +394,11 @@ impl Cli {
 #[cfg(test)]
 mod tests {
     use super::{
-        AskArgs, Cli, Command, DriftArgs, GoldenArgs, GraphCommand, GraphExportArgs,
-        GraphImportArgs, GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand,
-        InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs,
-        McpServerArgs, OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
+        AdrCommand, AdrCreateArgs, AdrListArgs, AdrStatusArg, AdrTarget, AdrUpdateArgs, AskArgs,
+        Cli, Command, DriftArgs, GoldenArgs, GraphCommand, GraphExportArgs, GraphImportArgs,
+        GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectGraphArgs,
+        InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs, McpServerArgs,
+        OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
     };
     use std::path::PathBuf;
 
@@ -518,6 +644,72 @@ mod tests {
                 target: GraphTarget::Import(GraphImportArgs {
                     path: PathBuf::from("fixtures/polyglot"),
                     artifact: PathBuf::from("graph.lithograph-graph.gz"),
+                }),
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_adr_commands() {
+        assert_eq!(
+            Cli::parse_from_args([
+                "lithograph",
+                "adr",
+                "create",
+                "fixtures/polyglot",
+                "--title",
+                "Use Postgres",
+                "--context",
+                "We need a database.",
+                "--decision",
+                "Use Postgres.",
+            ])
+            .command,
+            Some(Command::Adr(AdrCommand {
+                target: AdrTarget::Create(AdrCreateArgs {
+                    path: PathBuf::from("fixtures/polyglot"),
+                    title: "Use Postgres".to_owned(),
+                    context: "We need a database.".to_owned(),
+                    decision: "Use Postgres.".to_owned(),
+                    consequences: None,
+                    format: OutputFormat::Table,
+                }),
+            }))
+        );
+
+        assert_eq!(
+            Cli::parse_from_args([
+                "lithograph",
+                "adr",
+                "update",
+                "fixtures/polyglot",
+                "ADR-0001",
+                "--section",
+                "consequences",
+                "--value",
+                "Adds an ops dependency.",
+                "--status",
+                "accepted",
+            ])
+            .command,
+            Some(Command::Adr(AdrCommand {
+                target: AdrTarget::Update(AdrUpdateArgs {
+                    path: PathBuf::from("fixtures/polyglot"),
+                    id: "ADR-0001".to_owned(),
+                    section: Some("consequences".to_owned()),
+                    value: Some("Adds an ops dependency.".to_owned()),
+                    status: Some(AdrStatusArg::Accepted),
+                    format: OutputFormat::Table,
+                }),
+            }))
+        );
+
+        assert_eq!(
+            Cli::parse_from_args(["lithograph", "adr", "list", "fixtures/polyglot"]).command,
+            Some(Command::Adr(AdrCommand {
+                target: AdrTarget::List(AdrListArgs {
+                    path: PathBuf::from("fixtures/polyglot"),
+                    format: OutputFormat::Table,
                 }),
             }))
         );
