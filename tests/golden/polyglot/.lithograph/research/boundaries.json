@@ -1,0 +1,83 @@
+{
+  "boundaries": [
+    "environment variable: RIDGELINE_CACHE_DIR",
+    "environment variable: RIDGELINE_WORKER",
+    "environment variable: VERSION",
+    "external package: @vitejs/plugin-react",
+    "external package: __future__",
+    "external package: anyhow",
+    "external package: json",
+    "external package: os",
+    "external package: pathlib",
+    "external package: pydantic",
+    "external package: pytest",
+    "external package: std",
+    "external package: subprocess",
+    "external package: typescript",
+    "external package: vite",
+    "unresolved reference: /usr/local/bin/worker",
+    "unresolved reference: /var/cache/ridgeline",
+    "unresolved reference: App",
+    "unresolved reference: React",
+    "unresolved reference: RouteSummary",
+    "unresolved reference: assets/",
+    "unresolved reference: body",
+    "unresolved reference: charset",
+    "unresolved reference: div",
+    "unresolved reference: fixture_worker::bake_route",
+    "unresolved reference: ghcr.io/example/route-api:dev",
+    "unresolved reference: h1",
+    "unresolved reference: head",
+    "unresolved reference: html",
+    "unresolved reference: https://json-schema.org/draft/2020-12/schema",
+    "unresolved reference: id",
+    "unresolved reference: import React from \"react\";",
+    "unresolved reference: lang",
+    "unresolved reference: main",
+    "unresolved reference: meta",
+    "unresolved reference: p",
+    "unresolved reference: route",
+    "unresolved reference: rust/",
+    "unresolved reference: script",
+    "unresolved reference: src"
+  ],
+  "evidence": [
+    {
+      "reference": "relation:1"
+    },
+    {
+      "reference": "relation:9"
+    },
+    {
+      "reference": "relation:12"
+    },
+    {
+      "reference": "relation:10"
+    },
+    {
+      "reference": "relation:11"
+    },
+    {
+      "reference": "relation:8"
+    },
+    {
+      "reference": "relation:7"
+    },
+    {
+      "reference": "relation:16"
+    },
+    {
+      "reference": "relation:17"
+    },
+    {
+      "reference": "relation:13"
+    },
+    {
+      "reference": "relation:14"
+    },
+    {
+      "reference": "relation:15"
+    }
+  ],
+  "confidence": 85
+}

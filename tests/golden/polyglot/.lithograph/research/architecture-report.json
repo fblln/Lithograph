@@ -1,0 +1,331 @@
+{
+  "languages": [
+    {
+      "language": "bin",
+      "tier": "Detected",
+      "target_tier": "Detected",
+      "resolver_strategy": "inventory-fallback",
+      "artifact_count": 1
+    },
+    {
+      "language": "docker-compose",
+      "tier": "SyntaxIndexed",
+      "target_tier": "SyntaxIndexed",
+      "resolver_strategy": "structured-syntax",
+      "artifact_count": 1
+    },
+    {
+      "language": "dockerfile",
+      "tier": "SyntaxIndexed",
+      "target_tier": "SyntaxIndexed",
+      "resolver_strategy": "structured-syntax",
+      "artifact_count": 1
+    },
+    {
+      "language": "github-actions",
+      "tier": "SyntaxIndexed",
+      "target_tier": "SyntaxIndexed",
+      "resolver_strategy": "structured-syntax",
+      "artifact_count": 1
+    },
+    {
+      "language": "html",
+      "tier": "SyntaxIndexed",
+      "target_tier": "SyntaxIndexed",
+      "resolver_strategy": "syntax-indexed-treesitter",
+      "artifact_count": 1
+    },
+    {
+      "language": "json",
+      "tier": "SyntaxIndexed",
+      "target_tier": "SyntaxIndexed",
+      "resolver_strategy": "structured-syntax",
+      "artifact_count": 1
+    },
+    {
+      "language": "license",
+      "tier": "Detected",
+      "target_tier": "Detected",
+      "resolver_strategy": "inventory-fallback",
+      "artifact_count": 1
+    },
+    {
+      "language": "makefile",
+      "tier": "Detected",
+      "target_tier": "SyntaxIndexed",
+      "resolver_strategy": "generic-text-fallback",
+      "artifact_count": 1
+    },
+    {
+      "language": "markdown",
+      "tier": "SyntaxIndexed",
+      "target_tier": "SyntaxIndexed",
+      "resolver_strategy": "structured-syntax",
+      "artifact_count": 2
+    },
+    {
+      "language": "npm",
+      "tier": "SyntaxIndexed",
+      "target_tier": "SyntaxIndexed",
+      "resolver_strategy": "inventory-fallback",
+      "artifact_count": 1
+    },
+    {
+      "language": "python",
+      "tier": "HybridResolved",
+      "target_tier": "HybridResolved",
+      "resolver_strategy": "specialized-hybrid",
+      "artifact_count": 3
+    },
+    {
+      "language": "requirements-txt",
+      "tier": "Detected",
+      "target_tier": "Detected",
+      "resolver_strategy": "inventory-fallback",
+      "artifact_count": 1
+    },
+    {
+      "language": "rust",
+      "tier": "HybridResolved",
+      "target_tier": "HybridResolved",
+      "resolver_strategy": "specialized-hybrid",
+      "artifact_count": 3
+    },
+    {
+      "language": "svg",
+      "tier": "Detected",
+      "target_tier": "Detected",
+      "resolver_strategy": "inventory-fallback",
+      "artifact_count": 1
+    },
+    {
+      "language": "toml",
+      "tier": "SyntaxIndexed",
+      "target_tier": "SyntaxIndexed",
+      "resolver_strategy": "structured-syntax",
+      "artifact_count": 2
+    },
+    {
+      "language": "tsx",
+      "tier": "SyntaxIndexed",
+      "target_tier": "HybridResolved",
+      "resolver_strategy": "syntax-indexed-treesitter",
+      "artifact_count": 1
+    },
+    {
+      "language": "yaml",
+      "tier": "SyntaxIndexed",
+      "target_tier": "SyntaxIndexed",
+      "resolver_strategy": "structured-syntax",
+      "artifact_count": 1
+    }
+  ],
+  "layers": [
+    {
+      "artifact_path": ".github/workflows/ci.yml",
+      "layer": "Infra",
+      "confidence": "High",
+      "reason": "path contains `.github`"
+    },
+    {
+      "artifact_path": "Dockerfile",
+      "layer": "Infra",
+      "confidence": "High",
+      "reason": "artifact category is ContainerDefinition"
+    },
+    {
+      "artifact_path": "LICENSE",
+      "layer": "Unknown",
+      "confidence": "Low",
+      "reason": "no path, category, or graph-role evidence matched a known layer"
+    },
+    {
+      "artifact_path": "Makefile",
+      "layer": "Infra",
+      "confidence": "High",
+      "reason": "artifact category is BuildDefinition"
+    },
+    {
+      "artifact_path": "README.md",
+      "layer": "Unknown",
+      "confidence": "Low",
+      "reason": "no path, category, or graph-role evidence matched a known layer"
+    },
+    {
+      "artifact_path": "assets/logo.svg",
+      "layer": "Unknown",
+      "confidence": "Low",
+      "reason": "no path, category, or graph-role evidence matched a known layer"
+    },
+    {
+      "artifact_path": "config/schema.json",
+      "layer": "Unknown",
+      "confidence": "Low",
+      "reason": "no path, category, or graph-role evidence matched a known layer"
+    },
+    {
+      "artifact_path": "config/settings.yaml",
+      "layer": "Unknown",
+      "confidence": "Low",
+      "reason": "no path, category, or graph-role evidence matched a known layer"
+    },
+    {
+      "artifact_path": "data/sample.bin",
+      "layer": "Data",
+      "confidence": "High",
+      "reason": "path contains `data`"
+    },
+    {
+      "artifact_path": "docker-compose.yml",
+      "layer": "Infra",
+      "confidence": "High",
+      "reason": "artifact category is ContainerDefinition"
+    },
+    {
+      "artifact_path": "docs/architecture.md",
+      "layer": "Unknown",
+      "confidence": "Low",
+      "reason": "no path, category, or graph-role evidence matched a known layer"
+    },
+    {
+      "artifact_path": "generated/client.py",
+      "layer": "Unknown",
+      "confidence": "Low",
+      "reason": "no path, category, or graph-role evidence matched a known layer"
+    },
+    {
+      "artifact_path": "pyproject.toml",
+      "layer": "Infra",
+      "confidence": "High",
+      "reason": "artifact category is PackageManifest"
+    },
+    {
+      "artifact_path": "requirements.txt",
+      "layer": "Infra",
+      "confidence": "High",
+      "reason": "artifact category is PackageManifest"
+    },
+    {
+      "artifact_path": "rust/Cargo.toml",
+      "layer": "Infra",
+      "confidence": "High",
+      "reason": "artifact category is PackageManifest"
+    },
+    {
+      "artifact_path": "rust/src/bin/worker.rs",
+      "layer": "Unknown",
+      "confidence": "Low",
+      "reason": "no path, category, or graph-role evidence matched a known layer"
+    },
+    {
+      "artifact_path": "rust/src/lib.rs",
+      "layer": "Unknown",
+      "confidence": "Low",
+      "reason": "no path, category, or graph-role evidence matched a known layer"
+    },
+    {
+      "artifact_path": "src/python_app/__init__.py",
+      "layer": "Unknown",
+      "confidence": "Low",
+      "reason": "no path, category, or graph-role evidence matched a known layer"
+    },
+    {
+      "artifact_path": "src/python_app/service.py",
+      "layer": "Domain",
+      "confidence": "High",
+      "reason": "path contains `service`"
+    },
+    {
+      "artifact_path": "vendor/example/lib.rs",
+      "layer": "Unknown",
+      "confidence": "Low",
+      "reason": "no path, category, or graph-role evidence matched a known layer"
+    },
+    {
+      "artifact_path": "web/index.html",
+      "layer": "Ui",
+      "confidence": "High",
+      "reason": "path contains `web`"
+    },
+    {
+      "artifact_path": "web/package.json",
+      "layer": "Ui",
+      "confidence": "High",
+      "reason": "path contains `web`"
+    },
+    {
+      "artifact_path": "web/src/App.tsx",
+      "layer": "Ui",
+      "confidence": "High",
+      "reason": "path contains `web`"
+    }
+  ],
+  "architecture_facts": [
+    "knowledge graph schema: 130 node(s), 141 relation(s)",
+    "container/component candidate: Configuration (Configuration)",
+    "container/component candidate: assets (Directory)",
+    "container/component candidate: data (Directory)",
+    "container/component candidate: generated (Directory)",
+    "container/component candidate: root (Directory)",
+    "container/component candidate: vendor (Directory)",
+    "container/component candidate: web (Directory)",
+    "container/component candidate: Documentation (Documentation)",
+    "container/component candidate: Infrastructure (Infrastructure)",
+    "container/component candidate: python_app (PythonPackage)"
+  ],
+  "hotspots": [
+    "web (Directory) score 66",
+    "Configuration (Configuration) score 50",
+    "Documentation (Documentation) score 44",
+    "Infrastructure (Infrastructure) score 42",
+    "python_app (PythonPackage) score 37",
+    "fixture-worker (RustCrate) score 32",
+    "root (Directory) score 14",
+    "generated (Directory) score 6",
+    "vendor (Directory) score 6",
+    "assets (Directory) score 5"
+  ],
+  "decisions_and_docs": [
+    "existing architecture knowledge: docs/architecture.md"
+  ],
+  "mermaid": "```mermaid\nflowchart LR\n  M1[\"Configuration\"]\n  M2[\"assets\"]\n  M3[\"data\"]\n  M4[\"generated\"]\n  M5[\"root\"]\n  M6[\"vendor\"]\n  M7[\"web\"]\n  M8[\"Documentation\"]\n  M9[\"Infrastructure\"]\n  M10[\"python_app\"]\n  M9 -->|ReadsEnv| M1\n  M8 -->|References| M9\n  M8 -->|References| M9\n  M8 -->|References| M5\n  M8 -->|References| M2\n  M8 -->|References| M1\n  M8 -->|References| M1\n  M8 -->|References| M3\n  M8 -->|References| M9\n  M8 -->|References| M4\n  M8 -->|References| M1\n```",
+  "evidence": [
+    {
+      "reference": ".github/workflows/ci.yml"
+    },
+    {
+      "reference": "Dockerfile"
+    },
+    {
+      "reference": "LICENSE"
+    },
+    {
+      "reference": "Makefile"
+    },
+    {
+      "reference": "README.md"
+    },
+    {
+      "reference": "assets/logo.svg"
+    },
+    {
+      "reference": "config/schema.json"
+    },
+    {
+      "reference": "config/settings.yaml"
+    },
+    {
+      "reference": "data/sample.bin"
+    },
+    {
+      "reference": "docker-compose.yml"
+    },
+    {
+      "reference": "docs/architecture.md"
+    },
+    {
+      "reference": "generated/client.py"
+    }
+  ],
+  "confidence": 85
+}

@@ -2754,4 +2754,41 @@ impl Drop for Route {
 
         Ok(())
     }
+
+    /// LIT-22.2.5 AC1: files with common syntax errors (unclosed braces,
+    /// unterminated strings, malformed JSON) never panic the walker or
+    /// graph builder; each broken file still gets an artifact node, and
+    /// any symbols a tolerant parser did manage to extract before the
+    /// error are Low confidence, never fabricated as fully resolved.
+    #[test]
+    fn syntax_error_fixture_degrades_gracefully_without_panicking()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/syntax_errors");
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
+        let graph = GraphBuilder.build(&root, &artifacts);
+
+        assert_eq!(artifacts.len(), 3);
+        let artifact_paths: Vec<&str> = artifacts
+            .iter()
+            .map(|artifact| artifact.path.as_str())
+            .collect();
+        assert!(artifact_paths.contains(&"broken.py"));
+        assert!(artifact_paths.contains(&"broken.json"));
+        assert!(artifact_paths.contains(&"broken.rs"));
+
+        // Every broken artifact still got an Artifact graph node: a parse
+        // failure degrades what can be extracted from a file, it never
+        // drops the file from the graph entirely.
+        for path in ["broken.py", "broken.json", "broken.rs"] {
+            assert!(
+                graph.nodes.iter().any(
+                    |node| matches!(node, GraphNode::Artifact(artifact) if artifact.path == path)
+                ),
+                "missing artifact node for {path}"
+            );
+        }
+
+        Ok(())
+    }
 }

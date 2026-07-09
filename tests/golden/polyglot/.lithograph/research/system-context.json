@@ -1,0 +1,65 @@
+{
+  "project_summary": "Repository contains 23 artifact(s), 130 graph node(s), 141 graph relation(s), and 11 documentation module(s).",
+  "included_components": [
+    "Configuration (Configuration)",
+    "assets (Directory)",
+    "data (Directory)",
+    "generated (Directory)",
+    "root (Directory)",
+    "vendor (Directory)",
+    "web (Directory)",
+    "Documentation (Documentation)",
+    "Infrastructure (Infrastructure)",
+    "python_app (PythonPackage)",
+    "fixture-worker (RustCrate)"
+  ],
+  "external_systems": [
+    "@vitejs/plugin-react",
+    "__future__",
+    "anyhow",
+    "json",
+    "os",
+    "pathlib",
+    "pydantic",
+    "pytest",
+    "std",
+    "subprocess",
+    "typescript",
+    "vite",
+    "/usr/local/bin/worker",
+    "/var/cache/ridgeline",
+    "App",
+    "React",
+    "RouteSummary",
+    "assets/",
+    "body",
+    "charset"
+  ],
+  "evidence": [
+    {
+      "reference": ".github/workflows/ci.yml"
+    },
+    {
+      "reference": "Dockerfile"
+    },
+    {
+      "reference": "LICENSE"
+    },
+    {
+      "reference": "Makefile"
+    },
+    {
+      "reference": "README.md"
+    },
+    {
+      "reference": "assets/logo.svg"
+    },
+    {
+      "reference": "config/schema.json"
+    },
+    {
+      "reference": "config/settings.yaml"
+    }
+  ],
+  "confidence": 85
+}

@@ -1,0 +1,73 @@
+{
+  "workflows": [
+    "Dockerfile -[ReadsEnv]-> RIDGELINE_WORKER (High)",
+    "Dockerfile -[RunsCommand]-> [\"python\", \"-m\", \"python_app.service\"] (High)",
+    "Dockerfile -[RunsCommand]-> cargo build --manifest-path rust/Cargo.toml --release (High)",
+    "Dockerfile -[RunsCommand]-> pip install --no-cache-dir -r requirements.txt (High)",
+    "Dockerfile -[UsesImage]-> python:3.13-slim (High)",
+    "Dockerfile -[UsesImage]-> rust:1.96 (High)",
+    "Makefile -[RunsCommand]-> npm --prefix web run lint (Low)",
+    "Makefile -[RunsCommand]-> docker build -t ghcr.io/example/route-api:dev . (Low)",
+    "Makefile -[RunsCommand]-> python -m pytest (Low)",
+    "Makefile -[RunsCommand]-> cargo test --manifest-path rust/Cargo.toml (Low)",
+    "config/schema.json -[UsesImage]-> ghcr.io/example/worker:1.0 (High)",
+    "config/settings.yaml -[ReadsEnv]-> RIDGELINE_CACHE_DIR (High)",
+    "config/settings.yaml -[ReadsEnv]-> RIDGELINE_WORKER (High)",
+    "config/settings.yaml -[ReadsEnv]-> VERSION (High)",
+    "config/settings.yaml -[RunsCommand]-> python -m python_app.service (High)",
+    "config/settings.yaml -[UsesImage]-> ghcr.io/example/route-api:${VERSION} (High)",
+    "docs/architecture.md -[RunsCommand]-> make test (High)",
+    "docs/architecture.md -[RunsCommand]-> cargo test --manifest-path rust/Cargo.toml (High)",
+    "docs/architecture.md -[RunsCommand]-> python -m pytest (High)",
+    "rust/src/lib.rs -[ReadsEnv]-> RIDGELINE_CACHE_DIR (High)",
+    "src/python_app/service.py -[ReadsEnv]-> RIDGELINE_WORKER (High)",
+    "src/python_app/service.py -[RunsCommand]-> [worker_path, \"--route\", str(route_file)] (Low)",
+    "checks -[RunsCommand]-> python -m pytest (High)",
+    "checks -[RunsCommand]-> cargo test --manifest-path rust/Cargo.toml (High)",
+    "checks -[RunsCommand]-> npm --prefix web run lint (High)",
+    "checks -[RunsCommand]-> docker build -t ghcr.io/example/route-api:${{ github.sha }} . (High)",
+    "checks -[BuildsImage]-> ghcr.io/example/route-api:${{ (High)",
+    "api -[ReadsEnv]-> RIDGELINE_WORKER (High)",
+    "api -[UsesImage]-> ghcr.io/example/route-api:${VERSION:-dev} (High)",
+    "web -[UsesImage]-> node:24-alpine (High)"
+  ],
+  "evidence": [
+    {
+      "reference": "relation:1"
+    },
+    {
+      "reference": "relation:9"
+    },
+    {
+      "reference": "relation:12"
+    },
+    {
+      "reference": "relation:10"
+    },
+    {
+      "reference": "relation:11"
+    },
+    {
+      "reference": "relation:8"
+    },
+    {
+      "reference": "relation:7"
+    },
+    {
+      "reference": "relation:16"
+    },
+    {
+      "reference": "relation:17"
+    },
+    {
+      "reference": "relation:13"
+    },
+    {
+      "reference": "relation:14"
+    },
+    {
+      "reference": "relation:15"
+    }
+  ],
+  "confidence": 85
+}
