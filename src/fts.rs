@@ -235,7 +235,7 @@ fn bm25_score(
 /// any non-alphanumeric byte (handles `snake_case`, `kebab-case`, and
 /// `dotted.names`), then each resulting word on camelCase boundaries
 /// (`fooBar` -> `foo`, `bar`; `XMLParser` -> `xml`, `parser`).
-fn tokenize(text: &str) -> Vec<String> {
+pub(crate) fn tokenize(text: &str) -> Vec<String> {
     text.split(|ch: char| !ch.is_alphanumeric())
         .filter(|word| !word.is_empty())
         .flat_map(split_camel_case)

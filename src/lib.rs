@@ -26,6 +26,7 @@ pub mod research;
 pub mod resolve;
 pub mod run;
 pub mod search;
+pub mod semantic_search;
 pub mod storage;
 pub mod viewer;
 

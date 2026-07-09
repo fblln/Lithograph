@@ -65,6 +65,10 @@ pub const MCP_TOOLS: &[McpToolInfo] = &[
         description: "BM25 full-text search over symbols/docs/paths/facts. Params: query, limit?.",
     },
     McpToolInfo {
+        name: "search_semantic",
+        description: "Semantic search (deterministic offline embeddings) blended with graph connectivity. Params: query, limit?.",
+    },
+    McpToolInfo {
         name: "trace_path",
         description: "Traces relations from a node. Params: query, direction?, depth?.",
     },
@@ -223,6 +227,30 @@ impl WikiMcpServer {
                     .and_then(|value| usize::try_from(value).ok())
                     .unwrap_or_default();
                 Ok(serde_json::to_value(index.search(query, limit))?)
+            }
+            "search_semantic" => {
+                let graph = self.load_graph()?;
+                let query = request
+                    .params
+                    .get("query")
+                    .and_then(Value::as_str)
+                    .ok_or("search_semantic requires params.query")?;
+                let limit = request
+                    .params
+                    .get("limit")
+                    .and_then(Value::as_u64)
+                    .and_then(|value| usize::try_from(value).ok())
+                    .unwrap_or_default();
+                // Deterministic and offline, matching this server's design
+                // (LIT-22.4.4 AC3): no live model or network call.
+                let results = crate::semantic_search::SemanticSearch.search(
+                    &crate::semantic_search::MockEmbeddingProvider,
+                    &graph,
+                    query,
+                    limit,
+                    crate::semantic_search::SemanticSearchWeights::default(),
+                )?;
+                Ok(serde_json::to_value(results)?)
             }
             "trace_path" => {
                 let graph = self.load_graph()?;
@@ -804,6 +832,46 @@ mod tests {
                 .error
                 .as_ref()
                 .is_some_and(|error| error.contains("requires params.query"))
+        );
+
+        Ok(())
+    }
+
+    /// LIT-22.4.4 AC2/AC4: `search_semantic` is reachable through the MCP
+    /// server and returns evidence-carrying, blended-score results.
+    #[test]
+    fn search_semantic_returns_blended_results_with_evidence()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let server = WikiMcpServer::new(temp.path());
+
+        let response = server.handle(McpRequest {
+            id: json!(1),
+            tool: "search_semantic".to_owned(),
+            params: json!({ "query": "RouteService route handling" }),
+        });
+
+        let results = response
+            .result
+            .as_ref()
+            .and_then(Value::as_array)
+            .ok_or("expected an array of results")?;
+        assert!(!results.is_empty());
+        assert!(
+            results[0]
+                .get("combined_score")
+                .and_then(Value::as_f64)
+                .is_some()
+        );
+        assert!(
+            results
+                .iter()
+                .any(|result| result.get("evidence").is_some_and(|e| !e.is_null()))
         );
 
         Ok(())
