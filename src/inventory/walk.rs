@@ -2,6 +2,7 @@
 
 use crate::domain::{Artifact, ContentHash, RepoPath, TextStatus};
 use crate::inventory::classify::{ArtifactClassifier, ClassificationInput};
+use crate::inventory::limits::SizePolicy;
 use crate::inventory::safety::SafetyPolicy;
 use camino::Utf8PathBuf;
 use globset::{Glob, GlobMatcher};
@@ -155,6 +156,8 @@ fn read_artifact(path: &Path, relative_path: RepoPath) -> Result<Artifact, WalkE
         text,
     });
     let classification = safety_policy.apply(classification, safety_decision);
+    let size_policy = SizePolicy;
+    let classification = size_policy.apply(classification, size_policy.decide(metadata.len()));
     let mut artifact = Artifact::new(
         relative_path,
         classification.category,
@@ -686,6 +689,50 @@ mod tests {
                 .iter()
                 .any(|message| message.contains("invalid content hash"))
         );
+
+        Ok(())
+    }
+
+    /// Regression test: a real oversized text file (e.g. a large GPX
+    /// telemetry export or lockfile) must classify as opaque rather than
+    /// reach the generic-text/structured analyzer, whose extraction
+    /// heuristics scale with file size and can turn one large data file
+    /// into tens of thousands of spurious graph nodes -- observed live
+    /// during the LIT-22 comparison against codebase-memory-mcp.
+    #[test]
+    fn oversized_files_classify_as_opaque_and_skip_content_analysis()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("telemetry.gpx");
+        let mut oversized = String::new();
+        while oversized.len() <= crate::inventory::limits::MAX_ANALYZABLE_BYTES as usize {
+            oversized.push_str("<gpxtpx:cad>28</gpxtpx:cad>\n");
+        }
+        fs::write(&path, &oversized)?;
+        let relative_path = RepoPath::new("telemetry.gpx")?;
+
+        let artifact = read_artifact(&path, relative_path)?;
+
+        assert_eq!(artifact.support_tier, SupportTier::Opaque);
+        assert_eq!(artifact.analyzer, AnalyzerSelection::Opaque);
+        assert_eq!(artifact.model_policy, ModelExposurePolicy::ExcerptOnly);
+
+        Ok(())
+    }
+
+    /// A file just under the threshold keeps its normal classification, so
+    /// this is a size cutoff, not a blanket "treat text as opaque" change.
+    #[test]
+    fn files_under_the_threshold_are_analyzed_normally() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("small.txt");
+        fs::write(&path, "hello world\n")?;
+        let relative_path = RepoPath::new("small.txt")?;
+
+        let artifact = read_artifact(&path, relative_path)?;
+
+        assert_ne!(artifact.support_tier, SupportTier::Opaque);
+        assert_ne!(artifact.analyzer, AnalyzerSelection::Opaque);
 
         Ok(())
     }
