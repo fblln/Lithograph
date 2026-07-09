@@ -7,8 +7,8 @@ use crate::cli::{
     AdrCommand, AdrCreateArgs, AdrDeleteArgs, AdrGetArgs, AdrListArgs, AdrTarget, AdrUpdateArgs,
     AskArgs, Cli, Command, DriftArgs, GoldenArgs, GraphCommand, GraphExportArgs, GraphImportArgs,
     GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectGraphArgs,
-    InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs, McpServerArgs,
-    OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs, WatchArgs,
+    InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, IntegrateMcpArgs, McpExportArgs,
+    McpServerArgs, OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs, WatchArgs,
 };
 use crate::domain::Artifact;
 use crate::drift::{DriftDetector, DriftReport};
@@ -21,6 +21,9 @@ use crate::graph::{
 };
 use crate::inventory::{RepositoryWalker, WalkOptions};
 use crate::mcp::WikiMcpServer;
+use crate::mcp_targets::{
+    AgentTarget, IntegrationOutcome, TargetDetection, apply, detect, preview,
+};
 use crate::mermaid::{
     fix_path as fix_mermaid_path, render_report as render_mermaid_report,
     validate as validate_mermaid,
@@ -58,6 +61,7 @@ where
         Some(Command::Graph(args)) => execute_graph(args, writer),
         Some(Command::Adr(command)) => execute_adr(command, writer),
         Some(Command::Watch(args)) => execute_watch(args, writer),
+        Some(Command::IntegrateMcp(args)) => execute_integrate_mcp(args, writer),
         None => Ok(()),
     }
 }
@@ -458,6 +462,94 @@ pub fn render_integrate_agents_report(report: &IntegrateAgentsReport) -> String 
         output.push_str(&format!("{}: {outcome}\n", result.path.display()));
     }
     output
+}
+
+/// Detects, previews, or applies per-agent MCP integration (LIT-22.8.3).
+/// Without `args.target`, this only detects and reports (AC1); with a
+/// target and no `--apply`, it previews (AC2); `--apply` is the only path
+/// that writes.
+fn execute_integrate_mcp<W>(
+    args: IntegrateMcpArgs,
+    writer: &mut W,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    let Some(requested) = args.target.as_deref() else {
+        let detections = detect(&args.path);
+        writer.write_all(render_detections(&detections, args.format)?.as_bytes())?;
+        return Ok(());
+    };
+    let target = AgentTarget::parse(requested).ok_or_else(|| {
+        format!(
+            "unknown --target \"{requested}\"; expected one of codex, claude, gemini, zed, aider"
+        )
+    })?;
+    let outcome = if args.apply {
+        apply(&args.path, target)?
+    } else {
+        preview(&args.path, target)?
+    };
+    writer.write_all(render_outcome(&outcome, args.apply, args.format)?.as_bytes())?;
+    Ok(())
+}
+
+fn render_detections(
+    detections: &[TargetDetection],
+    format: OutputFormat,
+) -> Result<String, Box<dyn std::error::Error>> {
+    if format == OutputFormat::Json {
+        let mut json = serde_json::to_string_pretty(detections)?;
+        json.push('\n');
+        return Ok(json);
+    }
+    let mut output = String::new();
+    for detection in detections {
+        if !detection.supported {
+            output.push_str(&format!(
+                "{}: unsupported -- {}\n",
+                detection.target,
+                detection.reason.as_deref().unwrap_or("not supported")
+            ));
+            continue;
+        }
+        let path = detection
+            .config_path
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_default();
+        output.push_str(&format!(
+            "{}: supported, config={path}, exists={}, integrated={}\n",
+            detection.target, detection.config_exists, detection.already_integrated
+        ));
+    }
+    Ok(output)
+}
+
+fn render_outcome(
+    outcome: &IntegrationOutcome,
+    applied: bool,
+    format: OutputFormat,
+) -> Result<String, Box<dyn std::error::Error>> {
+    if format == OutputFormat::Json {
+        let mut json = serde_json::to_string_pretty(outcome)?;
+        json.push('\n');
+        return Ok(json);
+    }
+    let mode = if applied && outcome.changed {
+        "applied"
+    } else if applied {
+        "applied (no change)"
+    } else {
+        "previewed"
+    };
+    Ok(format!(
+        "{}: {mode}\npath: {}\nchanged: {}\n---\n{}",
+        outcome.target,
+        outcome.config_path.display(),
+        outcome.changed,
+        outcome.content
+    ))
 }
 
 fn execute_init<W>(args: InitArgs, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
@@ -870,8 +962,8 @@ mod tests {
         AdrCommand, AdrCreateArgs, AdrDeleteArgs, AdrGetArgs, AdrListArgs, AdrStatusArg, AdrTarget,
         AdrUpdateArgs, AskArgs, Cli, Command, DriftArgs, GraphCommand, GraphExportArgs,
         GraphImportArgs, GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand,
-        InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs,
-        OutputFormat, ValidateMermaidArgs, WatchArgs,
+        InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, IntegrateMcpArgs,
+        McpExportArgs, OutputFormat, ValidateMermaidArgs, WatchArgs,
     };
     use crate::graph::{GraphIssue, GraphIssueKind};
     use crate::inventory::{RepositoryWalker, WalkOptions};
@@ -1266,6 +1358,135 @@ mod tests {
         assert!(second.contains("unchanged"));
 
         Ok(())
+    }
+
+    fn integrate_mcp_args(path: &Path, target: Option<&str>, apply: bool) -> IntegrateMcpArgs {
+        IntegrateMcpArgs {
+            path: path.to_path_buf(),
+            target: target.map(str::to_owned),
+            apply,
+            format: OutputFormat::Table,
+        }
+    }
+
+    #[test]
+    fn execute_integrate_mcp_without_target_only_detects() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let temp = tempfile::TempDir::new()?;
+        let mut output = Vec::new();
+
+        execute(
+            Cli {
+                command: Some(Command::IntegrateMcp(integrate_mcp_args(
+                    temp.path(),
+                    None,
+                    false,
+                ))),
+            },
+            &mut output,
+        )?;
+        let output = String::from_utf8(output)?;
+
+        assert!(output.contains("claude: supported"));
+        assert!(output.contains("aider: unsupported"));
+        assert!(std::fs::read_dir(temp.path())?.next().is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn execute_integrate_mcp_preview_does_not_write() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        let mut output = Vec::new();
+
+        execute(
+            Cli {
+                command: Some(Command::IntegrateMcp(integrate_mcp_args(
+                    temp.path(),
+                    Some("claude"),
+                    false,
+                ))),
+            },
+            &mut output,
+        )?;
+        let output = String::from_utf8(output)?;
+
+        assert!(output.contains("previewed"));
+        assert!(output.contains("mcpServers"));
+        assert!(!temp.path().join(".mcp.json").exists());
+
+        Ok(())
+    }
+
+    #[test]
+    fn execute_integrate_mcp_apply_writes_then_is_idempotent()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        let cli = |target| Cli {
+            command: Some(Command::IntegrateMcp(integrate_mcp_args(
+                temp.path(),
+                Some(target),
+                true,
+            ))),
+        };
+
+        let mut first = Vec::new();
+        execute(cli("zed"), &mut first)?;
+        let first = String::from_utf8(first)?;
+        assert!(first.contains("applied"));
+        assert!(temp.path().join(".zed/settings.json").exists());
+
+        let mut second = Vec::new();
+        execute(cli("zed"), &mut second)?;
+        let second = String::from_utf8(second)?;
+        assert!(second.contains("applied (no change)"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn execute_integrate_mcp_reports_actionable_message_for_unsupported_target()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+
+        match execute(
+            Cli {
+                command: Some(Command::IntegrateMcp(integrate_mcp_args(
+                    temp.path(),
+                    Some("aider"),
+                    false,
+                ))),
+            },
+            &mut Vec::new(),
+        ) {
+            Ok(()) => Err("expected an unsupported-target error".into()),
+            Err(error) => {
+                assert!(error.to_string().contains("no native MCP"));
+                Ok(())
+            }
+        }
+    }
+
+    #[test]
+    fn execute_integrate_mcp_rejects_an_unknown_target() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+
+        match execute(
+            Cli {
+                command: Some(Command::IntegrateMcp(integrate_mcp_args(
+                    temp.path(),
+                    Some("not-a-real-target"),
+                    false,
+                ))),
+            },
+            &mut Vec::new(),
+        ) {
+            Ok(()) => Err("expected an unknown-target error".into()),
+            Err(error) => {
+                assert!(error.to_string().contains("unknown --target"));
+                Ok(())
+            }
+        }
     }
 
     fn copy_dir(from: &Path, to: &Path) -> Result<(), Box<dyn std::error::Error>> {

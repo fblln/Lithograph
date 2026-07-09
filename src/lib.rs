@@ -19,6 +19,7 @@ pub mod inventory;
 pub mod knowledge_agent;
 pub mod manifest;
 pub mod mcp;
+pub mod mcp_targets;
 pub mod mermaid;
 pub mod orchestrate;
 pub mod plan;

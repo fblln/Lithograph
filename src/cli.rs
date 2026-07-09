@@ -52,6 +52,28 @@ pub enum Command {
     /// Disabled by default beyond this explicit command: reports staleness
     /// only, unless `--auto-index` is passed.
     Watch(WatchArgs),
+    /// Detect, preview, or apply per-agent MCP server integration (Codex,
+    /// Claude, Gemini, Zed). Without `--target`, only detects and reports;
+    /// `--apply` requires `--target` and is the only way anything is written.
+    IntegrateMcp(IntegrateMcpArgs),
+}
+
+/// Arguments for `integrate-mcp`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct IntegrateMcpArgs {
+    /// Repository path to integrate.
+    pub path: PathBuf,
+    /// Agent target id (`codex`, `claude`, `gemini`, `zed`, `aider`). When
+    /// omitted, every target is detected and reported without writing.
+    #[arg(long)]
+    pub target: Option<String>,
+    /// Write the target's merged MCP config. Requires `--target`; without
+    /// this flag a given `--target` is only previewed, never written.
+    #[arg(long, requires = "target")]
+    pub apply: bool,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
 }
 
 /// Arguments for `watch`.
