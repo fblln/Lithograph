@@ -57,6 +57,47 @@ fn excerpts_from(evidence: &[ResearchEvidence]) -> Vec<ContextExcerpt> {
         .collect()
 }
 
+/// Routes `facts` down to `agent`'s relevant categories only (LIT-22.6.6
+/// AC1/AC3), so a caller can pass the same full fact list to every editor
+/// and each editor only ever sees, cites, and prompts on its own
+/// categories -- never another editor's.
+fn route_external_knowledge(
+    facts: &[crate::external_knowledge::ExternalKnowledgeFact],
+    agent: crate::external_knowledge::AgentKind,
+) -> Vec<&crate::external_knowledge::ExternalKnowledgeFact> {
+    crate::external_knowledge::ExternalKnowledgeExtractor.request(facts, agent.categories())
+}
+
+fn external_knowledge_excerpts(
+    facts: &[&crate::external_knowledge::ExternalKnowledgeFact],
+) -> Vec<ContextExcerpt> {
+    facts
+        .iter()
+        .map(|fact| ContextExcerpt {
+            artifact_path: fact.evidence.path.as_str().to_owned(),
+            policy: ModelExposurePolicy::Allowed,
+            included_lines: 0,
+            truncated: false,
+        })
+        .collect()
+}
+
+/// Renders `facts` as an appendable prompt section, or an empty string
+/// when there's nothing routed -- so appending it to a prompt is always
+/// safe, even for an editor with no relevant external knowledge.
+fn external_knowledge_section(
+    facts: &[&crate::external_knowledge::ExternalKnowledgeFact],
+) -> String {
+    if facts.is_empty() {
+        return String::new();
+    }
+    let lines: Vec<String> = facts
+        .iter()
+        .map(|fact| format!("- {}", fact.text))
+        .collect();
+    format!("\n\n## External Knowledge\n{}", lines.join("\n"))
+}
+
 /// Builds a request from `system_prompt`/`user_prompt`/`excerpts`, calls
 /// `model`, and folds evidence-validation issues into `open_questions`
 /// (AC3). A model failure is itself treated as a low-confidence outcome
@@ -180,6 +221,10 @@ impl KnowledgeAgent for OverviewEditor<'_> {
 pub struct ArchitectureEditor<'m> {
     /// Model used to compose prose from research facts.
     pub model: &'m dyn LanguageModel,
+    /// Full external-knowledge fact list (LIT-22.6.6); routed down to
+    /// this editor's own categories internally, so an empty slice or an
+    /// unrelated one is always safe to pass.
+    pub external_knowledge: &'m [crate::external_knowledge::ExternalKnowledgeFact],
 }
 
 impl KnowledgeAgent for ArchitectureEditor<'_> {
@@ -208,9 +253,16 @@ impl KnowledgeAgent for ArchitectureEditor<'_> {
             .join("\n");
         let containers = report.architecture_facts.join("\n");
         let components = report.hotspots.join("\n");
-        let user_prompt = format!(
-            "## System Context\n{languages}\n\n## Containers\n{containers}\n\n## Components\n{components}"
+        let routed_knowledge = route_external_knowledge(
+            self.external_knowledge,
+            crate::external_knowledge::AgentKind::ArchitectureEditor,
         );
+        let user_prompt = format!(
+            "## System Context\n{languages}\n\n## Containers\n{containers}\n\n## Components\n{components}{}",
+            external_knowledge_section(&routed_knowledge)
+        );
+        let mut excerpts = excerpts_from(&report.evidence);
+        excerpts.extend(external_knowledge_excerpts(&routed_knowledge));
         compose(
             self.model,
             TaskKind::Architecture,
@@ -220,7 +272,7 @@ impl KnowledgeAgent for ArchitectureEditor<'_> {
              Cite evidence_refs only from the excerpts shown; anything else goes in unresolved_questions."
                 .to_owned(),
             user_prompt,
-            excerpts_from(&report.evidence),
+            excerpts,
             report.confidence,
         )
     }
@@ -344,6 +396,9 @@ impl KnowledgeAgent for KeyModulesEditor<'_> {
 pub struct DatabaseEditor<'m> {
     /// Model used to compose prose from research facts.
     pub model: &'m dyn LanguageModel,
+    /// Full external-knowledge fact list (LIT-22.6.6); routed down to
+    /// this editor's own categories internally.
+    pub external_knowledge: &'m [crate::external_knowledge::ExternalKnowledgeFact],
 }
 
 impl KnowledgeAgent for DatabaseEditor<'_> {
@@ -362,20 +417,39 @@ impl KnowledgeAgent for DatabaseEditor<'_> {
         context: &AgentContext<'_>,
         _resolution: &DataSourceResolution,
     ) -> Self::Output {
-        let Some(report): Option<&DatabaseReport> = required_research_brief(context)
+        let report: Option<&DatabaseReport> = required_research_brief(context)
             .agent_memory
             .database
-            .as_ref()
-        else {
-            return EditedSection {
-                title: "Database".to_owned(),
-                body:
-                    "No database schema, migration, or SQL evidence was found in this repository."
-                        .to_owned(),
-                open_questions: Vec::new(),
-                confidence: 90,
-            };
+            .as_ref();
+        let routed_knowledge = route_external_knowledge(
+            self.external_knowledge,
+            crate::external_knowledge::AgentKind::DatabaseEditor,
+        );
+        let Some(report) = report else {
+            if routed_knowledge.is_empty() {
+                return EditedSection {
+                    title: "Database".to_owned(),
+                    body:
+                        "No database schema, migration, or SQL evidence was found in this repository."
+                            .to_owned(),
+                    open_questions: Vec::new(),
+                    confidence: 90,
+                };
+            }
+            return compose(
+                self.model,
+                TaskKind::Configuration,
+                "Database",
+                "Compose a database overview page strictly from the given facts. \
+                 Cite evidence_refs only from the excerpts shown; anything else goes in unresolved_questions."
+                    .to_owned(),
+                external_knowledge_section(&routed_knowledge),
+                external_knowledge_excerpts(&routed_knowledge),
+                70,
+            );
         };
+        let mut excerpts = excerpts_from(&report.evidence);
+        excerpts.extend(external_knowledge_excerpts(&routed_knowledge));
         compose(
             self.model,
             TaskKind::Configuration,
@@ -383,8 +457,12 @@ impl KnowledgeAgent for DatabaseEditor<'_> {
             "Compose a database overview page strictly from the given facts. \
              Cite evidence_refs only from the excerpts shown; anything else goes in unresolved_questions."
                 .to_owned(),
-            report.database_facts.join("\n"),
-            excerpts_from(&report.evidence),
+            format!(
+                "{}{}",
+                report.database_facts.join("\n"),
+                external_knowledge_section(&routed_knowledge)
+            ),
+            excerpts,
             report.confidence,
         )
     }
@@ -396,6 +474,9 @@ impl KnowledgeAgent for DatabaseEditor<'_> {
 pub struct ADRAndDriftEditor<'m> {
     /// Model used to compose prose from research facts.
     pub model: &'m dyn LanguageModel,
+    /// Full external-knowledge fact list (LIT-22.6.6); routed down to
+    /// this editor's own categories internally.
+    pub external_knowledge: &'m [crate::external_knowledge::ExternalKnowledgeFact],
 }
 
 impl KnowledgeAgent for ADRAndDriftEditor<'_> {
@@ -423,7 +504,11 @@ impl KnowledgeAgent for ADRAndDriftEditor<'_> {
             .map(|report| report.findings.as_slice())
             .unwrap_or(&[]);
 
-        if adrs.is_empty() && drift_findings.is_empty() {
+        let routed_knowledge = route_external_knowledge(
+            self.external_knowledge,
+            crate::external_knowledge::AgentKind::AdrAndDriftEditor,
+        );
+        if adrs.is_empty() && drift_findings.is_empty() && routed_knowledge.is_empty() {
             return EditedSection {
                 title: "Architecture Decisions and Drift".to_owned(),
                 body: "No architecture decision records or documentation drift findings exist yet."
@@ -449,7 +534,8 @@ impl KnowledgeAgent for ADRAndDriftEditor<'_> {
             .collect::<Vec<_>>()
             .join("\n");
         let user_prompt = format!(
-            "## Architecture Decisions\n{adr_lines}\n\n## Documentation Drift\n{drift_lines}"
+            "## Architecture Decisions\n{adr_lines}\n\n## Documentation Drift\n{drift_lines}{}",
+            external_knowledge_section(&routed_knowledge)
         );
         let excerpts: Vec<ContextExcerpt> = adrs
             .iter()
@@ -465,6 +551,7 @@ impl KnowledgeAgent for ADRAndDriftEditor<'_> {
                 included_lines: 0,
                 truncated: false,
             }))
+            .chain(external_knowledge_excerpts(&routed_knowledge))
             .collect();
         compose(
             self.model,
@@ -516,12 +603,24 @@ mod tests {
         );
 
         let overview = OverviewEditor { model: &MockModel }.run(&context)?;
-        let architecture = ArchitectureEditor { model: &MockModel }.run(&context)?;
+        let architecture = ArchitectureEditor {
+            model: &MockModel,
+            external_knowledge: &[],
+        }
+        .run(&context)?;
         let workflow = WorkflowEditor { model: &MockModel }.run(&context)?;
         let boundary = BoundaryEditor { model: &MockModel }.run(&context)?;
         let key_modules = KeyModulesEditor { model: &MockModel }.run(&context)?;
-        let database = DatabaseEditor { model: &MockModel }.run(&context)?;
-        let adr_and_drift = ADRAndDriftEditor { model: &MockModel }.run(&AgentContext::new())?;
+        let database = DatabaseEditor {
+            model: &MockModel,
+            external_knowledge: &[],
+        }
+        .run(&context)?;
+        let adr_and_drift = ADRAndDriftEditor {
+            model: &MockModel,
+            external_knowledge: &[],
+        }
+        .run(&AgentContext::new())?;
 
         for section in [
             &overview,
@@ -549,7 +648,11 @@ mod tests {
             DataSourceValue::ResearchBrief(&brief),
         );
 
-        let section = ArchitectureEditor { model: &MockModel }.run(&context)?;
+        let section = ArchitectureEditor {
+            model: &MockModel,
+            external_knowledge: &[],
+        }
+        .run(&context)?;
 
         assert!(!section.title.is_empty());
         assert!(section.confidence > 0);
@@ -615,7 +718,11 @@ mod tests {
         );
         assert!(brief.agent_memory.database.is_none());
 
-        let section = DatabaseEditor { model: &MockModel }.run(&context)?;
+        let section = DatabaseEditor {
+            model: &MockModel,
+            external_knowledge: &[],
+        }
+        .run(&context)?;
 
         assert!(section.body.contains("No database"));
         assert!(section.open_questions.is_empty());
@@ -654,9 +761,121 @@ mod tests {
                 DataSourceValue::DriftReport(&drift),
             );
 
-        let section = ADRAndDriftEditor { model: &MockModel }.run(&context)?;
+        let section = ADRAndDriftEditor {
+            model: &MockModel,
+            external_knowledge: &[],
+        }
+        .run(&context)?;
 
         assert!(!section.title.is_empty());
+
+        Ok(())
+    }
+
+    fn external_fact(
+        category: crate::external_knowledge::ExternalKnowledgeCategory,
+        path: &str,
+    ) -> Result<crate::external_knowledge::ExternalKnowledgeFact, Box<dyn std::error::Error>> {
+        let repo_path = RepoPath::new(path)?;
+        Ok(crate::external_knowledge::ExternalKnowledgeFact {
+            category,
+            text: format!("documentation: {path}"),
+            evidence: EvidenceRef::file(ArtifactId::from_path(&repo_path), repo_path),
+            confidence: crate::domain::Confidence::Low,
+        })
+    }
+
+    /// LIT-22.6.6 AC1/AC3/AC4: routed external knowledge actually reaches
+    /// `ArchitectureEditor`'s composed prompt -- proven indirectly through
+    /// `MockModel`'s deterministic, input-sensitive output (its body
+    /// embeds the request's line count and input hash), since the raw
+    /// prompt itself isn't exposed by the public `EditedSection` API.
+    #[test]
+    fn architecture_editor_prompt_reflects_routed_external_knowledge()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let brief = polyglot_research()?;
+        let context = AgentContext::new().with(
+            DataSourceKey::ResearchBrief,
+            DataSourceValue::ResearchBrief(&brief),
+        );
+
+        let without = ArchitectureEditor {
+            model: &MockModel,
+            external_knowledge: &[],
+        }
+        .run(&context)?;
+        let facts = vec![external_fact(
+            crate::external_knowledge::ExternalKnowledgeCategory::Architecture,
+            "docs/architecture.md",
+        )?];
+        let with = ArchitectureEditor {
+            model: &MockModel,
+            external_knowledge: &facts,
+        }
+        .run(&context)?;
+
+        assert_ne!(without.body, with.body);
+
+        Ok(())
+    }
+
+    /// LIT-22.6.6 AC1/AC3/AC4: `ArchitectureEditor` only routes its own
+    /// categories -- a Database-only fact list changes nothing for it,
+    /// proving isolation, not just presence-vs-absence.
+    #[test]
+    fn architecture_editor_ignores_unrelated_categories() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let brief = polyglot_research()?;
+        let context = AgentContext::new().with(
+            DataSourceKey::ResearchBrief,
+            DataSourceValue::ResearchBrief(&brief),
+        );
+
+        let without = ArchitectureEditor {
+            model: &MockModel,
+            external_knowledge: &[],
+        }
+        .run(&context)?;
+        let facts = vec![external_fact(
+            crate::external_knowledge::ExternalKnowledgeCategory::Database,
+            "docs/database.md",
+        )?];
+        let with_unrelated = ArchitectureEditor {
+            model: &MockModel,
+            external_knowledge: &facts,
+        }
+        .run(&context)?;
+
+        assert_eq!(without.body, with_unrelated.body);
+
+        Ok(())
+    }
+
+    /// LIT-22.6.6 AC1/AC3/AC4: `DatabaseEditor` composes from routed
+    /// external knowledge even when there is no `DatabaseReport` at all
+    /// (the polyglot fixture has none), rather than falling back to
+    /// "no evidence found" when relevant external knowledge exists.
+    #[test]
+    fn database_editor_uses_external_knowledge_when_no_report_exists()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let brief = polyglot_research()?;
+        assert!(brief.agent_memory.database.is_none());
+        let context = AgentContext::new().with(
+            DataSourceKey::ResearchBrief,
+            DataSourceValue::ResearchBrief(&brief),
+        );
+
+        let facts = vec![external_fact(
+            crate::external_knowledge::ExternalKnowledgeCategory::Database,
+            "docs/database.md",
+        )?];
+        let section = DatabaseEditor {
+            model: &MockModel,
+            external_knowledge: &facts,
+        }
+        .run(&context)?;
+
+        assert!(!section.body.contains("No database"));
 
         Ok(())
     }
