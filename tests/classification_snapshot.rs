@@ -4,6 +4,11 @@ use lithograph::domain::{AnalyzerSelection, Artifact, ModelExposurePolicy};
 use lithograph::inventory::{RepositoryWalker, WalkOptions};
 use std::path::Path;
 
+/// `vendor/example/lib.rs` classifies opaque (LIT-23.4): a directory
+/// literally named `vendor` marks its content vendored_score 100, which
+/// `VendorPolicy` now turns into `SupportTier::Opaque` /
+/// `AnalyzerSelection::Opaque` / `ModelExposurePolicy::ExcerptOnly`, the
+/// same treatment an oversized file already gets from `SizePolicy`.
 #[test]
 fn polyglot_fixture_classification_snapshot() -> Result<(), Box<dyn std::error::Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot");
@@ -36,7 +41,7 @@ rust/src/bin/worker.rs|SourceCode|rust|DeepLanguage|Text|Specialized(rust)|Allow
 rust/src/lib.rs|SourceCode|rust|DeepLanguage|Text|Specialized(rust)|Allowed|0|0
 src/python_app/__init__.py|SourceCode|python|DeepLanguage|Text|Specialized(python)|Allowed|0|0
 src/python_app/service.py|SourceCode|python|DeepLanguage|Text|Specialized(python)|Allowed|0|0
-vendor/example/lib.rs|SourceCode|rust|DeepLanguage|Text|Specialized(rust)|Allowed|0|100
+vendor/example/lib.rs|SourceCode|rust|Opaque|Text|Opaque|ExcerptOnly|0|100
 web/index.html|Template|html|StructuredFormat|Text|SyntaxIndexed(html)|Allowed|0|0
 web/package.json|PackageManifest|npm|StructuredFormat|Text|Specialized(npm)|Allowed|0|0
 web/src/App.tsx|SourceCode|tsx|StructuredFormat|Text|SyntaxIndexed(tsx)|Allowed|0|0"

@@ -261,7 +261,7 @@
     }
   ],
   "architecture_facts": [
-    "knowledge graph schema: 130 node(s), 142 relation(s)",
+    "knowledge graph schema: 129 node(s), 140 relation(s)",
     "container/component candidate: Configuration (Configuration)",
     "container/component candidate: assets (Directory)",
     "container/component candidate: data (Directory)",
@@ -282,8 +282,8 @@
     "fixture-worker (RustCrate) score 32",
     "root (Directory) score 14",
     "generated (Directory) score 6",
-    "vendor (Directory) score 6",
-    "assets (Directory) score 5"
+    "assets (Directory) score 5",
+    "data (Directory) score 2"
   ],
   "decisions_and_docs": [
     "existing architecture knowledge: docs/architecture.md"

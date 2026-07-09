@@ -764,9 +764,15 @@ mod tests {
             first_metadata["graph_relation_count"].as_u64(),
             Some(first.graph_relation_count as u64)
         );
+        // Not every artifact reaches the analysis cache -- binaries, unsafe
+        // paths, and (since LIT-23.4) vendored/oversized artifacts have no
+        // analyzer at all and so contribute neither a hit nor a miss.
+        // `artifacts_reanalyzed_count` is `cache.misses()` itself, so this
+        // asserts the persisted JSON matches the report, not a fixture-
+        // specific count.
         assert_eq!(
             first_metadata["cache_misses"].as_u64(),
-            Some(first.artifact_count as u64)
+            Some(first.artifacts_reanalyzed_count as u64)
         );
         assert_eq!(first_metadata["cache_hits"].as_u64(), Some(0));
         assert!(
@@ -779,9 +785,13 @@ mod tests {
         let second = run_update(temp.path(), &MockModel, "mock", "v1")?;
         let second_metadata: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&second.run_metadata_path)?)?;
+        // Everything that was a fresh miss on the first run over unchanged
+        // content becomes a hit on the second -- the same, potentially
+        // smaller-than-artifact_count set of artifacts that actually have
+        // an analyzer at all.
         assert_eq!(
             second_metadata["cache_hits"].as_u64(),
-            Some(second.artifact_count as u64)
+            Some(first.artifacts_reanalyzed_count as u64)
         );
         assert_eq!(second_metadata["cache_misses"].as_u64(), Some(0));
 

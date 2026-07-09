@@ -227,7 +227,12 @@ fn apply_origin_scores(path: &str, classification: Classification) -> Classifica
             ..classification
         };
     }
-    if has_component(path, "vendor") {
+    // LIT-23.4: "third_party"/"third-party" are as established a vendored-
+    // dependency directory convention as "vendor" itself.
+    if has_component(path, "vendor")
+        || has_component(path, "third_party")
+        || has_component(path, "third-party")
+    {
         return Classification {
             vendored_score: 100,
             ..classification

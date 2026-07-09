@@ -52,11 +52,9 @@
     {
       "name": "vendor",
       "kind": "Directory",
-      "member_count": 3,
+      "member_count": 1,
       "evidence": [
-        "artifact:vendor/example/lib.rs",
-        "module:vendor::example",
-        "symbol:vendor/example/lib.rs#vendor::example::vendored_helper"
+        "artifact:vendor/example/lib.rs"
       ]
     },
     {

@@ -41,20 +41,28 @@ impl SizePolicy {
     /// a bounded excerpt may still be useful context. A classification
     /// already stricter than `Allowed` (e.g. `Never`, from `SafetyPolicy`)
     /// is left untouched.
-    pub fn apply(
-        &self,
-        mut classification: Classification,
-        decision: SizeDecision,
-    ) -> Classification {
+    pub fn apply(&self, classification: Classification, decision: SizeDecision) -> Classification {
         if decision.oversized {
-            classification.support_tier = SupportTier::Opaque;
-            classification.analyzer = AnalyzerSelection::Opaque;
-            if classification.model_policy == ModelExposurePolicy::Allowed {
-                classification.model_policy = ModelExposurePolicy::ExcerptOnly;
-            }
+            make_opaque(classification)
+        } else {
+            classification
         }
-        classification
     }
+}
+
+/// Forces a classifier result opaque for extraction purposes (no analyzer
+/// runs over its content) while preserving an already-stricter model
+/// exposure policy (e.g. `Never`, from `SafetyPolicy`) rather than loosening
+/// it to `ExcerptOnly`. Shared by every "skip analysis, but this isn't
+/// secret" policy -- [`SizePolicy`] and, mirroring it, `VendorPolicy`
+/// (LIT-23.4, src/inventory/vendor.rs).
+pub(crate) fn make_opaque(mut classification: Classification) -> Classification {
+    classification.support_tier = SupportTier::Opaque;
+    classification.analyzer = AnalyzerSelection::Opaque;
+    if classification.model_policy == ModelExposurePolicy::Allowed {
+        classification.model_policy = ModelExposurePolicy::ExcerptOnly;
+    }
+    classification
 }
 
 #[cfg(test)]

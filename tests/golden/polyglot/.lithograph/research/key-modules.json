@@ -8,8 +8,8 @@
     "fixture-worker (RustCrate) score 32",
     "root (Directory) score 14",
     "generated (Directory) score 6",
-    "vendor (Directory) score 6",
-    "assets (Directory) score 5"
+    "assets (Directory) score 5",
+    "data (Directory) score 2"
   ],
   "evidence": [
     {

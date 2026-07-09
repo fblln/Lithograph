@@ -895,6 +895,10 @@ mod tests {
         Ok(())
     }
 
+    /// The `vendor` module's member count dropped from 3 to 1 under
+    /// LIT-23.4: `vendor/example/lib.rs` is now classified opaque (no
+    /// analyzer runs over vendored source), so only its bare Artifact node
+    /// remains reachable -- its own Symbol nodes no longer exist.
     #[test]
     fn module_plan_fixture_snapshot() -> Result<(), Box<dyn std::error::Error>> {
         let root = fixture_root();
@@ -925,7 +929,7 @@ module-plan:directory:assets|Directory|assets|2|64
 module-plan:directory:data|Directory|data|1|9
 module-plan:directory:generated|Directory|generated|3|37
 module-plan:directory:root|Directory|root|6|78
-module-plan:directory:vendor|Directory|vendor|3|18
+module-plan:directory:vendor|Directory|vendor|1|18
 module-plan:directory:web|Directory|web|33|151
 module-plan:documentation:documentation|Documentation|Documentation|13|1081
 module-plan:infrastructure:infrastructure|Infrastructure|Infrastructure|19|384

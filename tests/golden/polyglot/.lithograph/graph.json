@@ -1004,22 +1004,6 @@
     },
     {
       "node_type": "Symbol",
-      "id": "symbol:vendor/example/lib.rs#vendor::example::vendored_helper",
-      "kind": "Function",
-      "qualified_name": "vendor::example::vendored_helper",
-      "doc": null,
-      "evidence": {
-        "artifact_id": "artifact:vendor/example/lib.rs",
-        "path": "vendor/example/lib.rs",
-        "span": {
-          "start_line": 1,
-          "end_line": 3
-        },
-        "structured_path": null
-      }
-    },
-    {
-      "node_type": "Symbol",
       "id": "symbol:web/index.html::element@L2",
       "kind": "Definition",
       "qualified_name": "web/index.html::element@L2",
@@ -3431,51 +3415,6 @@
     },
     {
       "id": "relation:108",
-      "source": "artifact:vendor/example/lib.rs",
-      "target": "symbol:vendor/example/lib.rs#vendor::example::vendored_helper",
-      "kind": "Contains",
-      "confidence": "High",
-      "evidence": [
-        {
-          "artifact_id": "artifact:vendor/example/lib.rs",
-          "path": "vendor/example/lib.rs",
-          "span": {
-            "start_line": 1,
-            "end_line": 3
-          },
-          "structured_path": null
-        }
-      ],
-      "provenance": {
-        "language": null,
-        "resolver_strategy": "graph-builder",
-        "resolution": "SyntaxOnly",
-        "confidence": "High"
-      }
-    },
-    {
-      "id": "relation:107",
-      "source": "artifact:vendor/example/lib.rs",
-      "target": "module:vendor::example",
-      "kind": "BelongsToModule",
-      "confidence": "High",
-      "evidence": [
-        {
-          "artifact_id": "artifact:vendor/example/lib.rs",
-          "path": "vendor/example/lib.rs",
-          "span": null,
-          "structured_path": null
-        }
-      ],
-      "provenance": {
-        "language": null,
-        "resolver_strategy": "graph-builder",
-        "resolution": "SyntaxOnly",
-        "confidence": "High"
-      }
-    },
-    {
-      "id": "relation:110",
       "source": "artifact:web/index.html",
       "target": "symbol:web/index.html::element@L2",
       "kind": "Contains",
@@ -3499,7 +3438,7 @@
       }
     },
     {
-      "id": "relation:111",
+      "id": "relation:109",
       "source": "artifact:web/index.html",
       "target": "symbol:web/index.html::element@L3",
       "kind": "Contains",
@@ -3523,7 +3462,7 @@
       }
     },
     {
-      "id": "relation:112",
+      "id": "relation:110",
       "source": "artifact:web/index.html",
       "target": "symbol:web/index.html::element@L4",
       "kind": "Contains",
@@ -3547,7 +3486,7 @@
       }
     },
     {
-      "id": "relation:113",
+      "id": "relation:111",
       "source": "artifact:web/index.html",
       "target": "symbol:web/index.html::element@L5",
       "kind": "Contains",
@@ -3571,7 +3510,7 @@
       }
     },
     {
-      "id": "relation:114",
+      "id": "relation:112",
       "source": "artifact:web/index.html",
       "target": "symbol:web/index.html::element@L7",
       "kind": "Contains",
@@ -3595,7 +3534,7 @@
       }
     },
     {
-      "id": "relation:115",
+      "id": "relation:113",
       "source": "artifact:web/index.html",
       "target": "symbol:web/index.html::element@L8",
       "kind": "Contains",
@@ -3619,7 +3558,7 @@
       }
     },
     {
-      "id": "relation:116",
+      "id": "relation:114",
       "source": "artifact:web/index.html",
       "target": "symbol:web/index.html::script_element@L9",
       "kind": "Contains",
@@ -3643,7 +3582,7 @@
       }
     },
     {
-      "id": "relation:109",
+      "id": "relation:107",
       "source": "artifact:web/index.html",
       "target": "module:web/index.html",
       "kind": "BelongsToModule",
@@ -3664,7 +3603,7 @@
       }
     },
     {
-      "id": "relation:123",
+      "id": "relation:121",
       "source": "artifact:web/index.html",
       "target": "unresolved:body",
       "kind": "Usages",
@@ -3688,7 +3627,7 @@
       }
     },
     {
-      "id": "relation:121",
+      "id": "relation:119",
       "source": "artifact:web/index.html",
       "target": "unresolved:charset",
       "kind": "Usages",
@@ -3712,7 +3651,7 @@
       }
     },
     {
-      "id": "relation:124",
+      "id": "relation:122",
       "source": "artifact:web/index.html",
       "target": "unresolved:div",
       "kind": "Usages",
@@ -3736,7 +3675,7 @@
       }
     },
     {
-      "id": "relation:119",
+      "id": "relation:117",
       "source": "artifact:web/index.html",
       "target": "unresolved:head",
       "kind": "Usages",
@@ -3760,7 +3699,7 @@
       }
     },
     {
-      "id": "relation:117",
+      "id": "relation:115",
       "source": "artifact:web/index.html",
       "target": "unresolved:html",
       "kind": "Usages",
@@ -3784,7 +3723,7 @@
       }
     },
     {
-      "id": "relation:125",
+      "id": "relation:123",
       "source": "artifact:web/index.html",
       "target": "unresolved:id",
       "kind": "Usages",
@@ -3808,7 +3747,7 @@
       }
     },
     {
-      "id": "relation:118",
+      "id": "relation:116",
       "source": "artifact:web/index.html",
       "target": "unresolved:lang",
       "kind": "Usages",
@@ -3832,7 +3771,7 @@
       }
     },
     {
-      "id": "relation:120",
+      "id": "relation:118",
       "source": "artifact:web/index.html",
       "target": "unresolved:meta",
       "kind": "Usages",
@@ -3856,7 +3795,7 @@
       }
     },
     {
-      "id": "relation:126",
+      "id": "relation:124",
       "source": "artifact:web/index.html",
       "target": "unresolved:script",
       "kind": "Usages",
@@ -3880,7 +3819,7 @@
       }
     },
     {
-      "id": "relation:128",
+      "id": "relation:126",
       "source": "artifact:web/index.html",
       "target": "unresolved:src",
       "kind": "Usages",
@@ -3904,7 +3843,7 @@
       }
     },
     {
-      "id": "relation:122",
+      "id": "relation:120",
       "source": "artifact:web/index.html",
       "target": "unresolved:title",
       "kind": "Usages",
@@ -3928,7 +3867,7 @@
       }
     },
     {
-      "id": "relation:127",
+      "id": "relation:125",
       "source": "artifact:web/index.html",
       "target": "unresolved:type",
       "kind": "Usages",
@@ -3952,7 +3891,7 @@
       }
     },
     {
-      "id": "relation:129",
+      "id": "relation:127",
       "source": "artifact:web/package.json",
       "target": "package:@vitejs/plugin-react",
       "kind": "DependsOnPackage",
@@ -3973,7 +3912,7 @@
       }
     },
     {
-      "id": "relation:130",
+      "id": "relation:128",
       "source": "artifact:web/package.json",
       "target": "package:typescript",
       "kind": "DependsOnPackage",
@@ -3994,7 +3933,7 @@
       }
     },
     {
-      "id": "relation:131",
+      "id": "relation:129",
       "source": "artifact:web/package.json",
       "target": "package:vite",
       "kind": "DependsOnPackage",
@@ -4015,7 +3954,7 @@
       }
     },
     {
-      "id": "relation:134",
+      "id": "relation:132",
       "source": "artifact:web/src/App.tsx",
       "target": "symbol:web/src/App.tsx::function_declaration@L13",
       "kind": "Contains",
@@ -4039,7 +3978,7 @@
       }
     },
     {
-      "id": "relation:133",
+      "id": "relation:131",
       "source": "artifact:web/src/App.tsx",
       "target": "symbol:web/src/App.tsx::type_alias_declaration@L3",
       "kind": "Contains",
@@ -4063,7 +4002,7 @@
       }
     },
     {
-      "id": "relation:132",
+      "id": "relation:130",
       "source": "artifact:web/src/App.tsx",
       "target": "module:web/src/App.tsx",
       "kind": "BelongsToModule",
@@ -4084,7 +4023,7 @@
       }
     },
     {
-      "id": "relation:135",
+      "id": "relation:133",
       "source": "artifact:web/src/App.tsx",
       "target": "unresolved:import React from \"react\";",
       "kind": "Imports",
@@ -4108,7 +4047,7 @@
       }
     },
     {
-      "id": "relation:137",
+      "id": "relation:135",
       "source": "artifact:web/src/App.tsx",
       "target": "unresolved:RouteSummary",
       "kind": "TypeRefs",
@@ -4132,7 +4071,7 @@
       }
     },
     {
-      "id": "relation:139",
+      "id": "relation:137",
       "source": "artifact:web/src/App.tsx",
       "target": "unresolved:App",
       "kind": "Usages",
@@ -4156,7 +4095,7 @@
       }
     },
     {
-      "id": "relation:136",
+      "id": "relation:134",
       "source": "artifact:web/src/App.tsx",
       "target": "unresolved:React",
       "kind": "Usages",
@@ -4180,7 +4119,7 @@
       }
     },
     {
-      "id": "relation:141",
+      "id": "relation:139",
       "source": "artifact:web/src/App.tsx",
       "target": "unresolved:h1",
       "kind": "Usages",
@@ -4204,7 +4143,7 @@
       }
     },
     {
-      "id": "relation:140",
+      "id": "relation:138",
       "source": "artifact:web/src/App.tsx",
       "target": "unresolved:main",
       "kind": "Usages",
@@ -4228,7 +4167,7 @@
       }
     },
     {
-      "id": "relation:142",
+      "id": "relation:140",
       "source": "artifact:web/src/App.tsx",
       "target": "unresolved:p",
       "kind": "Usages",
@@ -4252,7 +4191,7 @@
       }
     },
     {
-      "id": "relation:138",
+      "id": "relation:136",
       "source": "artifact:web/src/App.tsx",
       "target": "unresolved:route",
       "kind": "Usages",

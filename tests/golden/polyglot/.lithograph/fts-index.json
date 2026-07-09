@@ -451,12 +451,6 @@
       "text": "src.python_app.service::run_worker Run the Rust worker and return its output."
     },
     {
-      "id": "symbol:vendor/example/lib.rs#vendor::example::vendored_helper",
-      "kind": "Symbol",
-      "reference": "vendor::example::vendored_helper",
-      "text": "vendor::example::vendored_helper "
-    },
-    {
       "id": "symbol:web/index.html::element@L2",
       "kind": "Symbol",
       "reference": "web/index.html::element@L2",

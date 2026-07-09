@@ -11,7 +11,7 @@ Directory       assets                2  3029d94afd11745b29441c5ecd57daf06d7140c
 Directory       data                  1  6b99ef6840a59c785d9f18965146b65ed88f2f225487b77007c2ef5e5cbb0227       9
 Directory       generated             3  af7c6864a5f8b357a9d86e0806a7739ea426ccbcceebf15fd1f4a462e06a3c40      37
 Directory       root                  6  d9b071b9e6f27ac2909415dc4c2590b2ba32e0fcab686075d2b79db574615771      78
-Directory       vendor                3  031399bb81b35a133503a3e11bf0af08d46a4064e5f34c019380e97d73812819      18
+Directory       vendor                1  031399bb81b35a133503a3e11bf0af08d46a4064e5f34c019380e97d73812819      18
 Directory       web                  33  684e2e68e5213a8ace17ed654a9a177835e7045586aebf6808961cbcddf9379c     151
 Documentation   Documentation        13  072a11ff87434dd925fa9e1516a3e2271ed75b8cca6b7049bc82f65ac1584f09    1081
 Infrastructure  Infrastructure       19  b504fade04dddb8d546b8a78b5e1a16e0692f96f8e34c926def164672be19873     384
