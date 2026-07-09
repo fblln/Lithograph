@@ -3247,4 +3247,52 @@ def render_report(data):
 
         Ok(())
     }
+
+    /// LIT-23.3: `package-lock.json`'s internal dependency-tree fields
+    /// (`resolved` URLs, `bin` entries, integrity hashes) must not produce
+    /// spurious reference/config relations the way hand-written JSON
+    /// config would. Confirmed live: a single real-world lockfile produced
+    /// 504 spurious relations before this fix.
+    #[test]
+    fn package_lock_json_produces_no_spurious_reference_relations()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("package-lock.json"),
+            r#"{
+  "name": "app",
+  "lockfileVersion": 3,
+  "packages": {
+    "": { "dependencies": { "esbuild": "^0.21.0" } },
+    "node_modules/esbuild": {
+      "version": "0.21.5",
+      "resolved": "https://registry.npmjs.org/esbuild/-/esbuild-0.21.5.tgz",
+      "integrity": "sha512-abc123==",
+      "bin": { "esbuild": "bin/esbuild" },
+      "engines": { "node": ">=12" }
+    }
+  }
+}
+"#,
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        assert!(
+            graph.nodes.iter().any(
+                |node| matches!(node, GraphNode::Artifact(artifact) if artifact.path == "package-lock.json")
+            ),
+            "a bare Artifact node must still exist for the lockfile"
+        );
+        assert!(
+            !graph
+                .relations
+                .iter()
+                .any(|relation| relation.source.as_str() == "artifact:package-lock.json"),
+            "a lockfile must produce no relations at all from its content"
+        );
+
+        Ok(())
+    }
 }
