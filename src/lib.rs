@@ -10,6 +10,7 @@ pub mod commands;
 pub mod domain;
 pub mod drift;
 pub mod editor_agent;
+pub mod external_knowledge;
 pub mod fts;
 pub mod generation;
 pub mod golden;
