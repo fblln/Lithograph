@@ -31,6 +31,7 @@ pub mod search;
 pub mod semantic_search;
 pub mod storage;
 pub mod viewer;
+pub mod watch;
 
 /// Runs the Lithograph command-line interface.
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {

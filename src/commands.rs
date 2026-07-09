@@ -8,7 +8,7 @@ use crate::cli::{
     AskArgs, Cli, Command, DriftArgs, GoldenArgs, GraphCommand, GraphExportArgs, GraphImportArgs,
     GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectGraphArgs,
     InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs, McpServerArgs,
-    OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
+    OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs, WatchArgs,
 };
 use crate::domain::Artifact;
 use crate::drift::{DriftDetector, DriftReport};
@@ -26,14 +26,16 @@ use crate::mermaid::{
     validate as validate_mermaid,
 };
 use crate::orchestrate::{
-    InitReport, UpdateReport, run_init_with_options, run_update_with_options,
+    InitReport, UpdateReport, run_init_with_options, run_update, run_update_with_options,
 };
 use crate::plan::{DocumentationModule, ModulePlanner};
 use crate::quality::{inspect as inspect_quality, render_table as render_quality_table};
 use crate::viewer::{generate as generate_viewer, render_report as render_viewer_report};
+use crate::watch::{WatchConfig, poll_once, render_report as render_watch_report};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::io::Write;
+use std::time::Duration;
 
 /// Runs parsed CLI arguments and writes command output.
 pub fn execute<W>(cli: Cli, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
@@ -55,6 +57,7 @@ where
         Some(Command::Viewer(args)) => execute_viewer(args, writer),
         Some(Command::Graph(args)) => execute_graph(args, writer),
         Some(Command::Adr(command)) => execute_adr(command, writer),
+        Some(Command::Watch(args)) => execute_watch(args, writer),
         None => Ok(()),
     }
 }
@@ -321,6 +324,36 @@ where
     let report = generate_viewer(&args.path, &output_dir)?;
     writer.write_all(render_viewer_report(&report).as_bytes())?;
     Ok(())
+}
+
+/// Polls `args.path` for staleness and, with `--auto-index`, runs `update`
+/// when staleness is detected (AC1: never auto-indexes without that
+/// explicit flag). `--once` polls a single time and returns; otherwise this
+/// loops with a real `std::thread::sleep` between polls, which is why only
+/// the single-poll (`--once`) path is unit-tested -- an infinite loop with
+/// real sleeps has no deterministic endpoint to assert against.
+fn execute_watch<W>(args: WatchArgs, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    let config = WatchConfig {
+        max_artifacts: args.max_artifacts,
+        poll_interval: Duration::from_secs(args.interval_secs),
+    };
+
+    loop {
+        let report = poll_once(&args.path, &config)?;
+        writer.write_all(render_watch_report(&report).as_bytes())?;
+        if report.stale && args.auto_index {
+            let (model, model_name) = select_model()?;
+            let update_report = run_update(&args.path, model.as_ref(), &model_name, "v1")?;
+            writer.write_all(render_update_report(&update_report).as_bytes())?;
+        }
+        if args.once {
+            return Ok(());
+        }
+        std::thread::sleep(config.poll_interval);
+    }
 }
 
 fn execute_ask<W>(args: AskArgs, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
@@ -838,7 +871,7 @@ mod tests {
         AdrUpdateArgs, AskArgs, Cli, Command, DriftArgs, GraphCommand, GraphExportArgs,
         GraphImportArgs, GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand,
         InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs,
-        OutputFormat, ValidateMermaidArgs,
+        OutputFormat, ValidateMermaidArgs, WatchArgs,
     };
     use crate::graph::{GraphIssue, GraphIssueKind};
     use crate::inventory::{RepositoryWalker, WalkOptions};
@@ -893,6 +926,145 @@ mod tests {
         assert!(temp.path().join(".lithograph/run.json").exists());
 
         Ok(())
+    }
+
+    fn watch_args(path: &Path, once: bool, auto_index: bool) -> WatchArgs {
+        WatchArgs {
+            path: path.to_path_buf(),
+            max_artifacts: 20_000,
+            interval_secs: 0,
+            once,
+            auto_index,
+        }
+    }
+
+    #[test]
+    fn execute_watch_once_reports_stale_before_init() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        let mut output = Vec::new();
+
+        execute(
+            Cli {
+                command: Some(Command::Watch(watch_args(temp.path(), true, false))),
+            },
+            &mut output,
+        )?;
+        let output = String::from_utf8(output)?;
+
+        assert!(output.starts_with("stale:"));
+        assert!(!temp.path().join(".lithograph/run.json").exists());
+
+        Ok(())
+    }
+
+    #[test]
+    fn execute_watch_once_reports_up_to_date_after_init() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        execute(
+            Cli {
+                command: Some(Command::Init(InitArgs {
+                    path: temp.path().to_path_buf(),
+                    prompt_version: "v1".to_owned(),
+                    semantic_grouping: false,
+                })),
+            },
+            &mut Vec::new(),
+        )?;
+        let mut output = Vec::new();
+
+        execute(
+            Cli {
+                command: Some(Command::Watch(watch_args(temp.path(), true, false))),
+            },
+            &mut output,
+        )?;
+        let output = String::from_utf8(output)?;
+
+        assert!(output.starts_with("up to date:"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn execute_watch_without_auto_index_never_writes_docs() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+
+        execute(
+            Cli {
+                command: Some(Command::Watch(watch_args(temp.path(), true, false))),
+            },
+            &mut Vec::new(),
+        )?;
+
+        assert!(!temp.path().join("docs/lithograph/quickstart.md").exists());
+
+        Ok(())
+    }
+
+    #[test]
+    fn execute_watch_with_auto_index_runs_update_when_stale()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        let mut output = Vec::new();
+
+        execute(
+            Cli {
+                command: Some(Command::Watch(watch_args(temp.path(), true, true))),
+            },
+            &mut output,
+        )?;
+        let output = String::from_utf8(output)?;
+
+        assert!(output.contains("stale:"));
+        assert!(output.contains("pages regenerated:"));
+        assert!(temp.path().join("docs/lithograph/quickstart.md").exists());
+
+        Ok(())
+    }
+
+    #[test]
+    fn execute_watch_rejects_repositories_over_the_safe_artifact_limit()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        let args = WatchArgs {
+            max_artifacts: 1,
+            ..watch_args(temp.path(), true, false)
+        };
+
+        match execute(
+            Cli {
+                command: Some(Command::Watch(args)),
+            },
+            &mut Vec::new(),
+        ) {
+            Ok(()) => Err("expected a project-too-large error".into()),
+            Err(error) => {
+                assert!(error.to_string().contains("safe watch limit"));
+                Ok(())
+            }
+        }
     }
 
     #[test]

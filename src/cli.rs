@@ -48,6 +48,30 @@ pub enum Command {
     Graph(GraphCommand),
     /// Create, read, update, delete, and list architecture decision records.
     Adr(AdrCommand),
+    /// Poll a repository for staleness against its last recorded snapshot.
+    /// Disabled by default beyond this explicit command: reports staleness
+    /// only, unless `--auto-index` is passed.
+    Watch(WatchArgs),
+}
+
+/// Arguments for `watch`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct WatchArgs {
+    /// Repository path to watch.
+    pub path: PathBuf,
+    /// Maximum artifacts one poll may scan before refusing to proceed.
+    #[arg(long, default_value_t = 20_000)]
+    pub max_artifacts: usize,
+    /// Seconds to wait between polls when watching continuously.
+    #[arg(long, default_value_t = 5)]
+    pub interval_secs: u64,
+    /// Poll exactly once and exit, instead of watching continuously.
+    #[arg(long)]
+    pub once: bool,
+    /// Automatically run `update` when staleness is detected. Disabled by
+    /// default: without this flag, `watch` only reports staleness.
+    #[arg(long)]
+    pub auto_index: bool,
 }
 
 /// ADR command namespace.
