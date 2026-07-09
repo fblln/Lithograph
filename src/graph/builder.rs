@@ -3203,4 +3203,48 @@ def render_report(data):
 
         Ok(())
     }
+
+    /// LIT-23.2: CSS class/id selectors are declaration syntax (what a
+    /// rule_set is), not references to something else, so they must never
+    /// produce `Usages`/`TypeRefs` relations the way a code identifier
+    /// use-site does. Confirmed live: a single real-world stylesheet
+    /// produced 105 spurious `Usages` relations before this fix.
+    #[test]
+    fn css_selectors_produce_no_usages_relations() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("styles.css"),
+            "#root {\n  height: 100%;\n}\n\n.app-shell {\n  display: flex;\n}\n\n.brand-mark {\n  color: #fff;\n}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        assert!(
+            graph.nodes.iter().any(
+                |node| matches!(node, GraphNode::Artifact(artifact) if artifact.path == "styles.css")
+            ),
+            "a bare Artifact node must still exist for the CSS file"
+        );
+        assert!(
+            !graph.relations.iter().any(|relation| matches!(
+                relation.kind,
+                RelationKind::Usages | RelationKind::TypeRefs
+            ) && relation.source.as_str()
+                == "artifact:styles.css"),
+            "CSS selectors must not produce Usages/TypeRefs relations"
+        );
+        // The rule_set/at_rule structural facts (LIT-22.2.3) are unaffected:
+        // each selector's rule still contributes a Symbol via Contains.
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::Contains
+                    && relation.source.as_str() == "artifact:styles.css"),
+            "CSS rule_set definitions should still produce Contains relations"
+        );
+
+        Ok(())
+    }
 }
