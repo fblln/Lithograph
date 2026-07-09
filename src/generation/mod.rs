@@ -8,7 +8,7 @@ pub mod openai;
 pub mod render;
 pub mod validate;
 
-pub use context::{ContextBuilder, ContextExcerpt, ModelContext};
+pub use context::{ArchitectureViewContext, ContextBuilder, ContextExcerpt, ModelContext};
 pub use deepinfra::{DeepInfraConfig, DeepInfraModel};
 pub use llm::{LanguageModel, MockModel, ModelError, ModelRequest, PageGeneration};
 pub use openai::{OpenAiConfig, OpenAiModel};

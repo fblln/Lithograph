@@ -1,9 +1,13 @@
 //! `init` orchestration: wires scan, analysis, graph, module planning,
 //! generation, evidence validation, and writes into one product loop.
 
+use crate::adr::AdrStore;
 use crate::analysis::AnalysisCache;
 use crate::domain::{Artifact, EvidenceRef};
-use crate::generation::{ContextBuilder, LanguageModel, ModelError, PageRenderer, RenderError};
+use crate::drift::DriftDetector;
+use crate::generation::{
+    ArchitectureViewContext, ContextBuilder, LanguageModel, ModelError, PageRenderer, RenderError,
+};
 use crate::graph::{Graph, GraphBuilder, GraphIssue, GraphStore, GraphValidator};
 use crate::inventory::{RepositoryWalker, WalkError, WalkOptions};
 use crate::manifest::{
@@ -77,6 +81,24 @@ fn scan_and_plan(
 /// [`scan_exclude_globs`].
 fn analysis_cache(repo_root: &Path) -> AnalysisCache {
     AnalysisCache::new(repo_root.join(".lithograph/cache/analysis"))
+}
+
+/// Scans drift and loads ADR summaries for the architecture page only
+/// (LIT-22.7.1): every other page kind skips this entirely, since it's
+/// only worth the filesystem scan when actually building that one page.
+fn architecture_view_context(
+    task_kind: TaskKind,
+    artifacts: &[Artifact],
+    graph: &Graph,
+    repo_root: &Path,
+) -> Option<ArchitectureViewContext> {
+    if task_kind != TaskKind::Architecture {
+        return None;
+    }
+    Some(ArchitectureViewContext {
+        drift: DriftDetector.scan(artifacts, graph, repo_root),
+        adr_summaries: AdrStore::new(repo_root).list(),
+    })
 }
 
 /// Counts and output paths from one `init` run.
@@ -243,6 +265,8 @@ pub fn run_init_with_options(
                         &graph,
                         &artifacts,
                         Some(&research),
+                        architecture_view_context(task.kind, &artifacts, &graph, repo_root)
+                            .as_ref(),
                     ),
                 };
 
@@ -491,6 +515,8 @@ pub fn run_update_with_options(
                         &graph,
                         &artifacts,
                         Some(&research),
+                        architecture_view_context(task.kind, &artifacts, &graph, repo_root)
+                            .as_ref(),
                     ),
                 };
 

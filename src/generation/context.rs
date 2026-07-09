@@ -1,7 +1,9 @@
 //! Bounded, evidence-backed model context and prompt construction for
 //! module and repository-wide wiki pages.
 
+use crate::adr::AdrSummary;
 use crate::domain::{Artifact, ModelExposurePolicy, TextStatus};
+use crate::drift::DriftReport;
 use crate::generation::llm::ModelRequest;
 use crate::graph::{Graph, GraphNode, GraphNodeId};
 use crate::inventory::SafetyPolicy;
@@ -11,6 +13,20 @@ use crate::research::ResearchBrief;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+
+/// Extra context for the architecture page only (LIT-22.7.1): documentation
+/// drift findings and existing ADR summaries, so the page can validate
+/// implementation intent against what's actually recorded (AC3) and
+/// surface both as explicit Risks/Drift sections (AC1). `None` for every
+/// other page kind, since drift/ADR scanning is only worth the cost when
+/// actually building the architecture page.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArchitectureViewContext {
+    /// Documentation drift findings for the current repository state.
+    pub drift: DriftReport,
+    /// Summaries of every persisted architecture decision record.
+    pub adr_summaries: Vec<AdrSummary>,
+}
 
 /// Maximum lines of a single artifact's content included as an excerpt.
 const MAX_EXCERPT_LINES: usize = 120;
@@ -199,6 +215,7 @@ impl ContextBuilder {
         graph: &Graph,
         artifacts: &[Artifact],
         research: Option<&ResearchBrief>,
+        architecture_context: Option<&ArchitectureViewContext>,
     ) -> ModelContext {
         let owner_by_member: BTreeMap<&GraphNodeId, &str> = modules
             .iter()
@@ -218,7 +235,7 @@ impl ContextBuilder {
 
         let mut sections = vec![format!("## Repository focus: {:?}\n", task_kind)];
         if let Some(research) = research {
-            append_research_sections(&mut sections, task_kind, research);
+            append_research_sections(&mut sections, task_kind, research, architecture_context);
         }
         sections.push("## Repository modules\n".to_owned());
         for module in modules {
@@ -328,8 +345,9 @@ fn append_research_sections(
     sections: &mut Vec<String>,
     task_kind: TaskKind,
     research: &ResearchBrief,
+    architecture_context: Option<&ArchitectureViewContext>,
 ) {
-    append_agent_memory_sections(sections, task_kind, research);
+    append_agent_memory_sections(sections, task_kind, research, architecture_context);
 
     let facts = match task_kind {
         TaskKind::Overview | TaskKind::Architecture => &research.system_context,
@@ -367,6 +385,7 @@ fn append_agent_memory_sections(
     sections: &mut Vec<String>,
     task_kind: TaskKind,
     research: &ResearchBrief,
+    architecture_context: Option<&ArchitectureViewContext>,
 ) {
     let memory = &research.agent_memory;
     match task_kind {
@@ -379,49 +398,7 @@ fn append_agent_memory_sections(
             ));
         }
         TaskKind::Architecture => {
-            let language_lines = memory
-                .architecture
-                .languages
-                .iter()
-                .map(|language| {
-                    format!(
-                        "- {}: {:?} ({} artifact(s))",
-                        language.language, language.tier, language.artifact_count
-                    )
-                })
-                .collect::<Vec<_>>();
-            let domain_lines = memory
-                .domain_modules
-                .modules
-                .iter()
-                .take(20)
-                .map(|module| {
-                    format!(
-                        "- {} ({}) owns {} member(s); evidence: {}",
-                        module.name,
-                        module.kind,
-                        module.member_count,
-                        join_or_none(&module.evidence)
-                    )
-                })
-                .collect::<Vec<_>>();
-            sections.push(format!(
-                "\n## Agent research: architecture memory\n### System context\n{}\n\n### Language support tiers\n{}\n\n### Domain modules\n{}\n\n### Architecture facts\n{}\n\n### Hotspots\n{}",
-                memory.system_context.project_summary,
-                language_lines.join("\n"),
-                domain_lines.join("\n"),
-                bullet_lines(&memory.architecture.architecture_facts),
-                bullet_lines(&memory.architecture.hotspots)
-            ));
-            if !memory.architecture.decisions_and_docs.is_empty() {
-                sections.push(format!(
-                    "\n## Existing architecture knowledge and ADR candidates\n{}",
-                    bullet_lines(&memory.architecture.decisions_and_docs)
-                ));
-            }
-            if let Some(diagram) = &memory.architecture.mermaid {
-                sections.push(format!("\n## Agent-authored C4 seed diagram\n{diagram}"));
-            }
+            append_c4_architecture_sections(sections, memory, architecture_context);
         }
         TaskKind::Workflows => {
             sections.push(format!(
@@ -449,6 +426,137 @@ fn append_agent_memory_sections(
                 bullet_lines(&memory.key_modules.modules)
             ));
         }
+    }
+}
+
+/// Builds the architecture page's explicit C4-oriented sections
+/// (LIT-22.7.1 AC1): System Context, Container View, Component View,
+/// Deployment/Runtime View, Workflows, Risks, and Drift, plus existing
+/// architecture docs/ADRs used to validate implementation intent (AC3).
+fn append_c4_architecture_sections(
+    sections: &mut Vec<String>,
+    memory: &crate::research::AgentMemory,
+    architecture_context: Option<&ArchitectureViewContext>,
+) {
+    let language_lines: Vec<String> = memory
+        .architecture
+        .languages
+        .iter()
+        .map(|language| {
+            format!(
+                "- {}: {:?} ({} artifact(s))",
+                language.language, language.tier, language.artifact_count
+            )
+        })
+        .collect();
+    let domain_lines: Vec<String> = memory
+        .domain_modules
+        .modules
+        .iter()
+        .take(20)
+        .map(|module| {
+            format!(
+                "- {} ({}) owns {} member(s); evidence: {}",
+                module.name,
+                module.kind,
+                module.member_count,
+                join_or_none(&module.evidence)
+            )
+        })
+        .collect();
+    sections.push(format!(
+        "\n## System Context\n{}\n\n### Language support tiers\n{}\n\n### Domain modules\n{}",
+        memory.system_context.project_summary,
+        language_lines.join("\n"),
+        domain_lines.join("\n"),
+    ));
+    sections.push(format!(
+        "\n## Container View\n{}",
+        bullet_lines(&memory.architecture.architecture_facts)
+    ));
+    sections.push(format!(
+        "\n## Component View\n{}",
+        bullet_lines(&memory.architecture.hotspots)
+    ));
+    let deployment_lines = match &memory.deployment {
+        Some(deployment) => bullet_lines(&deployment.deployment_facts),
+        None => "- no container/deployment evidence found".to_owned(),
+    };
+    sections.push(format!(
+        "\n## Deployment / Runtime View\n{deployment_lines}"
+    ));
+    sections.push(format!(
+        "\n## Workflows\n{}",
+        bullet_lines(&memory.workflows.workflows)
+    ));
+
+    let mut risk_lines: Vec<String> = [
+        ("system context", memory.system_context.confidence),
+        ("architecture", memory.architecture.confidence),
+        ("workflows", memory.workflows.confidence),
+        ("boundaries", memory.boundaries.confidence),
+    ]
+    .into_iter()
+    .filter(|&(_, confidence)| confidence < 60)
+    .map(|(label, confidence)| format!("- low confidence in {label} research ({confidence}/100)"))
+    .collect();
+    if !memory.system_context.external_systems.is_empty() {
+        risk_lines.push(format!(
+            "- {} external system(s)/unresolved reference(s) not fully resolved",
+            memory.system_context.external_systems.len()
+        ));
+    }
+    if let Some(context) = architecture_context
+        && !context.drift.findings.is_empty()
+    {
+        risk_lines.push(format!(
+            "- {} documentation drift finding(s) detected",
+            context.drift.findings.len()
+        ));
+    }
+    sections.push(format!("\n## Risks\n{}", bullet_lines(&risk_lines)));
+
+    let drift_lines: Vec<String> = architecture_context
+        .map(|context| {
+            context
+                .drift
+                .findings
+                .iter()
+                .map(|finding| {
+                    format!(
+                        "- {:?}: {} ({})",
+                        finding.kind, finding.detail, finding.artifact_path
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    sections.push(format!(
+        "\n## Drift\n{}",
+        if drift_lines.is_empty() {
+            "- no documentation drift detected".to_owned()
+        } else {
+            drift_lines.join("\n")
+        }
+    ));
+
+    let mut knowledge_lines = memory.architecture.decisions_and_docs.clone();
+    if let Some(context) = architecture_context {
+        knowledge_lines.extend(
+            context
+                .adr_summaries
+                .iter()
+                .map(|adr| format!("ADR {} [{:?}]: {}", adr.id, adr.status, adr.title)),
+        );
+    }
+    if !knowledge_lines.is_empty() {
+        sections.push(format!(
+            "\n## Existing architecture knowledge and ADRs\n{}",
+            bullet_lines(&knowledge_lines)
+        ));
+    }
+    if let Some(diagram) = &memory.architecture.mermaid {
+        sections.push(format!("\n## Agent-authored C4 seed diagram\n{diagram}"));
     }
 }
 
@@ -1238,6 +1346,7 @@ mod tests {
             &graph,
             &artifacts,
             None,
+            None,
         );
 
         assert!(context.user_prompt.contains("## Repository modules"));
@@ -1268,12 +1377,14 @@ mod tests {
             &graph,
             &artifacts,
             None,
+            None,
         );
         let architecture = ContextBuilder.build_summary_context(
             TaskKind::Architecture,
             &modules,
             &graph,
             &artifacts,
+            None,
             None,
         );
         let workflows = ContextBuilder.build_summary_context(
@@ -1282,6 +1393,7 @@ mod tests {
             &graph,
             &artifacts,
             None,
+            None,
         );
         let boundaries = ContextBuilder.build_summary_context(
             TaskKind::Boundaries,
@@ -1289,12 +1401,14 @@ mod tests {
             &graph,
             &artifacts,
             None,
+            None,
         );
         let configuration = ContextBuilder.build_summary_context(
             TaskKind::Configuration,
             &modules,
             &graph,
             &artifacts,
+            None,
             None,
         );
 
@@ -1326,5 +1440,105 @@ mod tests {
             crate::domain::ArtifactId::from_path(&artifact.path),
             artifact.path.clone(),
         )
+    }
+
+    /// LIT-22.7.1: the architecture page's context (the prompt a real
+    /// model actually receives) is explicitly C4-oriented (AC1), its
+    /// seed diagram is graph-derived and passes the existing Mermaid
+    /// validator (AC2), and existing ADRs/drift findings surface as
+    /// explicit content grounded in real evidence (AC3).
+    #[test]
+    fn architecture_context_is_c4_oriented_with_validated_mermaid_and_adr_drift_evidence()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::adr::{AdrStatus, AdrStore};
+        use crate::drift::{DriftDetector, DriftFinding, DriftKind, DriftReport};
+        use crate::research::ResearchBuilder;
+
+        let root = fixture_root();
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
+        let graph = GraphBuilder.build(&root, &artifacts);
+        let modules = ModulePlanner.plan(&graph, &artifacts);
+        let brief = ResearchBuilder.build(&artifacts, &graph, &modules);
+
+        let adr_temp = tempfile::TempDir::new()?;
+        let store = AdrStore::new(adr_temp.path());
+        store.create(
+            "Use blake3 for content hashing",
+            "Need a fast, stable content hash for caching.",
+            "Adopt blake3 across the analysis cache and run metadata.",
+            None,
+        )?;
+        let mut adr_summaries = store.list();
+        assert_eq!(adr_summaries.len(), 1);
+        assert_eq!(adr_summaries[0].status, AdrStatus::Proposed);
+
+        let real_drift = DriftDetector.scan(&artifacts, &graph, &root);
+        let synthetic_finding = DriftFinding {
+            kind: DriftKind::BrokenLink,
+            artifact_path: "docs/lithograph/overview.md".to_owned(),
+            detail: "docs/missing.md".to_owned(),
+            evidence: file_evidence(&artifacts[0]),
+            graph_node: None,
+        };
+        let mut findings = real_drift.findings;
+        findings.push(synthetic_finding);
+        let drift = DriftReport { findings };
+        assert!(!drift.findings.is_empty());
+
+        let architecture_context = super::ArchitectureViewContext {
+            drift,
+            adr_summaries: std::mem::take(&mut adr_summaries),
+        };
+
+        let context = ContextBuilder.build_summary_context(
+            TaskKind::Architecture,
+            &modules,
+            &graph,
+            &artifacts,
+            Some(&brief),
+            Some(&architecture_context),
+        );
+
+        for heading in [
+            "## System Context",
+            "## Container View",
+            "## Component View",
+            "## Deployment / Runtime View",
+            "## Workflows",
+            "## Risks",
+            "## Drift",
+        ] {
+            assert!(
+                context.user_prompt.contains(heading),
+                "missing section: {heading}"
+            );
+        }
+        assert!(context.user_prompt.contains("documentation drift finding"));
+        assert!(
+            context
+                .user_prompt
+                .contains("Use blake3 for content hashing")
+        );
+        assert!(context.user_prompt.contains("```mermaid"));
+
+        let diagram_dir = tempfile::TempDir::new()?;
+        let diagram = context
+            .user_prompt
+            .split("```mermaid")
+            .nth(1)
+            .and_then(|rest| rest.split("```").next())
+            .ok_or("expected a mermaid fence in the composed context")?;
+        std::fs::write(
+            diagram_dir.path().join("architecture.md"),
+            format!("# Architecture\n\n```mermaid{diagram}```\n"),
+        )?;
+        let report = crate::mermaid::validate(diagram_dir.path(), None)?;
+        assert!(
+            report.is_clean(),
+            "seed diagram failed Mermaid validation: {:?}",
+            report.issues
+        );
+
+        Ok(())
     }
 }
