@@ -128,6 +128,7 @@ impl GraphBuilder {
             state.apply_output(artifact, output);
         }
 
+        state.detect_near_clones(repo_root);
         state.finish()
     }
 }
@@ -908,6 +909,22 @@ impl BuilderState {
                         reference.confidence,
                     )),
                 );
+            }
+            PythonReferenceKind::DataFlows => {
+                if let Some(target) = symbol_ids.get(&reference.value).cloned() {
+                    self.relate_with_provenance(
+                        artifact_node.clone(),
+                        target,
+                        RelationKind::DataFlows,
+                        reference.confidence,
+                        vec![reference.evidence.clone()],
+                        Some(artifact_provenance(
+                            artifact,
+                            RelationResolution::HybridResolved,
+                            reference.confidence,
+                        )),
+                    );
+                }
             }
         }
     }
@@ -1827,6 +1844,84 @@ impl BuilderState {
         }
     }
 
+    /// Emits `SimilarTo` relations between near-clone function/method pairs
+    /// (LIT-22.3.6 AC2): deterministic Jaccard similarity over each
+    /// symbol's lowercase word-token bag, read from its own evidence span
+    /// -- never live embeddings or any external ranking service (AC3;
+    /// semantic ranking stays a separate, later search concern).
+    // ponytail: O(n^2) pairwise comparison over every function/method
+    // symbol in the repo. Fine for a "minimum deterministic" baseline at
+    // the scale this tool targets; if a very large repo makes this slow,
+    // bucket candidates by token-count or line-count range first.
+    fn detect_near_clones(&mut self, repo_root: &Path) {
+        const MIN_BODY_LINES: u32 = 3;
+        const SIMILAR_THRESHOLD: f64 = 0.6;
+        const HIGH_CONFIDENCE_THRESHOLD: f64 = 0.85;
+
+        let mut file_cache: BTreeMap<String, Option<String>> = BTreeMap::new();
+        let mut candidates: Vec<(GraphNodeId, EvidenceRef, BTreeSet<String>)> = Vec::new();
+        for node in self.nodes.values() {
+            let GraphNode::Symbol(symbol) = node else {
+                continue;
+            };
+            if !matches!(symbol.kind, SymbolKind::Function | SymbolKind::Method) {
+                continue;
+            }
+            let Some(span) = &symbol.evidence.span else {
+                continue;
+            };
+            if span.end_line.saturating_sub(span.start_line) + 1 < MIN_BODY_LINES {
+                continue;
+            }
+            let path = symbol.evidence.path.as_str().to_owned();
+            let text = file_cache
+                .entry(path.clone())
+                .or_insert_with(|| fs::read_to_string(repo_root.join(&path)).ok());
+            let Some(text) = text else {
+                continue;
+            };
+            let tokens = word_tokens(text, span.start_line, span.end_line);
+            if tokens.is_empty() {
+                continue;
+            }
+            candidates.push((symbol.id.clone(), symbol.evidence.clone(), tokens));
+        }
+
+        for i in 0..candidates.len() {
+            for j in (i + 1)..candidates.len() {
+                let (id_a, evidence_a, tokens_a) = &candidates[i];
+                let (id_b, evidence_b, tokens_b) = &candidates[j];
+                let similarity = jaccard_similarity(tokens_a, tokens_b);
+                if similarity < SIMILAR_THRESHOLD {
+                    continue;
+                }
+                let confidence = if similarity >= HIGH_CONFIDENCE_THRESHOLD {
+                    Confidence::High
+                } else {
+                    Confidence::Low
+                };
+                let (source, target) = if id_a <= id_b {
+                    (id_a.clone(), id_b.clone())
+                } else {
+                    (id_b.clone(), id_a.clone())
+                };
+                self.relate_with_provenance(
+                    source,
+                    target,
+                    RelationKind::SimilarTo,
+                    confidence,
+                    vec![evidence_a.clone(), evidence_b.clone()],
+                    Some(RelationProvenance {
+                        language: None,
+                        resolver_strategy: "lexical-jaccard-similarity".to_owned(),
+                        resolution: RelationResolution::HybridResolved,
+                        confidence,
+                    }),
+                );
+            }
+        }
+    }
+
     fn finish(mut self) -> Graph {
         let mut nodes: Vec<GraphNode> = self.nodes.into_values().collect();
         nodes.sort_by(|a, b| a.id().cmp(b.id()));
@@ -1837,6 +1932,34 @@ impl BuilderState {
             relations: self.relations,
         }
     }
+}
+
+/// Lowercase word-shaped tokens (letters/digits/underscore runs longer
+/// than one character) from `text`'s `start_line..=end_line` (one-based,
+/// inclusive) -- deterministic lexical content for near-clone comparison
+/// (LIT-22.3.6 AC2). Single-character tokens (`x`, `_`) are dropped:
+/// they're common enough to dominate the Jaccard score without indicating
+/// real similarity.
+fn word_tokens(text: &str, start_line: u32, end_line: u32) -> BTreeSet<String> {
+    let start = start_line.saturating_sub(1) as usize;
+    let end = end_line as usize;
+    text.lines()
+        .enumerate()
+        .filter(|(index, _)| *index >= start && *index < end)
+        .flat_map(|(_, line)| line.split(|ch: char| !ch.is_alphanumeric() && ch != '_'))
+        .filter(|token| token.len() > 1)
+        .map(str::to_lowercase)
+        .collect()
+}
+
+/// `|intersection| / |union|`, `0.0` when both sets are empty.
+fn jaccard_similarity(a: &BTreeSet<String>, b: &BTreeSet<String>) -> f64 {
+    let union = a.union(b).count();
+    if union == 0 {
+        return 0.0;
+    }
+    let intersection = a.intersection(b).count();
+    intersection as f64 / union as f64
 }
 
 fn python_relative_target(
@@ -2845,6 +2968,133 @@ impl Drop for Route {
         assert!(graph.nodes.iter().any(
             |node| matches!(node, GraphNode::Unresolved(node) if node.value == "user.updated")
         ));
+
+        Ok(())
+    }
+
+    /// LIT-22.3.6 AC1/AC4: a call that passes an argument to a
+    /// locally-defined function produces a `DataFlows` relation to that
+    /// function's symbol, distinct from the always-present `Calls` relation.
+    #[test]
+    fn call_with_argument_produces_a_dataflows_relation() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("service.py"),
+            "def build(x):\n    return x\n\n\ndef run(value):\n    return build(value)\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let data_flows = graph
+            .relations
+            .iter()
+            .find(|relation| relation.kind == RelationKind::DataFlows)
+            .ok_or("expected a DataFlows relation")?;
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::Calls
+                    && relation.target == data_flows.target)
+        );
+
+        Ok(())
+    }
+
+    /// LIT-22.3.6 AC2/AC4: two near-identical functions (same shape,
+    /// trivially renamed) produce a `SimilarTo` relation via deterministic
+    /// lexical similarity; a clearly different function does not pair
+    /// with either.
+    #[test]
+    fn near_identical_functions_produce_a_similar_to_relation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("clones.py"),
+            "\
+def calculate_total(items):
+    total = 0
+    for item in items:
+        total += item.price
+    return total
+
+
+def calculate_total_v2(items):
+    total = 0
+    for item in items:
+        total += item.price * 2
+    return total
+
+
+def render_report(data):
+    output = []
+    for section in data.sections:
+        output.append(section.title)
+    return \"\\n\".join(output)
+",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let symbol_id = |name: &str| -> Option<&crate::graph::model::GraphNodeId> {
+            graph.nodes.iter().find_map(|node| match node {
+                GraphNode::Symbol(symbol) if symbol.qualified_name.ends_with(name) => {
+                    Some(&symbol.id)
+                }
+                _ => None,
+            })
+        };
+        let total_id = symbol_id("calculate_total").ok_or("missing calculate_total symbol")?;
+        let total_v2_id =
+            symbol_id("calculate_total_v2").ok_or("missing calculate_total_v2 symbol")?;
+        let report_id = symbol_id("render_report").ok_or("missing render_report symbol")?;
+
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::SimilarTo
+                    && ((&relation.source == total_id && &relation.target == total_v2_id)
+                        || (&relation.source == total_v2_id && &relation.target == total_id)))
+        );
+        assert!(!graph.relations.iter().any(|relation| {
+            relation.kind == RelationKind::SimilarTo
+                && (&relation.source == report_id || &relation.target == report_id)
+        }));
+
+        Ok(())
+    }
+
+    /// LIT-22.3.6 AC2/AC4: near-clone scoring is a pure deterministic
+    /// function of source text -- building the same repository twice
+    /// yields byte-identical `SimilarTo` relations, never live/varying
+    /// embedding-based scores.
+    #[test]
+    fn near_clone_detection_is_deterministic_across_repeated_builds()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("clones.py"),
+            "def calculate_total(items):\n    total = 0\n    for item in items:\n        total += item.price\n    return total\n\n\ndef calculate_total_v2(items):\n    total = 0\n    for item in items:\n        total += item.price * 2\n    return total\n",
+        )?;
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+
+        let first = GraphBuilder.build(temp.path(), &artifacts);
+        let second = GraphBuilder.build(temp.path(), &artifacts);
+
+        let similar_relations = |graph: &crate::graph::model::Graph| {
+            graph
+                .relations
+                .iter()
+                .filter(|relation| relation.kind == RelationKind::SimilarTo)
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(similar_relations(&first), similar_relations(&second));
+        assert!(!similar_relations(&first).is_empty());
 
         Ok(())
     }

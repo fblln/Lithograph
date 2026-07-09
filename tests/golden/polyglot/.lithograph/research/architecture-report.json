@@ -261,7 +261,7 @@
     }
   ],
   "architecture_facts": [
-    "knowledge graph schema: 130 node(s), 141 relation(s)",
+    "knowledge graph schema: 130 node(s), 142 relation(s)",
     "container/component candidate: Configuration (Configuration)",
     "container/component candidate: assets (Directory)",
     "container/component candidate: data (Directory)",
@@ -278,7 +278,7 @@
     "Configuration (Configuration) score 50",
     "Documentation (Documentation) score 44",
     "Infrastructure (Infrastructure) score 42",
-    "python_app (PythonPackage) score 37",
+    "python_app (PythonPackage) score 38",
     "fixture-worker (RustCrate) score 32",
     "root (Directory) score 14",
     "generated (Directory) score 6",

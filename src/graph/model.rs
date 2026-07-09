@@ -289,6 +289,12 @@ pub enum RelationKind {
     Emits,
     /// Subscribes/listens for an event or message on a channel (LIT-22.3.5).
     ListensOn,
+    /// Data flows from the source symbol into the target symbol via a call
+    /// argument or a `self.field` assignment (LIT-22.3.6 AC1).
+    DataFlows,
+    /// Two symbols are near-clones by deterministic lexical/structural
+    /// similarity (LIT-22.3.6 AC2) -- never live embeddings.
+    SimilarTo,
 }
 
 /// How a relation was extracted or resolved.

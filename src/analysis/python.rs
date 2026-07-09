@@ -119,6 +119,11 @@ pub enum PythonReferenceKind {
     Emits,
     /// Subscribes/listens for an event or message on a channel (LIT-22.3.5).
     ListensOn,
+    /// Data flows into a locally-defined callee via a call argument, or
+    /// into a `self.field` via assignment from a call result (LIT-22.3.6
+    /// AC1). Emitted alongside `Call` for a call site that also has
+    /// argument or field-assignment evidence, never on its own.
+    DataFlows,
 }
 
 /// One heuristic reference extracted from a call expression.
@@ -567,6 +572,12 @@ fn collect_references(
     if node.kind() == "call"
         && let Some(reference) = classify_call(node, artifact, source, defined_names, aliases)
     {
+        if reference.kind == PythonReferenceKind::Call && has_data_flow_evidence(node, source) {
+            references.push(PythonReference {
+                kind: PythonReferenceKind::DataFlows,
+                ..reference.clone()
+            });
+        }
         references.push(reference);
     }
     let mut cursor = node.walk();
@@ -682,6 +693,33 @@ fn event_call_kind(callee: &str) -> Option<PythonReferenceKind> {
         .iter()
         .any(|hint| receiver.contains(hint))
         .then_some(kind)
+}
+
+/// True when a `call` node has argument or field-assignment evidence that
+/// data flowed into the callee (LIT-22.3.6 AC1): the call passes at least
+/// one argument, or its result is assigned directly to `self.<field>`. A
+/// bare no-argument call whose result is discarded has no such evidence.
+fn has_data_flow_evidence(call: Node, source: &str) -> bool {
+    let has_argument = call
+        .child_by_field_name("arguments")
+        .is_some_and(|arguments| arguments.named_child_count() > 0);
+    if has_argument {
+        return true;
+    }
+    let Some(parent) = call.parent() else {
+        return false;
+    };
+    if parent.kind() != "assignment" {
+        return false;
+    }
+    let Some(left) = parent.child_by_field_name("left") else {
+        return false;
+    };
+    if left.kind() != "attribute" {
+        return false;
+    }
+    left.child_by_field_name("object")
+        .is_some_and(|object| node_text(object, source) == "self")
 }
 
 fn literal_or_dynamic(
@@ -1146,6 +1184,81 @@ def run():
             reference.kind,
             PythonReferenceKind::Emits | PythonReferenceKind::ListensOn
         )));
+
+        Ok(())
+    }
+
+    /// LIT-22.3.6 AC1/AC4: a call to a locally-defined function with an
+    /// argument gets a `DataFlows` reference alongside its `Call`
+    /// reference (argument evidence).
+    #[test]
+    fn call_with_argument_gets_a_dataflows_reference() -> Result<(), Box<dyn std::error::Error>> {
+        let artifact = python_artifact("app/service.py")?;
+        let source = "def build(x):\n    return x\n\n\ndef run(value):\n    return build(value)\n";
+        let analysis = PythonAnalyzer.analyze(&artifact, source);
+
+        assert!(
+            analysis
+                .references
+                .iter()
+                .any(|reference| reference.kind == PythonReferenceKind::DataFlows
+                    && reference.value == "build")
+        );
+        assert!(
+            analysis
+                .references
+                .iter()
+                .any(|reference| reference.kind == PythonReferenceKind::Call
+                    && reference.value == "build")
+        );
+
+        Ok(())
+    }
+
+    /// LIT-22.3.6 AC1/AC4: a call whose result is assigned directly to
+    /// `self.<field>` gets a `DataFlows` reference even with zero
+    /// arguments (field-access evidence).
+    #[test]
+    fn call_assigned_to_self_field_gets_a_dataflows_reference()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let artifact = python_artifact("app/service.py")?;
+        let source = "def build_cache():\n    return {}\n\n\nclass Service:\n    def setup(self):\n        self.cache = build_cache()\n";
+        let analysis = PythonAnalyzer.analyze(&artifact, source);
+
+        assert!(
+            analysis
+                .references
+                .iter()
+                .any(|reference| reference.kind == PythonReferenceKind::DataFlows
+                    && reference.value == "build_cache")
+        );
+
+        Ok(())
+    }
+
+    /// LIT-22.3.6 AC1/AC4: a bare, no-argument call whose result is
+    /// discarded (not assigned to a field) has no data-flow evidence, so
+    /// no `DataFlows` reference is fabricated -- only the plain `Call`.
+    #[test]
+    fn bare_call_with_no_arguments_has_no_dataflows_reference()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let artifact = python_artifact("app/service.py")?;
+        let source = "def refresh():\n    return None\n\n\ndef run():\n    refresh()\n";
+        let analysis = PythonAnalyzer.analyze(&artifact, source);
+
+        assert!(
+            !analysis
+                .references
+                .iter()
+                .any(|reference| reference.kind == PythonReferenceKind::DataFlows)
+        );
+        assert!(
+            analysis
+                .references
+                .iter()
+                .any(|reference| reference.kind == PythonReferenceKind::Call
+                    && reference.value == "refresh")
+        );
 
         Ok(())
     }

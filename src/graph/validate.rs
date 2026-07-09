@@ -203,7 +203,9 @@ fn target_kind_allowed(kind: RelationKind, target: NodeKindTag) -> bool {
         | RelationKind::Inherits
         | RelationKind::TypeRefs
         | RelationKind::Usages
-        | RelationKind::Ffi => matches!(target, NodeKindTag::Symbol),
+        | RelationKind::Ffi
+        | RelationKind::DataFlows
+        | RelationKind::SimilarTo => matches!(target, NodeKindTag::Symbol),
         RelationKind::References | RelationKind::Emits | RelationKind::ListensOn => true,
     }
 }

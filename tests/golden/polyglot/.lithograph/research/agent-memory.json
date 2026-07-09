@@ -12,7 +12,7 @@
     "deployment"
   ],
   "system_context": {
-    "project_summary": "Repository contains 23 artifact(s), 130 graph node(s), 141 graph relation(s), and 11 documentation module(s).",
+    "project_summary": "Repository contains 23 artifact(s), 130 graph node(s), 142 graph relation(s), and 11 documentation module(s).",
     "included_components": [
       "Configuration (Configuration)",
       "assets (Directory)",
@@ -526,7 +526,7 @@
       }
     ],
     "architecture_facts": [
-      "knowledge graph schema: 130 node(s), 141 relation(s)",
+      "knowledge graph schema: 130 node(s), 142 relation(s)",
       "container/component candidate: Configuration (Configuration)",
       "container/component candidate: assets (Directory)",
       "container/component candidate: data (Directory)",
@@ -543,7 +543,7 @@
       "Configuration (Configuration) score 50",
       "Documentation (Documentation) score 44",
       "Infrastructure (Infrastructure) score 42",
-      "python_app (PythonPackage) score 37",
+      "python_app (PythonPackage) score 38",
       "fixture-worker (RustCrate) score 32",
       "root (Directory) score 14",
       "generated (Directory) score 6",
@@ -756,7 +756,7 @@
       "Configuration (Configuration) score 50",
       "Documentation (Documentation) score 44",
       "Infrastructure (Infrastructure) score 42",
-      "python_app (PythonPackage) score 37",
+      "python_app (PythonPackage) score 38",
       "fixture-worker (RustCrate) score 32",
       "root (Directory) score 14",
       "generated (Directory) score 6",
