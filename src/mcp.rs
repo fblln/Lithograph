@@ -61,6 +61,10 @@ pub const MCP_TOOLS: &[McpToolInfo] = &[
         description: "Grep-like code search. Params: query, path_contains?, language?, module_id?, package?, graph_node_id?, limit?.",
     },
     McpToolInfo {
+        name: "search_fulltext",
+        description: "BM25 full-text search over symbols/docs/paths/facts. Params: query, limit?.",
+    },
+    McpToolInfo {
         name: "trace_path",
         description: "Traces relations from a node. Params: query, direction?, depth?.",
     },
@@ -202,6 +206,23 @@ impl WikiMcpServer {
                     &modules,
                     &params,
                 ))?)
+            }
+            "search_fulltext" => {
+                let index: crate::fts::FtsIndex = JsonStore
+                    .read(&self.repo_root.join(".lithograph/fts-index.json"))?
+                    .ok_or("no FTS index found; run init or update first")?;
+                let query = request
+                    .params
+                    .get("query")
+                    .and_then(Value::as_str)
+                    .ok_or("search_fulltext requires params.query")?;
+                let limit = request
+                    .params
+                    .get("limit")
+                    .and_then(Value::as_u64)
+                    .and_then(|value| usize::try_from(value).ok())
+                    .unwrap_or_default();
+                Ok(serde_json::to_value(index.search(query, limit))?)
             }
             "trace_path" => {
                 let graph = self.load_graph()?;
@@ -741,6 +762,49 @@ mod tests {
             params: json!({}),
         });
         assert_eq!(empty_query.result, Some(json!([])));
+
+        Ok(())
+    }
+
+    /// LIT-22.4.3 AC1/AC2: `search_fulltext` reads the FTS index persisted
+    /// by `init` and returns BM25-ranked results, and rejects a request
+    /// with no `params.query`.
+    #[test]
+    fn search_fulltext_returns_ranked_results_and_requires_a_query()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let server = WikiMcpServer::new(temp.path());
+
+        let response = server.handle(McpRequest {
+            id: json!(1),
+            tool: "search_fulltext".to_owned(),
+            params: json!({ "query": "RouteService" }),
+        });
+        let results = response
+            .result
+            .as_ref()
+            .and_then(Value::as_array)
+            .ok_or("expected an array of results")?;
+        assert!(!results.is_empty());
+        assert!(results[0].get("score").and_then(Value::as_f64).is_some());
+
+        let missing_query = server.handle(McpRequest {
+            id: json!(2),
+            tool: "search_fulltext".to_owned(),
+            params: json!({}),
+        });
+        assert!(missing_query.result.is_none());
+        assert!(
+            missing_query
+                .error
+                .as_ref()
+                .is_some_and(|error| error.contains("requires params.query"))
+        );
 
         Ok(())
     }

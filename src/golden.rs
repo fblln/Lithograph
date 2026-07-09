@@ -132,6 +132,7 @@ const LITHOGRAPH_SNAPSHOT_FILES: &[&str] = &[
     ".lithograph/manifest.json",
     ".lithograph/graph.json",
     ".lithograph/graph/current.json",
+    ".lithograph/fts-index.json",
     ".lithograph/research/brief.json",
     ".lithograph/research/agent-memory.json",
     ".lithograph/research/system-context.json",

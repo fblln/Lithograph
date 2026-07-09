@@ -1,0 +1,514 @@
+{
+  "documents": [
+    {
+      "id": "artifact:.github/workflows/ci.yml",
+      "kind": "Path",
+      "reference": ".github/workflows/ci.yml",
+      "text": ".github/workflows/ci.yml"
+    },
+    {
+      "id": "artifact:Dockerfile",
+      "kind": "Path",
+      "reference": "Dockerfile",
+      "text": "Dockerfile"
+    },
+    {
+      "id": "artifact:LICENSE",
+      "kind": "Path",
+      "reference": "LICENSE",
+      "text": "LICENSE"
+    },
+    {
+      "id": "artifact:Makefile",
+      "kind": "Path",
+      "reference": "Makefile",
+      "text": "Makefile"
+    },
+    {
+      "id": "artifact:README.md",
+      "kind": "Path",
+      "reference": "README.md",
+      "text": "README.md"
+    },
+    {
+      "id": "artifact:assets/logo.svg",
+      "kind": "Path",
+      "reference": "assets/logo.svg",
+      "text": "assets/logo.svg"
+    },
+    {
+      "id": "artifact:config/schema.json",
+      "kind": "Path",
+      "reference": "config/schema.json",
+      "text": "config/schema.json"
+    },
+    {
+      "id": "artifact:config/settings.yaml",
+      "kind": "Path",
+      "reference": "config/settings.yaml",
+      "text": "config/settings.yaml"
+    },
+    {
+      "id": "artifact:data/sample.bin",
+      "kind": "Path",
+      "reference": "data/sample.bin",
+      "text": "data/sample.bin"
+    },
+    {
+      "id": "artifact:docker-compose.yml",
+      "kind": "Path",
+      "reference": "docker-compose.yml",
+      "text": "docker-compose.yml"
+    },
+    {
+      "id": "artifact:docs/architecture.md",
+      "kind": "Path",
+      "reference": "docs/architecture.md",
+      "text": "docs/architecture.md"
+    },
+    {
+      "id": "artifact:generated/client.py",
+      "kind": "Path",
+      "reference": "generated/client.py",
+      "text": "generated/client.py"
+    },
+    {
+      "id": "artifact:pyproject.toml",
+      "kind": "Path",
+      "reference": "pyproject.toml",
+      "text": "pyproject.toml"
+    },
+    {
+      "id": "artifact:requirements.txt",
+      "kind": "Path",
+      "reference": "requirements.txt",
+      "text": "requirements.txt"
+    },
+    {
+      "id": "artifact:rust/Cargo.toml",
+      "kind": "Path",
+      "reference": "rust/Cargo.toml",
+      "text": "rust/Cargo.toml"
+    },
+    {
+      "id": "artifact:rust/src/bin/worker.rs",
+      "kind": "Path",
+      "reference": "rust/src/bin/worker.rs",
+      "text": "rust/src/bin/worker.rs"
+    },
+    {
+      "id": "artifact:rust/src/lib.rs",
+      "kind": "Path",
+      "reference": "rust/src/lib.rs",
+      "text": "rust/src/lib.rs"
+    },
+    {
+      "id": "artifact:src/python_app/__init__.py",
+      "kind": "Path",
+      "reference": "src/python_app/__init__.py",
+      "text": "src/python_app/__init__.py"
+    },
+    {
+      "id": "artifact:src/python_app/service.py",
+      "kind": "Path",
+      "reference": "src/python_app/service.py",
+      "text": "src/python_app/service.py"
+    },
+    {
+      "id": "artifact:vendor/example/lib.rs",
+      "kind": "Path",
+      "reference": "vendor/example/lib.rs",
+      "text": "vendor/example/lib.rs"
+    },
+    {
+      "id": "artifact:web/index.html",
+      "kind": "Path",
+      "reference": "web/index.html",
+      "text": "web/index.html"
+    },
+    {
+      "id": "artifact:web/package.json",
+      "kind": "Path",
+      "reference": "web/package.json",
+      "text": "web/package.json"
+    },
+    {
+      "id": "artifact:web/src/App.tsx",
+      "kind": "Path",
+      "reference": "web/src/App.tsx",
+      "text": "web/src/App.tsx"
+    },
+    {
+      "id": "command:.github/workflows/ci.yml#jobs.checks.steps[1]",
+      "kind": "Fact",
+      "reference": "python -m pytest",
+      "text": "python -m pytest"
+    },
+    {
+      "id": "command:.github/workflows/ci.yml#jobs.checks.steps[2]",
+      "kind": "Fact",
+      "reference": "cargo test --manifest-path rust/Cargo.toml",
+      "text": "cargo test --manifest-path rust/Cargo.toml"
+    },
+    {
+      "id": "command:.github/workflows/ci.yml#jobs.checks.steps[3]",
+      "kind": "Fact",
+      "reference": "npm --prefix web run lint",
+      "text": "npm --prefix web run lint"
+    },
+    {
+      "id": "command:.github/workflows/ci.yml#jobs.checks.steps[4]",
+      "kind": "Fact",
+      "reference": "docker build -t ghcr.io/example/route-api:${{ github.sha }} .",
+      "text": "docker build -t ghcr.io/example/route-api:${{ github.sha }} ."
+    },
+    {
+      "id": "command:Dockerfile#14",
+      "kind": "Fact",
+      "reference": "[\"python\", \"-m\", \"python_app.service\"]",
+      "text": "[\"python\", \"-m\", \"python_app.service\"]"
+    },
+    {
+      "id": "command:Dockerfile#4",
+      "kind": "Fact",
+      "reference": "cargo build --manifest-path rust/Cargo.toml --release",
+      "text": "cargo build --manifest-path rust/Cargo.toml --release"
+    },
+    {
+      "id": "command:Dockerfile#9",
+      "kind": "Fact",
+      "reference": "pip install --no-cache-dir -r requirements.txt",
+      "text": "pip install --no-cache-dir -r requirements.txt"
+    },
+    {
+      "id": "command:Makefile#12",
+      "kind": "Fact",
+      "reference": "npm --prefix web run lint",
+      "text": "npm --prefix web run lint"
+    },
+    {
+      "id": "command:Makefile#15",
+      "kind": "Fact",
+      "reference": "docker build -t ghcr.io/example/route-api:dev .",
+      "text": "docker build -t ghcr.io/example/route-api:dev ."
+    },
+    {
+      "id": "command:Makefile#6",
+      "kind": "Fact",
+      "reference": "python -m pytest",
+      "text": "python -m pytest"
+    },
+    {
+      "id": "command:Makefile#9",
+      "kind": "Fact",
+      "reference": "cargo test --manifest-path rust/Cargo.toml",
+      "text": "cargo test --manifest-path rust/Cargo.toml"
+    },
+    {
+      "id": "command:config/settings.yaml#service.command",
+      "kind": "Fact",
+      "reference": "python -m python_app.service",
+      "text": "python -m python_app.service"
+    },
+    {
+      "id": "command:docs/architecture.md#21",
+      "kind": "Fact",
+      "reference": "make test",
+      "text": "make test"
+    },
+    {
+      "id": "command:docs/architecture.md#22",
+      "kind": "Fact",
+      "reference": "cargo test --manifest-path rust/Cargo.toml",
+      "text": "cargo test --manifest-path rust/Cargo.toml"
+    },
+    {
+      "id": "command:docs/architecture.md#23",
+      "kind": "Fact",
+      "reference": "python -m pytest",
+      "text": "python -m pytest"
+    },
+    {
+      "id": "command:src/python_app/service.py#29",
+      "kind": "Fact",
+      "reference": "[worker_path, \"--route\", str(route_file)]",
+      "text": "[worker_path, \"--route\", str(route_file)]"
+    },
+    {
+      "id": "config:.github/workflows/ci.yml#jobs.checks",
+      "kind": "Fact",
+      "reference": "checks",
+      "text": "Job checks"
+    },
+    {
+      "id": "config:config/settings.yaml#service.name",
+      "kind": "Fact",
+      "reference": "route-api",
+      "text": "Service route-api"
+    },
+    {
+      "id": "config:config/settings.yaml#service.port",
+      "kind": "Fact",
+      "reference": "8080",
+      "text": "Port 8080"
+    },
+    {
+      "id": "config:docker-compose.yml#services.api",
+      "kind": "Fact",
+      "reference": "api",
+      "text": "Service api"
+    },
+    {
+      "id": "config:docker-compose.yml#services.web",
+      "kind": "Fact",
+      "reference": "web",
+      "text": "Service web"
+    },
+    {
+      "id": "doc:README.md#1",
+      "kind": "Documentation",
+      "reference": "Polyglot Fixture",
+      "text": "Polyglot Fixture"
+    },
+    {
+      "id": "doc:README.md#13",
+      "kind": "Documentation",
+      "reference": "Expected Artifact Categories",
+      "text": "Expected Artifact Categories"
+    },
+    {
+      "id": "doc:README.md#40",
+      "kind": "Documentation",
+      "reference": "Offline Guarantees",
+      "text": "Offline Guarantees"
+    },
+    {
+      "id": "doc:docs/architecture.md#1",
+      "kind": "Documentation",
+      "reference": "Architecture Notes",
+      "text": "Architecture Notes"
+    },
+    {
+      "id": "env:RIDGELINE_CACHE_DIR",
+      "kind": "Fact",
+      "reference": "RIDGELINE_CACHE_DIR",
+      "text": "RIDGELINE_CACHE_DIR"
+    },
+    {
+      "id": "env:RIDGELINE_WORKER",
+      "kind": "Fact",
+      "reference": "RIDGELINE_WORKER",
+      "text": "RIDGELINE_WORKER"
+    },
+    {
+      "id": "env:VERSION",
+      "kind": "Fact",
+      "reference": "VERSION",
+      "text": "VERSION"
+    },
+    {
+      "id": "package:@vitejs/plugin-react",
+      "kind": "Fact",
+      "reference": "@vitejs/plugin-react",
+      "text": "@vitejs/plugin-react"
+    },
+    {
+      "id": "package:__future__",
+      "kind": "Fact",
+      "reference": "__future__",
+      "text": "__future__"
+    },
+    {
+      "id": "package:anyhow",
+      "kind": "Fact",
+      "reference": "anyhow",
+      "text": "anyhow"
+    },
+    {
+      "id": "package:fixture-worker",
+      "kind": "Fact",
+      "reference": "fixture-worker",
+      "text": "fixture-worker"
+    },
+    {
+      "id": "package:json",
+      "kind": "Fact",
+      "reference": "json",
+      "text": "json"
+    },
+    {
+      "id": "package:os",
+      "kind": "Fact",
+      "reference": "os",
+      "text": "os"
+    },
+    {
+      "id": "package:pathlib",
+      "kind": "Fact",
+      "reference": "pathlib",
+      "text": "pathlib"
+    },
+    {
+      "id": "package:polyglot-fixture",
+      "kind": "Fact",
+      "reference": "polyglot-fixture",
+      "text": "polyglot-fixture"
+    },
+    {
+      "id": "package:pydantic",
+      "kind": "Fact",
+      "reference": "pydantic",
+      "text": "pydantic"
+    },
+    {
+      "id": "package:pytest",
+      "kind": "Fact",
+      "reference": "pytest",
+      "text": "pytest"
+    },
+    {
+      "id": "package:std",
+      "kind": "Fact",
+      "reference": "std",
+      "text": "std"
+    },
+    {
+      "id": "package:subprocess",
+      "kind": "Fact",
+      "reference": "subprocess",
+      "text": "subprocess"
+    },
+    {
+      "id": "package:typescript",
+      "kind": "Fact",
+      "reference": "typescript",
+      "text": "typescript"
+    },
+    {
+      "id": "package:vite",
+      "kind": "Fact",
+      "reference": "vite",
+      "text": "vite"
+    },
+    {
+      "id": "symbol:generated/client.py#generated.client::call_route_api",
+      "kind": "Symbol",
+      "reference": "generated.client::call_route_api",
+      "text": "generated.client::call_route_api "
+    },
+    {
+      "id": "symbol:rust/src/bin/worker.rs#worker::main",
+      "kind": "Symbol",
+      "reference": "worker::main",
+      "text": "worker::main "
+    },
+    {
+      "id": "symbol:rust/src/lib.rs#::RouteBake",
+      "kind": "Symbol",
+      "reference": "::RouteBake",
+      "text": "::RouteBake Provides route baking behavior."
+    },
+    {
+      "id": "symbol:rust/src/lib.rs#::RouteBaker",
+      "kind": "Symbol",
+      "reference": "::RouteBaker",
+      "text": "::RouteBaker Configurable route baker."
+    },
+    {
+      "id": "symbol:rust/src/lib.rs#::bake_route",
+      "kind": "Symbol",
+      "reference": "::bake_route",
+      "text": "::bake_route Bakes a route with the default baker."
+    },
+    {
+      "id": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
+      "kind": "Symbol",
+      "reference": "src.python_app.service::RouteService",
+      "text": "src.python_app.service::RouteService Loads route metadata and delegates expensive work to the Rust worker."
+    },
+    {
+      "id": "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
+      "kind": "Symbol",
+      "reference": "src.python_app.service::RouteService::__init__",
+      "text": "src.python_app.service::RouteService::__init__ "
+    },
+    {
+      "id": "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
+      "kind": "Symbol",
+      "reference": "src.python_app.service::RouteService::bake_route",
+      "text": "src.python_app.service::RouteService::bake_route "
+    },
+    {
+      "id": "symbol:src/python_app/service.py#src.python_app.service::RouteService::load_settings",
+      "kind": "Symbol",
+      "reference": "src.python_app.service::RouteService::load_settings",
+      "text": "src.python_app.service::RouteService::load_settings "
+    },
+    {
+      "id": "symbol:src/python_app/service.py#src.python_app.service::run_worker",
+      "kind": "Symbol",
+      "reference": "src.python_app.service::run_worker",
+      "text": "src.python_app.service::run_worker Run the Rust worker and return its output."
+    },
+    {
+      "id": "symbol:vendor/example/lib.rs#vendor::example::vendored_helper",
+      "kind": "Symbol",
+      "reference": "vendor::example::vendored_helper",
+      "text": "vendor::example::vendored_helper "
+    },
+    {
+      "id": "symbol:web/index.html::element@L2",
+      "kind": "Symbol",
+      "reference": "web/index.html::element@L2",
+      "text": "web/index.html::element@L2 "
+    },
+    {
+      "id": "symbol:web/index.html::element@L3",
+      "kind": "Symbol",
+      "reference": "web/index.html::element@L3",
+      "text": "web/index.html::element@L3 "
+    },
+    {
+      "id": "symbol:web/index.html::element@L4",
+      "kind": "Symbol",
+      "reference": "web/index.html::element@L4",
+      "text": "web/index.html::element@L4 "
+    },
+    {
+      "id": "symbol:web/index.html::element@L5",
+      "kind": "Symbol",
+      "reference": "web/index.html::element@L5",
+      "text": "web/index.html::element@L5 "
+    },
+    {
+      "id": "symbol:web/index.html::element@L7",
+      "kind": "Symbol",
+      "reference": "web/index.html::element@L7",
+      "text": "web/index.html::element@L7 "
+    },
+    {
+      "id": "symbol:web/index.html::element@L8",
+      "kind": "Symbol",
+      "reference": "web/index.html::element@L8",
+      "text": "web/index.html::element@L8 "
+    },
+    {
+      "id": "symbol:web/index.html::script_element@L9",
+      "kind": "Symbol",
+      "reference": "web/index.html::script_element@L9",
+      "text": "web/index.html::script_element@L9 "
+    },
+    {
+      "id": "symbol:web/src/App.tsx::function_declaration@L13",
+      "kind": "Symbol",
+      "reference": "web/src/App.tsx::function_declaration@L13",
+      "text": "web/src/App.tsx::function_declaration@L13 "
+    },
+    {
+      "id": "symbol:web/src/App.tsx::type_alias_declaration@L3",
+      "kind": "Symbol",
+      "reference": "web/src/App.tsx::type_alias_declaration@L3",
+      "text": "web/src/App.tsx::type_alias_declaration@L3 "
+    }
+  ]
+}

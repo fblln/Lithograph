@@ -5,6 +5,7 @@ use crate::adr::AdrStore;
 use crate::analysis::AnalysisCache;
 use crate::domain::{Artifact, EvidenceRef};
 use crate::drift::DriftDetector;
+use crate::fts::FtsIndex;
 use crate::generation::{
     ArchitectureViewContext, ContextBuilder, LanguageModel, ModelError, PageRenderer, RenderError,
 };
@@ -310,6 +311,13 @@ pub fn run_init_with_options(
 
         let graph_store_outcome = GraphStore::new(repo_root).save(&graph)?;
         let graph_path = graph_store_outcome.legacy_graph_path;
+        // The FTS index is a pure function of the graph (LIT-22.4.3 AC1),
+        // so it is rebuilt from scratch every run and only actually
+        // rewritten (`write_if_changed`) when its content differs.
+        JsonStore.write_if_changed(
+            &lithograph_dir.join("fts-index.json"),
+            &FtsIndex::build(&graph),
+        )?;
         write_research_artifacts(&lithograph_dir, &research)?;
         let manifest_path = lithograph_dir.join("manifest.json");
         JsonStore.write_if_changed(&manifest_path, &manifest)?;
@@ -556,6 +564,13 @@ pub fn run_update_with_options(
 
         let graph_store_outcome = GraphStore::new(repo_root).save(&graph)?;
         let graph_path = graph_store_outcome.legacy_graph_path;
+        // The FTS index is a pure function of the graph (LIT-22.4.3 AC1),
+        // so it is rebuilt from scratch every run and only actually
+        // rewritten (`write_if_changed`) when its content differs.
+        JsonStore.write_if_changed(
+            &lithograph_dir.join("fts-index.json"),
+            &FtsIndex::build(&graph),
+        )?;
         write_research_artifacts(&lithograph_dir, &research)?;
         JsonStore.write_if_changed(&manifest_path, &manifest)?;
         JsonStore.write_if_changed(&snapshot_path, &snapshot)?;
