@@ -10,7 +10,7 @@ use crate::manifest::{
     DocumentationPage, GenerationTask, PageManifest, PageManifestBuilder, TaskKind,
 };
 use crate::plan::{DocumentationModule, ModulePlanner};
-use crate::research::{ResearchBrief, ResearchBuilder};
+use crate::research::{AgentMemoryIndex, ResearchBrief, ResearchBuilder};
 use crate::run::{
     PipelineInvalidationMetadata, PipelineStage, RepositorySnapshot, RunMetadata, RunMetadataInput,
     StageTiming,
@@ -577,7 +577,8 @@ fn write_research_artifacts(
 ) -> Result<(), InitError> {
     let research_dir = lithograph_dir.join("research");
     JsonStore.write_if_changed(&research_dir.join("brief.json"), research)?;
-    research.agent_memory.persist(&research_dir)?;
+    AgentMemoryIndex::new(research.agent_memory.clone(), research.input_hash.clone())
+        .persist(&research_dir)?;
     JsonStore.write_if_changed(
         &research_dir.join("configuration.json"),
         &research.configuration,

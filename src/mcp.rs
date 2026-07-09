@@ -423,6 +423,26 @@ mod tests {
                 .as_ref()
                 .is_some_and(|value| value.get("architecture").is_some())
         );
+        // LIT-22.6.5 AC1/AC4: MCP access exposes the versioned index fields,
+        // not just the raw reports.
+        assert!(
+            research
+                .result
+                .as_ref()
+                .is_some_and(|value| value.get("schema_version") == Some(&json!(1)))
+        );
+        assert!(
+            research
+                .result
+                .as_ref()
+                .is_some_and(|value| value.get("report_keys").is_some_and(Value::is_array))
+        );
+        assert!(
+            research
+                .result
+                .as_ref()
+                .is_some_and(|value| value.get("input_hash").is_some_and(Value::is_string))
+        );
         assert!(
             schema
                 .result

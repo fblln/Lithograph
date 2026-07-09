@@ -202,9 +202,9 @@ pub struct AgentMemory {
 }
 
 impl AgentMemory {
-    /// Persists one JSON file per agent, plus a combined `agent-memory.json`.
+    /// Persists one JSON file per agent (AC2). Does not write the combined
+    /// index; see [`AgentMemoryIndex::persist`].
     pub fn persist(&self, research_dir: &Path) -> std::io::Result<()> {
-        JsonStore.write_if_changed(&research_dir.join("agent-memory.json"), self)?;
         JsonStore.write_if_changed(
             &research_dir.join("system-context.json"),
             &self.system_context,
@@ -231,6 +231,110 @@ impl AgentMemory {
         }
         Ok(())
     }
+
+    /// Memory keys of every report actually populated this run, in a
+    /// stable order: always-present reports first, then optional ones
+    /// that are `Some` (LIT-22.6.5 AC1).
+    pub fn present_report_keys(&self) -> Vec<String> {
+        let mut keys = vec![
+            "system-context".to_owned(),
+            "domain-modules".to_owned(),
+            "architecture-report".to_owned(),
+            "workflows".to_owned(),
+            "boundaries".to_owned(),
+            "key-modules".to_owned(),
+        ];
+        if self.database.is_some() {
+            keys.push("database".to_owned());
+        }
+        if self.cross_service.is_some() {
+            keys.push("cross-service".to_owned());
+        }
+        if self.deployment.is_some() {
+            keys.push("deployment".to_owned());
+        }
+        keys
+    }
+}
+
+/// Current schema version stamped on every newly written
+/// [`AgentMemoryIndex`] (LIT-22.6.5 AC1/AC3). Bump this whenever
+/// `AgentMemory`'s persisted shape changes in a way a reader must know
+/// about; a file with a lower `schema_version` is stale and should be
+/// treated as absent (regenerate) rather than read as current.
+pub const AGENT_MEMORY_SCHEMA_VERSION: u32 = 1;
+
+/// Versioned envelope persisted as `agent-memory.json` (LIT-22.6.5 AC1):
+/// schema version, an input hash over the artifacts/graph that produced
+/// this memory, which pipeline stage produced it, and which per-agent
+/// report keys are actually populated -- so a future agent or MCP tool can
+/// tell what it is looking at without re-deriving it from the report
+/// bodies. `#[serde(flatten)]` keeps every `AgentMemory` field at the JSON
+/// top level (unchanged shape for existing readers), with the envelope
+/// fields as additional sibling keys.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentMemoryIndex {
+    /// Schema version this file was written with. `#[serde(default)]`
+    /// means a file written before this field existed reads back as `0`
+    /// -- an explicit, checkable "pre-versioning" marker (AC3) rather
+    /// than a guess.
+    #[serde(default)]
+    pub schema_version: u32,
+    /// Hash over the artifact content hashes and graph node ids that
+    /// produced this memory.
+    pub input_hash: String,
+    /// Pipeline stage that produced this memory (always `Research`,
+    /// recorded explicitly rather than assumed).
+    pub produced_by_stage: crate::run::PipelineStage,
+    /// Memory keys of every report actually populated (see
+    /// [`AgentMemory::present_report_keys`]).
+    pub report_keys: Vec<String>,
+    /// The reports themselves.
+    #[serde(flatten)]
+    pub memory: AgentMemory,
+}
+
+impl AgentMemoryIndex {
+    /// Wraps `memory` in a current-schema-version index.
+    pub fn new(memory: AgentMemory, input_hash: String) -> Self {
+        let report_keys = memory.present_report_keys();
+        Self {
+            schema_version: AGENT_MEMORY_SCHEMA_VERSION,
+            input_hash,
+            produced_by_stage: crate::run::PipelineStage::Research,
+            report_keys,
+            memory,
+        }
+    }
+
+    /// True when this index was written by the current schema version
+    /// (AC3). A caller that finds `false` should treat the memory as
+    /// stale rather than trust its shape.
+    pub fn is_current_schema(&self) -> bool {
+        self.schema_version == AGENT_MEMORY_SCHEMA_VERSION
+    }
+
+    /// Persists the combined index (AC1) and every per-agent report file
+    /// (AC2).
+    pub fn persist(&self, research_dir: &Path) -> std::io::Result<()> {
+        JsonStore.write_if_changed(&research_dir.join("agent-memory.json"), self)?;
+        self.memory.persist(research_dir)
+    }
+}
+
+/// Hashes the artifact content hashes and graph node ids that produced one
+/// research run, so a persisted [`AgentMemoryIndex`] can be checked against
+/// a later run without re-comparing every report field by field.
+fn research_input_hash(artifacts: &[Artifact], graph: &Graph) -> String {
+    let mut artifact_hashes: Vec<&str> = artifacts
+        .iter()
+        .map(|artifact| artifact.content_hash.as_str())
+        .collect();
+    artifact_hashes.sort_unstable();
+    let mut node_ids: Vec<&str> = graph.nodes.iter().map(|node| node.id().as_str()).collect();
+    node_ids.sort_unstable();
+    let combined = format!("{}\n{}", artifact_hashes.join(","), node_ids.join(","));
+    blake3::hash(combined.as_bytes()).to_hex().to_string()
 }
 
 /// Structured, persisted research facts for one repository snapshot.
@@ -248,6 +352,10 @@ pub struct ResearchBrief {
     pub key_modules: Vec<String>,
     /// Typed agent-style reports used by architecture documentation contexts.
     pub agent_memory: AgentMemory,
+    /// Hash over the artifacts/graph that produced `agent_memory`
+    /// (LIT-22.6.5 AC1); carried into [`AgentMemoryIndex::input_hash`]
+    /// when persisted.
+    pub input_hash: String,
 }
 
 /// Builds deterministic research artifacts from the already-validated graph.
@@ -315,6 +423,7 @@ impl ResearchBuilder {
             boundaries: boundaries.boundaries,
             configuration: configuration(artifacts, graph),
             key_modules: key_modules.modules,
+            input_hash: research_input_hash(artifacts, graph),
             agent_memory,
         }
     }
@@ -1123,7 +1232,7 @@ pub fn agent_memory_path(repo_root: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{LanguageSupportTier, ResearchBuilder, agent_memory_path};
+    use super::{AgentMemoryIndex, LanguageSupportTier, ResearchBuilder, agent_memory_path};
     use crate::graph::GraphBuilder;
     use crate::inventory::{RepositoryWalker, WalkOptions};
     use crate::plan::ModulePlanner;
@@ -1177,8 +1286,7 @@ mod tests {
         let brief = ResearchBuilder.build(&artifacts, &graph, &modules);
         let temp = tempfile::TempDir::new()?;
 
-        brief
-            .agent_memory
+        AgentMemoryIndex::new(brief.agent_memory, brief.input_hash)
             .persist(&temp.path().join(".lithograph/research"))?;
 
         assert!(agent_memory_path(temp.path()).exists());
@@ -1355,6 +1463,74 @@ mod tests {
         let second = ResearchBuilder.build(&artifacts, &graph, &modules);
 
         assert_eq!(first, second);
+
+        Ok(())
+    }
+
+    /// LIT-22.6.5 AC1: the persisted index carries the current schema
+    /// version, an input hash matching the brief, and every populated
+    /// report's memory key (the polyglot fixture has container/compose
+    /// evidence but no routes, so `deployment` is present and
+    /// `cross-service` is not).
+    #[test]
+    fn agent_memory_index_records_schema_version_input_hash_and_report_keys()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (artifacts, graph, modules) = polyglot_fixture()?;
+        let brief = ResearchBuilder.build(&artifacts, &graph, &modules);
+
+        let index = AgentMemoryIndex::new(brief.agent_memory.clone(), brief.input_hash.clone());
+
+        assert_eq!(index.schema_version, super::AGENT_MEMORY_SCHEMA_VERSION);
+        assert!(index.is_current_schema());
+        assert_eq!(index.input_hash, brief.input_hash);
+        assert!(!index.input_hash.is_empty());
+        assert!(index.report_keys.contains(&"system-context".to_owned()));
+        assert!(index.report_keys.contains(&"deployment".to_owned()));
+        assert!(!index.report_keys.contains(&"cross-service".to_owned()));
+
+        Ok(())
+    }
+
+    /// LIT-22.6.5 AC3: a file written before schema versioning existed (no
+    /// `schema_version` key at all) deserializes with `schema_version: 0`
+    /// rather than failing, and `is_current_schema` reports it as stale so
+    /// a caller knows to regenerate instead of trusting its shape.
+    #[test]
+    fn pre_versioning_agent_memory_json_is_detected_as_a_stale_schema()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (artifacts, graph, modules) = polyglot_fixture()?;
+        let brief = ResearchBuilder.build(&artifacts, &graph, &modules);
+        let current = AgentMemoryIndex::new(brief.agent_memory, brief.input_hash);
+        let mut json: serde_json::Value = serde_json::to_value(&current)?;
+        json.as_object_mut()
+            .ok_or("expected a JSON object")?
+            .remove("schema_version");
+
+        let parsed: AgentMemoryIndex = serde_json::from_value(json)?;
+
+        assert_eq!(parsed.schema_version, 0);
+        assert!(!parsed.is_current_schema());
+
+        Ok(())
+    }
+
+    /// LIT-22.6.5 AC4: persisting the same index twice does not rewrite
+    /// `agent-memory.json` the second time (no-op write stability).
+    #[test]
+    fn persisting_agent_memory_index_twice_is_a_no_op_write()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (artifacts, graph, modules) = polyglot_fixture()?;
+        let brief = ResearchBuilder.build(&artifacts, &graph, &modules);
+        let index = AgentMemoryIndex::new(brief.agent_memory, brief.input_hash);
+        let temp = tempfile::TempDir::new()?;
+        let research_dir = temp.path().join(".lithograph/research");
+
+        index.persist(&research_dir)?;
+        let first_modified = std::fs::metadata(agent_memory_path(temp.path()))?.modified()?;
+        index.persist(&research_dir)?;
+        let second_modified = std::fs::metadata(agent_memory_path(temp.path()))?.modified()?;
+
+        assert_eq!(first_modified, second_modified);
 
         Ok(())
     }
