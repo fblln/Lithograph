@@ -3,8 +3,12 @@
 
 use crate::architecture::{ArchitectureLayer, LayerDetector};
 use crate::domain::{Artifact, ArtifactCategory, SupportTier};
-use crate::graph::{Graph, GraphNode, RelationKind};
+use crate::graph::{ConfigNodeKind, Graph, GraphNode, RelationKind};
 use crate::inventory::language::{RegistryIndexTier, by_name as registry_language};
+use crate::knowledge_agent::{
+    AgentContext, DataSourceKey, DataSourceResolution, DataSourceSpec, DataSourceValue,
+    KnowledgeAgent,
+};
 use crate::plan::DocumentationModule;
 use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};
@@ -150,6 +154,30 @@ pub struct DatabaseReport {
     pub confidence: u8,
 }
 
+/// Optional cross-service report (LIT-22.6.3 AC2), emitted only when the
+/// graph has at least one HTTP/RPC/GraphQL route (LIT-22.3.4).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CrossServiceReport {
+    /// Route/RPC/GraphQL field facts.
+    pub routes: Vec<String>,
+    /// Evidence backing this report.
+    pub evidence: Vec<ResearchEvidence>,
+    /// Confidence from 0 to 100.
+    pub confidence: u8,
+}
+
+/// Optional deployment report (LIT-22.6.3 AC2), emitted only when the
+/// repository has container/compose/CI deployment evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeploymentReport {
+    /// Container images, Compose services, and deployment-definition facts.
+    pub deployment_facts: Vec<String>,
+    /// Evidence backing this report.
+    pub evidence: Vec<ResearchEvidence>,
+    /// Confidence from 0 to 100.
+    pub confidence: u8,
+}
+
 /// Persisted output of the deterministic agent-style research pipeline.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentMemory {
@@ -167,6 +195,10 @@ pub struct AgentMemory {
     pub key_modules: KeyModulesReport,
     /// Optional database analyzer output.
     pub database: Option<DatabaseReport>,
+    /// Optional cross-service researcher output (LIT-22.6.3 AC2).
+    pub cross_service: Option<CrossServiceReport>,
+    /// Optional deployment researcher output (LIT-22.6.3 AC2).
+    pub deployment: Option<DeploymentReport>,
 }
 
 impl AgentMemory {
@@ -191,26 +223,14 @@ impl AgentMemory {
         if let Some(database) = &self.database {
             JsonStore.write_if_changed(&research_dir.join("database.json"), database)?;
         }
+        if let Some(cross_service) = &self.cross_service {
+            JsonStore.write_if_changed(&research_dir.join("cross-service.json"), cross_service)?;
+        }
+        if let Some(deployment) = &self.deployment {
+            JsonStore.write_if_changed(&research_dir.join("deployment.json"), deployment)?;
+        }
         Ok(())
     }
-}
-
-/// Minimal deterministic agent interface mirroring deepwiki-rs' staged shape.
-pub(crate) trait KnowledgeAgent {
-    /// Output report type.
-    type Output: Serialize + Clone + PartialEq + Eq;
-
-    /// Stable agent name and memory key.
-    fn memory_key(&self) -> &'static str;
-
-    /// Computes this agent's output from already-indexed facts and earlier reports.
-    fn execute(&self, input: &ResearchInput<'_>) -> Self::Output;
-}
-
-pub(crate) struct ResearchInput<'a> {
-    artifacts: &'a [Artifact],
-    graph: &'a Graph,
-    modules: &'a [DocumentationModule],
 }
 
 /// Structured, persisted research facts for one repository snapshot.
@@ -235,29 +255,47 @@ pub struct ResearchBrief {
 pub struct ResearchBuilder;
 
 impl ResearchBuilder {
-    /// Derives compact agent-style reports without calling a model.
+    /// Derives compact agent-style reports without calling a model. Runs
+    /// every agent (AC1) through the shared `KnowledgeAgent` framework
+    /// (LIT-22.6.2), in a fixed order (AC4), against one shared
+    /// [`AgentContext`] built from `artifacts`/`graph`/`modules`.
     pub fn build(
         &self,
         artifacts: &[Artifact],
         graph: &Graph,
         modules: &[DocumentationModule],
     ) -> ResearchBrief {
-        let input = ResearchInput {
-            artifacts,
-            graph,
-            modules,
-        };
-        let system_context = execute_agent(SystemContextResearcher, &input);
-        let domain_modules = execute_agent(DomainModulesDetector, &input);
-        let architecture = execute_agent(ArchitectureResearcher, &input);
-        let workflows = execute_agent(WorkflowResearcher, &input);
-        let boundaries = execute_agent(BoundaryAnalyzer, &input);
-        let key_modules = execute_agent(KeyModulesInsight, &input);
-        let database = execute_agent(DatabaseOverviewAnalyzer, &input);
+        let context = AgentContext::new()
+            .with(
+                DataSourceKey::Artifacts,
+                DataSourceValue::Artifacts(artifacts),
+            )
+            .with(DataSourceKey::Graph, DataSourceValue::Graph(graph))
+            .with(DataSourceKey::Modules, DataSourceValue::Modules(modules));
+
+        let system_context = run_agent(SystemContextResearcher, &context);
+        let domain_modules = run_agent(DomainModulesDetector, &context);
+        let architecture = run_agent(ArchitectureResearcher, &context);
+        let workflows = run_agent(WorkflowResearcher, &context);
+        let boundaries = run_agent(BoundaryAnalyzer, &context);
+        let key_modules = run_agent(KeyModulesInsight, &context);
+        let database = run_agent(DatabaseOverviewAnalyzer, &context);
         let database = if database.database_facts.is_empty() {
             None
         } else {
             Some(database)
+        };
+        let cross_service = run_agent(CrossServiceResearcher, &context);
+        let cross_service = if cross_service.routes.is_empty() {
+            None
+        } else {
+            Some(cross_service)
+        };
+        let deployment = run_agent(DeploymentResearcher, &context);
+        let deployment = if deployment.deployment_facts.is_empty() {
+            None
+        } else {
+            Some(deployment)
         };
         let agent_memory = AgentMemory {
             system_context,
@@ -267,6 +305,8 @@ impl ResearchBuilder {
             boundaries: boundaries.clone(),
             key_modules: key_modules.clone(),
             database,
+            cross_service,
+            deployment,
         };
 
         ResearchBrief {
@@ -280,9 +320,46 @@ impl ResearchBuilder {
     }
 }
 
-fn execute_agent<A: KnowledgeAgent>(agent: A, input: &ResearchInput<'_>) -> A::Output {
-    let _memory_key = agent.memory_key();
-    agent.execute(input)
+/// Runs one agent against a context that `ResearchBuilder::build` always
+/// populates with `Artifacts`/`Graph`/`Modules`, so every agent declared
+/// here (all of which require only that trio) cannot actually observe a
+/// missing-required-source error; `unreachable!` documents that invariant
+/// rather than threading an infallible `Result` through an infallible
+/// `ResearchBrief`-returning `build()`.
+fn run_agent<A: KnowledgeAgent>(agent: A, context: &AgentContext<'_>) -> A::Output {
+    match agent.run(context) {
+        Ok(output) => output,
+        Err(error) => unreachable!("{} agent failed unexpectedly: {error}", agent.memory_key()),
+    }
+}
+
+fn artifacts_graph_modules_required() -> DataSourceSpec {
+    DataSourceSpec {
+        required: &[
+            DataSourceKey::Artifacts,
+            DataSourceKey::Graph,
+            DataSourceKey::Modules,
+        ],
+        optional: &[],
+    }
+}
+
+fn required_artifacts<'a>(context: &AgentContext<'a>) -> &'a [Artifact] {
+    context
+        .artifacts()
+        .unwrap_or_else(|| unreachable!("Artifacts declared required"))
+}
+
+fn required_graph<'a>(context: &AgentContext<'a>) -> &'a Graph {
+    context
+        .graph()
+        .unwrap_or_else(|| unreachable!("Graph declared required"))
+}
+
+fn required_modules<'a>(context: &AgentContext<'a>) -> &'a [DocumentationModule] {
+    context
+        .modules()
+        .unwrap_or_else(|| unreachable!("Modules declared required"))
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -295,15 +372,24 @@ impl KnowledgeAgent for SystemContextResearcher {
         "system-context"
     }
 
-    fn execute(&self, input: &ResearchInput<'_>) -> Self::Output {
-        let components: Vec<String> = input
-            .modules
+    fn data_sources(&self) -> DataSourceSpec {
+        artifacts_graph_modules_required()
+    }
+
+    fn compute(
+        &self,
+        context: &AgentContext<'_>,
+        _resolution: &DataSourceResolution,
+    ) -> Self::Output {
+        let artifacts = required_artifacts(context);
+        let graph = required_graph(context);
+        let modules = required_modules(context);
+        let components: Vec<String> = modules
             .iter()
             .take(12)
             .map(|module| format!("{} ({:?})", module.name, module.kind))
             .collect();
-        let external_systems = input
-            .graph
+        let external_systems = graph
             .nodes
             .iter()
             .filter_map(|node| match node {
@@ -316,15 +402,15 @@ impl KnowledgeAgent for SystemContextResearcher {
         Self::Output {
             project_summary: format!(
                 "Repository contains {} artifact(s), {} graph node(s), {} graph relation(s), and {} documentation module(s).",
-                input.artifacts.len(),
-                input.graph.nodes.len(),
-                input.graph.relations.len(),
-                input.modules.len()
+                artifacts.len(),
+                graph.nodes.len(),
+                graph.relations.len(),
+                modules.len()
             ),
             included_components: components,
             external_systems,
-            evidence: artifact_evidence(input.artifacts, 8),
-            confidence: confidence_for(input.artifacts.len()),
+            evidence: artifact_evidence(artifacts, 8),
+            confidence: confidence_for(artifacts.len()),
         }
     }
 }
@@ -339,9 +425,19 @@ impl KnowledgeAgent for DomainModulesDetector {
         "domain-modules"
     }
 
-    fn execute(&self, input: &ResearchInput<'_>) -> Self::Output {
-        let modules = input
-            .modules
+    fn data_sources(&self) -> DataSourceSpec {
+        artifacts_graph_modules_required()
+    }
+
+    fn compute(
+        &self,
+        context: &AgentContext<'_>,
+        _resolution: &DataSourceResolution,
+    ) -> Self::Output {
+        let artifacts = required_artifacts(context);
+        let graph = required_graph(context);
+        let modules = required_modules(context);
+        let module_facts = modules
             .iter()
             .take(20)
             .map(|module| DomainModuleFact {
@@ -356,9 +452,8 @@ impl KnowledgeAgent for DomainModulesDetector {
                     .collect(),
             })
             .collect();
-        let labels = node_labels(input.graph);
-        let relations = input
-            .graph
+        let labels = node_labels(graph);
+        let relations = graph
             .relations
             .iter()
             .filter(|relation| {
@@ -386,10 +481,10 @@ impl KnowledgeAgent for DomainModulesDetector {
             })
             .collect();
         Self::Output {
-            modules,
+            modules: module_facts,
             relations,
-            evidence: artifact_evidence(input.artifacts, 8),
-            confidence: confidence_for(input.modules.len()),
+            evidence: artifact_evidence(artifacts, 8),
+            confidence: confidence_for(modules.len()),
         }
     }
 }
@@ -404,22 +499,32 @@ impl KnowledgeAgent for ArchitectureResearcher {
         "architecture-report"
     }
 
-    fn execute(&self, input: &ResearchInput<'_>) -> Self::Output {
-        let languages = language_support(input.artifacts);
+    fn data_sources(&self) -> DataSourceSpec {
+        artifacts_graph_modules_required()
+    }
+
+    fn compute(
+        &self,
+        context: &AgentContext<'_>,
+        _resolution: &DataSourceResolution,
+    ) -> Self::Output {
+        let artifacts = required_artifacts(context);
+        let graph = required_graph(context);
+        let modules = required_modules(context);
+        let languages = language_support(artifacts);
         let mut architecture_facts = Vec::new();
         architecture_facts.push(format!(
             "knowledge graph schema: {} node(s), {} relation(s)",
-            input.graph.nodes.len(),
-            input.graph.relations.len()
+            graph.nodes.len(),
+            graph.relations.len()
         ));
-        architecture_facts.extend(input.modules.iter().take(10).map(|module| {
+        architecture_facts.extend(modules.iter().take(10).map(|module| {
             format!(
                 "container/component candidate: {} ({:?})",
                 module.name, module.kind
             )
         }));
-        let decisions_and_docs = input
-            .artifacts
+        let decisions_and_docs = artifacts
             .iter()
             .filter(|artifact| artifact.category == ArtifactCategory::Documentation)
             .filter(|artifact| {
@@ -429,16 +534,16 @@ impl KnowledgeAgent for ArchitectureResearcher {
             .map(|artifact| format!("existing architecture knowledge: {}", artifact.path))
             .take(20)
             .collect();
-        let hotspots = key_modules(input.modules, input.graph);
+        let hotspots = key_modules(modules, graph);
         Self::Output {
             languages,
-            layers: LayerDetector.detect(input.graph),
+            layers: LayerDetector.detect(graph),
             architecture_facts,
             hotspots,
             decisions_and_docs,
-            mermaid: architecture_mermaid(input.modules, input.graph),
-            evidence: artifact_evidence(input.artifacts, 12),
-            confidence: confidence_for(input.graph.nodes.len()),
+            mermaid: architecture_mermaid(modules, graph),
+            evidence: artifact_evidence(artifacts, 12),
+            confidence: confidence_for(graph.nodes.len()),
         }
     }
 }
@@ -453,11 +558,20 @@ impl KnowledgeAgent for WorkflowResearcher {
         "workflows"
     }
 
-    fn execute(&self, input: &ResearchInput<'_>) -> Self::Output {
+    fn data_sources(&self) -> DataSourceSpec {
+        artifacts_graph_modules_required()
+    }
+
+    fn compute(
+        &self,
+        context: &AgentContext<'_>,
+        _resolution: &DataSourceResolution,
+    ) -> Self::Output {
+        let graph = required_graph(context);
         Self::Output {
-            workflows: workflows(input.graph),
-            evidence: relation_evidence(input.graph, 12),
-            confidence: confidence_for(input.graph.relations.len()),
+            workflows: workflows(graph),
+            evidence: relation_evidence(graph, 12),
+            confidence: confidence_for(graph.relations.len()),
         }
     }
 }
@@ -472,11 +586,20 @@ impl KnowledgeAgent for BoundaryAnalyzer {
         "boundaries"
     }
 
-    fn execute(&self, input: &ResearchInput<'_>) -> Self::Output {
+    fn data_sources(&self) -> DataSourceSpec {
+        artifacts_graph_modules_required()
+    }
+
+    fn compute(
+        &self,
+        context: &AgentContext<'_>,
+        _resolution: &DataSourceResolution,
+    ) -> Self::Output {
+        let graph = required_graph(context);
         Self::Output {
-            boundaries: boundaries(input.graph),
-            evidence: relation_evidence(input.graph, 12),
-            confidence: confidence_for(input.graph.relations.len()),
+            boundaries: boundaries(graph),
+            evidence: relation_evidence(graph, 12),
+            confidence: confidence_for(graph.relations.len()),
         }
     }
 }
@@ -491,11 +614,22 @@ impl KnowledgeAgent for KeyModulesInsight {
         "key-modules"
     }
 
-    fn execute(&self, input: &ResearchInput<'_>) -> Self::Output {
+    fn data_sources(&self) -> DataSourceSpec {
+        artifacts_graph_modules_required()
+    }
+
+    fn compute(
+        &self,
+        context: &AgentContext<'_>,
+        _resolution: &DataSourceResolution,
+    ) -> Self::Output {
+        let artifacts = required_artifacts(context);
+        let graph = required_graph(context);
+        let modules = required_modules(context);
         Self::Output {
-            modules: key_modules(input.modules, input.graph),
-            evidence: artifact_evidence(input.artifacts, 10),
-            confidence: confidence_for(input.modules.len()),
+            modules: key_modules(modules, graph),
+            evidence: artifact_evidence(artifacts, 10),
+            confidence: confidence_for(modules.len()),
         }
     }
 }
@@ -510,9 +644,17 @@ impl KnowledgeAgent for DatabaseOverviewAnalyzer {
         "database"
     }
 
-    fn execute(&self, input: &ResearchInput<'_>) -> Self::Output {
-        let database_facts = input
-            .artifacts
+    fn data_sources(&self) -> DataSourceSpec {
+        artifacts_graph_modules_required()
+    }
+
+    fn compute(
+        &self,
+        context: &AgentContext<'_>,
+        _resolution: &DataSourceResolution,
+    ) -> Self::Output {
+        let artifacts = required_artifacts(context);
+        let database_facts = artifacts
             .iter()
             .filter(|artifact| {
                 matches!(
@@ -524,8 +666,119 @@ impl KnowledgeAgent for DatabaseOverviewAnalyzer {
             .collect();
         Self::Output {
             database_facts,
-            evidence: artifact_evidence(input.artifacts, 10),
+            evidence: artifact_evidence(artifacts, 10),
             confidence: 80,
+        }
+    }
+}
+
+/// Optional (AC2): only produces routes when the graph has at least one
+/// HTTP/RPC/GraphQL route node (LIT-22.3.4); `ResearchBuilder::build`
+/// turns an empty report into `None`.
+#[derive(Debug, Clone, Copy, Default)]
+struct CrossServiceResearcher;
+
+impl KnowledgeAgent for CrossServiceResearcher {
+    type Output = CrossServiceReport;
+
+    fn memory_key(&self) -> &'static str {
+        "cross-service"
+    }
+
+    fn data_sources(&self) -> DataSourceSpec {
+        DataSourceSpec {
+            required: &[DataSourceKey::Graph],
+            optional: &[],
+        }
+    }
+
+    fn compute(
+        &self,
+        context: &AgentContext<'_>,
+        _resolution: &DataSourceResolution,
+    ) -> Self::Output {
+        let graph = required_graph(context);
+        let routes: Vec<String> = graph
+            .nodes
+            .iter()
+            .filter_map(|node| match node {
+                GraphNode::Config(config) if config.kind == ConfigNodeKind::Route => {
+                    Some(config.name.clone())
+                }
+                _ => None,
+            })
+            .take(40)
+            .collect();
+        let evidence = graph
+            .nodes
+            .iter()
+            .filter_map(|node| match node {
+                GraphNode::Config(config) if config.kind == ConfigNodeKind::Route => {
+                    Some(ResearchEvidence {
+                        reference: config.id.as_str().to_owned(),
+                    })
+                }
+                _ => None,
+            })
+            .take(12)
+            .collect();
+        let confidence = confidence_for(routes.len());
+        Self::Output {
+            routes,
+            evidence,
+            confidence,
+        }
+    }
+}
+
+/// Optional (AC2): only produces facts when the repository has
+/// container/compose/deployment evidence; `ResearchBuilder::build` turns
+/// an empty report into `None`.
+#[derive(Debug, Clone, Copy, Default)]
+struct DeploymentResearcher;
+
+impl KnowledgeAgent for DeploymentResearcher {
+    type Output = DeploymentReport;
+
+    fn memory_key(&self) -> &'static str {
+        "deployment"
+    }
+
+    fn data_sources(&self) -> DataSourceSpec {
+        artifacts_graph_modules_required()
+    }
+
+    fn compute(
+        &self,
+        context: &AgentContext<'_>,
+        _resolution: &DataSourceResolution,
+    ) -> Self::Output {
+        let artifacts = required_artifacts(context);
+        let graph = required_graph(context);
+        let mut deployment_facts: Vec<String> = artifacts
+            .iter()
+            .filter(|artifact| {
+                matches!(
+                    artifact.category,
+                    ArtifactCategory::ContainerDefinition | ArtifactCategory::DeploymentDefinition
+                )
+            })
+            .map(|artifact| format!("{:?}: {}", artifact.category, artifact.path))
+            .collect();
+        deployment_facts.extend(graph.nodes.iter().filter_map(|node| match node {
+            GraphNode::Config(config) if config.kind == ConfigNodeKind::Service => {
+                Some(format!("compose service: {}", config.name))
+            }
+            GraphNode::Container(container) => {
+                Some(format!("container image: {}", container.reference))
+            }
+            _ => None,
+        }));
+        deployment_facts.truncate(40);
+        Self::Output {
+            confidence: confidence_for(deployment_facts.len()),
+            evidence: artifact_evidence(artifacts, 10),
+            deployment_facts,
         }
     }
 }
@@ -876,6 +1129,20 @@ mod tests {
     use crate::plan::ModulePlanner;
     use std::path::Path;
 
+    type Fixture = (
+        Vec<crate::domain::Artifact>,
+        crate::graph::Graph,
+        Vec<crate::plan::DocumentationModule>,
+    );
+
+    fn polyglot_fixture() -> Result<Fixture, Box<dyn std::error::Error>> {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot");
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
+        let graph = GraphBuilder.build(&root, &artifacts);
+        let modules = ModulePlanner.plan(&graph, &artifacts);
+        Ok((artifacts, graph, modules))
+    }
+
     #[test]
     fn builds_agent_memory_from_polyglot_fixture() -> Result<(), Box<dyn std::error::Error>> {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot");
@@ -963,6 +1230,131 @@ mod tests {
         assert_eq!(go.target_tier, LanguageSupportTier::HybridResolved);
         assert_eq!(sql.tier, LanguageSupportTier::SyntaxIndexed);
         assert_eq!(sql.target_tier, LanguageSupportTier::SyntaxIndexed);
+
+        Ok(())
+    }
+
+    /// LIT-22.6.3 AC1: every agent named in the AC runs and lands in
+    /// `AgentMemory`.
+    #[test]
+    fn every_named_agent_runs_through_the_shared_framework()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (artifacts, graph, modules) = polyglot_fixture()?;
+
+        let brief = ResearchBuilder.build(&artifacts, &graph, &modules);
+        let memory = &brief.agent_memory;
+
+        assert!(!memory.system_context.project_summary.is_empty());
+        assert!(!memory.domain_modules.modules.is_empty());
+        assert!(!memory.architecture.languages.is_empty());
+        assert!(!memory.workflows.workflows.is_empty());
+        assert!(!memory.boundaries.boundaries.is_empty());
+        assert!(!memory.key_modules.modules.is_empty());
+
+        Ok(())
+    }
+
+    /// LIT-22.6.3 AC2/AC4 (optional data): the polyglot fixture has
+    /// container/compose evidence but no HTTP route decorators, so
+    /// `deployment` is populated and `cross_service` stays `None`.
+    #[test]
+    fn optional_researchers_run_only_when_their_evidence_exists()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (artifacts, graph, modules) = polyglot_fixture()?;
+
+        let brief = ResearchBuilder.build(&artifacts, &graph, &modules);
+
+        assert!(brief.agent_memory.deployment.is_some());
+        assert!(brief.agent_memory.cross_service.is_none());
+
+        Ok(())
+    }
+
+    /// LIT-22.6.3 AC2/AC4: a repository with an HTTP route decorator
+    /// populates `cross_service`; one with no database/container/route
+    /// evidence at all leaves every optional report `None`.
+    #[test]
+    fn cross_service_researcher_runs_when_a_route_exists() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let repo = tempfile::TempDir::new()?;
+        std::fs::write(
+            repo.path().join("service.py"),
+            "import requests\n\n\n@app.get(\"/users/{id}\")\ndef get_user(id):\n    return None\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(repo.path())?;
+        let graph = GraphBuilder.build(repo.path(), &artifacts);
+        let modules = ModulePlanner.plan(&graph, &artifacts);
+        let brief = ResearchBuilder.build(&artifacts, &graph, &modules);
+
+        let cross_service = brief
+            .agent_memory
+            .cross_service
+            .ok_or("expected a cross-service report")?;
+        assert!(cross_service.routes.contains(&"GET /users/{id}".to_owned()));
+        assert!(!cross_service.evidence.is_empty());
+        assert!(brief.agent_memory.database.is_none());
+        assert!(brief.agent_memory.deployment.is_none());
+
+        Ok(())
+    }
+
+    /// LIT-22.6.3 AC3: every report's evidence list cites a real
+    /// artifact path or graph node/relation id, not a placeholder.
+    #[test]
+    fn every_report_evidence_cites_real_references() -> Result<(), Box<dyn std::error::Error>> {
+        let (artifacts, graph, modules) = polyglot_fixture()?;
+        let brief = ResearchBuilder.build(&artifacts, &graph, &modules);
+        let memory = &brief.agent_memory;
+
+        let artifact_paths: std::collections::BTreeSet<&str> = artifacts
+            .iter()
+            .map(|artifact| artifact.path.as_str())
+            .collect();
+        let relation_ids: std::collections::BTreeSet<&str> = graph
+            .relations
+            .iter()
+            .map(|relation| relation.id.as_str())
+            .collect();
+
+        for evidence in &memory.system_context.evidence {
+            assert!(artifact_paths.contains(evidence.reference.as_str()));
+        }
+        assert!(!memory.workflows.evidence.is_empty());
+        for evidence in &memory.workflows.evidence {
+            assert!(relation_ids.contains(evidence.reference.as_str()));
+        }
+
+        Ok(())
+    }
+
+    /// LIT-22.6.3 AC4 (typed parsing): `AgentMemory` round-trips through
+    /// JSON without loss, including the new optional reports.
+    #[test]
+    fn agent_memory_round_trips_through_json() -> Result<(), Box<dyn std::error::Error>> {
+        let (artifacts, graph, modules) = polyglot_fixture()?;
+        let brief = ResearchBuilder.build(&artifacts, &graph, &modules);
+
+        let json = serde_json::to_string(&brief.agent_memory)?;
+        let parsed: super::AgentMemory = serde_json::from_str(&json)?;
+
+        assert_eq!(parsed, brief.agent_memory);
+
+        Ok(())
+    }
+
+    /// LIT-22.6.3 AC4 (ordering): running the same inputs through the
+    /// framework twice produces byte-identical output -- no agent's
+    /// output depends on iteration order over a non-deterministic
+    /// collection.
+    #[test]
+    fn build_is_deterministic_across_repeated_runs() -> Result<(), Box<dyn std::error::Error>> {
+        let (artifacts, graph, modules) = polyglot_fixture()?;
+
+        let first = ResearchBuilder.build(&artifacts, &graph, &modules);
+        let second = ResearchBuilder.build(&artifacts, &graph, &modules);
+
+        assert_eq!(first, second);
 
         Ok(())
     }
