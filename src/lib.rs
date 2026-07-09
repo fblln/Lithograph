@@ -22,6 +22,7 @@ pub mod mermaid;
 pub mod orchestrate;
 pub mod plan;
 pub mod quality;
+pub mod query;
 pub mod research;
 pub mod resolve;
 pub mod run;

@@ -69,6 +69,10 @@ pub const MCP_TOOLS: &[McpToolInfo] = &[
         description: "Semantic search (deterministic offline embeddings) blended with graph connectivity. Params: query, limit?.",
     },
     McpToolInfo {
+        name: "query_graph",
+        description: "Narrow Cypher-like MATCH/WHERE/RETURN query. Params: query, e.g. `MATCH (a:Symbol)-[:Calls]->(b:Symbol) WHERE a.name CONTAINS \"foo\" RETURN a, b`.",
+    },
+    McpToolInfo {
         name: "trace_path",
         description: "Traces relations from a node. Params: query, direction?, depth?.",
     },
@@ -251,6 +255,18 @@ impl WikiMcpServer {
                     crate::semantic_search::SemanticSearchWeights::default(),
                 )?;
                 Ok(serde_json::to_value(results)?)
+            }
+            "query_graph" => {
+                let graph = self.load_graph()?;
+                let text = request
+                    .params
+                    .get("query")
+                    .and_then(Value::as_str)
+                    .ok_or("query_graph requires params.query")?;
+                let query = crate::query::parse(text)?;
+                Ok(serde_json::to_value(crate::query::evaluate(
+                    &query, &graph,
+                ))?)
             }
             "trace_path" => {
                 let graph = self.load_graph()?;
@@ -873,6 +889,44 @@ mod tests {
                 .iter()
                 .any(|result| result.get("evidence").is_some_and(|e| !e.is_null()))
         );
+
+        Ok(())
+    }
+
+    /// LIT-22.4.5 AC1/AC2/AC3: `query_graph` evaluates a valid MATCH query
+    /// through the MCP server, and rejects an invalid one with an
+    /// actionable error rather than a bare failure.
+    #[test]
+    fn query_graph_evaluates_valid_queries_and_rejects_invalid_ones()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let server = WikiMcpServer::new(temp.path());
+
+        let response = server.handle(McpRequest {
+            id: json!(1),
+            tool: "query_graph".to_owned(),
+            params: json!({ "query": "MATCH (a:Artifact)-[:Contains]->(b:Symbol) RETURN a, b" }),
+        });
+        let rows = response
+            .result
+            .as_ref()
+            .and_then(Value::as_array)
+            .ok_or("expected an array of rows")?;
+        assert!(!rows.is_empty());
+        assert!(rows[0].get("id").is_some());
+
+        let invalid = server.handle(McpRequest {
+            id: json!(2),
+            tool: "query_graph".to_owned(),
+            params: json!({ "query": "SELECT * FROM nodes" }),
+        });
+        assert!(invalid.result.is_none());
+        assert!(invalid.error.is_some());
 
         Ok(())
     }

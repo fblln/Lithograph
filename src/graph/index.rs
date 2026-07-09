@@ -928,7 +928,7 @@ fn search_result(
     }
 }
 
-fn node_label(node: &GraphNode) -> &'static str {
+pub(crate) fn node_label(node: &GraphNode) -> &'static str {
     match node {
         GraphNode::Artifact(_) => "Artifact",
         GraphNode::Symbol(_) => "Symbol",
@@ -943,7 +943,7 @@ fn node_label(node: &GraphNode) -> &'static str {
     }
 }
 
-fn node_name(node: &GraphNode) -> String {
+pub(crate) fn node_name(node: &GraphNode) -> String {
     match node {
         GraphNode::Artifact(node) => node.path.clone(),
         GraphNode::Symbol(node) => node.qualified_name.clone(),
@@ -958,7 +958,7 @@ fn node_name(node: &GraphNode) -> String {
     }
 }
 
-fn node_file_path(node: &GraphNode) -> Option<String> {
+pub(crate) fn node_file_path(node: &GraphNode) -> Option<String> {
     match node {
         GraphNode::Artifact(node) => Some(node.path.clone()),
         GraphNode::Symbol(node) => Some(node.evidence.path.as_str().to_owned()),
