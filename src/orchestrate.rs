@@ -92,7 +92,7 @@ fn architecture_view_context(
     graph: &Graph,
     repo_root: &Path,
 ) -> Option<ArchitectureViewContext> {
-    if task_kind != TaskKind::Architecture {
+    if !matches!(task_kind, TaskKind::Architecture | TaskKind::AdrDrift) {
         return None;
     }
     Some(ArchitectureViewContext {
@@ -653,7 +653,7 @@ mod tests {
         assert!(report.graph_node_count > 0);
         assert!(report.graph_relation_count > 0);
         assert_eq!(report.module_count, 11);
-        assert_eq!(report.page_count, report.module_count + 6);
+        assert_eq!(report.page_count, report.module_count + 9);
         assert_eq!(report.pages_written, report.page_count);
 
         assert!(temp.path().join("docs/lithograph/overview.md").exists());
@@ -664,6 +664,13 @@ mod tests {
         assert!(
             temp.path()
                 .join("docs/lithograph/configuration.md")
+                .exists()
+        );
+        assert!(temp.path().join("docs/lithograph/database.md").exists());
+        assert!(temp.path().join("docs/lithograph/key-modules.md").exists());
+        assert!(
+            temp.path()
+                .join("docs/lithograph/adr-and-drift.md")
                 .exists()
         );
         assert!(temp.path().join(".lithograph/graph.json").exists());
@@ -851,7 +858,7 @@ mod tests {
         );
         // Rust crate page + every repository-level page regenerates; the
         // unrelated Python package page does not.
-        assert_eq!(report.pages_regenerated, 7);
+        assert_eq!(report.pages_regenerated, 10);
 
         Ok(())
     }

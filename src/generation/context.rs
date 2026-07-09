@@ -319,6 +319,24 @@ impl ContextBuilder {
             TaskKind::Configuration => {
                 append_configuration_sections(&mut sections, graph, &node_by_id);
             }
+            TaskKind::Database => {
+                sections.push(
+                    "\n## Database guidance\nSummarize database schemas, migrations, and SQL evidence strictly from the given facts; state plainly when no database evidence was found."
+                        .to_owned(),
+                );
+            }
+            TaskKind::KeyModules => {
+                sections.push(
+                    "\n## Key modules guidance\nHighlight the largest or most connected modules and why they matter, strictly from the given facts."
+                        .to_owned(),
+                );
+            }
+            TaskKind::AdrDrift => {
+                sections.push(
+                    "\n## Architecture decisions and drift guidance\nSummarize recorded architecture decisions and documentation drift findings strictly from the given facts; state plainly when none exist."
+                        .to_owned(),
+                );
+            }
             TaskKind::ModulePage => {}
         }
 
@@ -353,8 +371,11 @@ fn append_research_sections(
         TaskKind::Overview | TaskKind::Architecture => &research.system_context,
         TaskKind::Workflows => &research.workflows,
         TaskKind::Boundaries => &research.boundaries,
-        TaskKind::Configuration | TaskKind::Quickstart => &research.configuration,
-        TaskKind::ModulePage => &research.key_modules,
+        TaskKind::Configuration | TaskKind::Quickstart | TaskKind::Database => {
+            &research.configuration
+        }
+        TaskKind::ModulePage | TaskKind::KeyModules => &research.key_modules,
+        TaskKind::AdrDrift => &research.boundaries,
     };
     if !facts.is_empty() {
         sections.push(format!(
@@ -420,6 +441,22 @@ fn append_agent_memory_sections(
                 ));
             }
         }
+        TaskKind::Database => {
+            let facts = match &memory.database {
+                Some(database) => bullet_lines(&database.database_facts),
+                None => "- no database schema, migration, or SQL evidence was found".to_owned(),
+            };
+            sections.push(format!("\n## Database\n{facts}"));
+        }
+        TaskKind::KeyModules => {
+            sections.push(format!(
+                "\n## Key Modules\n{}",
+                bullet_lines(&memory.key_modules.modules)
+            ));
+        }
+        TaskKind::AdrDrift => {
+            append_adr_and_drift_sections(sections, architecture_context);
+        }
         TaskKind::ModulePage => {
             sections.push(format!(
                 "\n## Agent research: key module memory\n{}",
@@ -427,6 +464,45 @@ fn append_agent_memory_sections(
             ));
         }
     }
+}
+
+/// Builds the architecture-decisions-and-drift page's content
+/// (LIT-22.7.3 AC1): real persisted ADR summaries and real documentation
+/// drift findings, or an explicit "none found" statement rather than a
+/// fabricated summary.
+fn append_adr_and_drift_sections(
+    sections: &mut Vec<String>,
+    architecture_context: Option<&ArchitectureViewContext>,
+) {
+    let Some(context) = architecture_context else {
+        sections.push(
+            "\n## Architecture Decisions\n- none recorded\n\n## Drift\n- no documentation drift detected"
+                .to_owned(),
+        );
+        return;
+    };
+    let adr_lines: Vec<String> = context
+        .adr_summaries
+        .iter()
+        .map(|adr| format!("ADR {} [{:?}]: {}", adr.id, adr.status, adr.title))
+        .collect();
+    sections.push(format!(
+        "\n## Architecture Decisions\n{}",
+        bullet_lines(&adr_lines)
+    ));
+
+    let drift_lines: Vec<String> = context
+        .drift
+        .findings
+        .iter()
+        .map(|finding| {
+            format!(
+                "{:?}: {} ({})",
+                finding.kind, finding.detail, finding.artifact_path
+            )
+        })
+        .collect();
+    sections.push(format!("\n## Drift\n{}", bullet_lines(&drift_lines)));
 }
 
 /// Builds the architecture page's explicit C4-oriented sections
@@ -1163,6 +1239,15 @@ fn system_prompt(task_kind: TaskKind) -> String {
         TaskKind::Configuration => {
             "You write the Lithograph repository configuration and deployment page from graph-derived manifests, packages, env vars, and runtime configuration below."
         }
+        TaskKind::Database => {
+            "You write the Lithograph repository database overview page from graph-derived schema, migration, and SQL evidence below."
+        }
+        TaskKind::KeyModules => {
+            "You write the Lithograph repository key-modules page from the largest and most connected modules below."
+        }
+        TaskKind::AdrDrift => {
+            "You write the Lithograph repository architecture-decisions-and-drift page from recorded ADRs and documentation drift findings below."
+        }
     };
     format!(
         "{role}\n\n\
@@ -1538,6 +1623,88 @@ mod tests {
             "seed diagram failed Mermaid validation: {:?}",
             report.issues
         );
+
+        Ok(())
+    }
+
+    /// LIT-22.7.3 AC1: the three new repository-wide pages (database,
+    /// key modules, ADR/drift) each produce real, evidence-grounded
+    /// context content -- the polyglot fixture has no SQL/database
+    /// evidence, so the database page explicitly says so rather than
+    /// fabricating facts.
+    #[test]
+    fn database_key_modules_and_adr_drift_contexts_are_evidence_grounded()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::adr::{AdrStatus, AdrStore};
+        use crate::drift::DriftReport;
+        use crate::research::ResearchBuilder;
+
+        let root = fixture_root();
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
+        let graph = GraphBuilder.build(&root, &artifacts);
+        let modules = ModulePlanner.plan(&graph, &artifacts);
+        let brief = ResearchBuilder.build(&artifacts, &graph, &modules);
+        assert!(brief.agent_memory.database.is_none());
+
+        let database_context = ContextBuilder.build_summary_context(
+            TaskKind::Database,
+            &modules,
+            &graph,
+            &artifacts,
+            Some(&brief),
+            None,
+        );
+        assert!(database_context.user_prompt.contains("## Database"));
+        assert!(
+            database_context
+                .user_prompt
+                .contains("no database schema, migration, or SQL evidence")
+        );
+
+        let key_modules_context = ContextBuilder.build_summary_context(
+            TaskKind::KeyModules,
+            &modules,
+            &graph,
+            &artifacts,
+            Some(&brief),
+            None,
+        );
+        assert!(key_modules_context.user_prompt.contains("## Key Modules"));
+
+        let adr_temp = tempfile::TempDir::new()?;
+        let store = AdrStore::new(adr_temp.path());
+        store.create(
+            "Use blake3 for content hashing",
+            "Need a fast, stable content hash.",
+            "Adopt blake3.",
+            None,
+        )?;
+        let adr_summaries = store.list();
+        assert_eq!(adr_summaries[0].status, AdrStatus::Proposed);
+        let architecture_context = super::ArchitectureViewContext {
+            drift: DriftReport::default(),
+            adr_summaries,
+        };
+        let adr_drift_context = ContextBuilder.build_summary_context(
+            TaskKind::AdrDrift,
+            &modules,
+            &graph,
+            &artifacts,
+            Some(&brief),
+            Some(&architecture_context),
+        );
+        assert!(
+            adr_drift_context
+                .user_prompt
+                .contains("## Architecture Decisions")
+        );
+        assert!(
+            adr_drift_context
+                .user_prompt
+                .contains("Use blake3 for content hashing")
+        );
+        assert!(adr_drift_context.user_prompt.contains("## Drift"));
+        assert!(adr_drift_context.user_prompt.contains("- none observed"));
 
         Ok(())
     }

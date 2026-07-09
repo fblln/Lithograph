@@ -143,7 +143,7 @@ mod tests {
         let html = std::fs::read_to_string(&report.index_path)?;
         assert!(html.contains("Search"));
         assert!(html.contains("mermaid"));
-        assert_eq!(report.page_count, 17);
+        assert_eq!(report.page_count, 20);
 
         Ok(())
     }
