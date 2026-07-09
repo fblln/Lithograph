@@ -7,8 +7,9 @@ use crate::cli::{
     AdrCommand, AdrCreateArgs, AdrDeleteArgs, AdrGetArgs, AdrListArgs, AdrTarget, AdrUpdateArgs,
     AskArgs, Cli, Command, DriftArgs, GoldenArgs, GraphCommand, GraphExportArgs, GraphImportArgs,
     GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectGraphArgs,
-    InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, IntegrateMcpArgs, McpExportArgs,
-    McpServerArgs, OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs, WatchArgs,
+    InspectMetricsArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, IntegrateMcpArgs,
+    McpExportArgs, McpServerArgs, OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
+    WatchArgs,
 };
 use crate::domain::Artifact;
 use crate::drift::{DriftDetector, DriftReport};
@@ -33,6 +34,8 @@ use crate::orchestrate::{
 };
 use crate::plan::{DocumentationModule, ModulePlanner};
 use crate::quality::{inspect as inspect_quality, render_table as render_quality_table};
+use crate::run::{PerformanceBudget, RunMetadata};
+use crate::storage::JsonStore;
 use crate::viewer::{generate as generate_viewer, render_report as render_viewer_report};
 use crate::watch::{WatchConfig, poll_once, render_report as render_watch_report};
 use serde::Serialize;
@@ -688,7 +691,111 @@ where
         InspectTarget::Artifacts(args) => execute_inspect_artifacts(args, writer),
         InspectTarget::Graph(args) => execute_inspect_graph(args, writer),
         InspectTarget::Modules(args) => execute_inspect_modules(args, writer),
+        InspectTarget::Metrics(args) => execute_inspect_metrics(args, writer),
     }
+}
+
+/// Reads the last recorded `.lithograph/run.json` and renders its metrics
+/// (LIT-22.8.4 AC1/AC2). When any `--max-*`/`--min-*` threshold is set,
+/// also checks it as a [`PerformanceBudget`] and, on violation, returns an
+/// error after writing the report -- the caller always sees the numbers
+/// even when the command exits non-zero (AC3).
+fn execute_inspect_metrics<W>(
+    args: InspectMetricsArgs,
+    writer: &mut W,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    let run_metadata_path = args.path.join(".lithograph/run.json");
+    let metadata: RunMetadata = JsonStore.read(&run_metadata_path)?.ok_or_else(|| {
+        format!(
+            "no run metadata found at {}; run `init` or `update` first",
+            run_metadata_path.display()
+        )
+    })?;
+    let budget = PerformanceBudget {
+        max_graph_node_count: args.max_graph_nodes,
+        max_graph_relation_count: args.max_graph_relations,
+        min_cache_hit_rate: args
+            .min_cache_hit_rate_percent
+            .map(|percent| f64::from(percent) / 100.0),
+        max_estimated_prompt_tokens: args.max_tokens,
+    };
+    let violations = budget.check(&metadata);
+
+    let output = match args.format {
+        OutputFormat::Table => render_metrics_table(&metadata, &violations),
+        OutputFormat::Json => {
+            let mut json = serde_json::to_string_pretty(&serde_json::json!({
+                "metrics": &metadata,
+                "violations": &violations,
+            }))?;
+            json.push('\n');
+            json
+        }
+    };
+    writer.write_all(output.as_bytes())?;
+
+    if violations.is_empty() {
+        return Ok(());
+    }
+    let summary = violations
+        .iter()
+        .map(|violation| {
+            format!(
+                "{} (limit {}, actual {})",
+                violation.metric, violation.limit, violation.actual
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    Err(format!(
+        "{} performance budget violation(s): {summary}",
+        violations.len()
+    )
+    .into())
+}
+
+/// Renders a deterministic, human-readable run metrics summary.
+pub fn render_metrics_table(
+    metadata: &RunMetadata,
+    violations: &[crate::run::BudgetViolation],
+) -> String {
+    let mut output = format!(
+        "run: {} ({})\n\
+         graph nodes: {}\n\
+         graph relations: {}\n\
+         cache hits: {}\n\
+         cache misses: {}\n\
+         cache hit rate: {:.2}\n\
+         estimated prompt tokens: {}\n",
+        metadata.run_id,
+        metadata.command,
+        metadata.graph_node_count,
+        metadata.graph_relation_count,
+        metadata.cache_hits,
+        metadata.cache_misses,
+        metadata.cache_hit_rate(),
+        metadata.estimated_prompt_tokens,
+    );
+    for timing in &metadata.stage_timings {
+        output.push_str(&format!(
+            "stage {:?}: {}ms\n",
+            timing.stage, timing.duration_ms
+        ));
+    }
+    if violations.is_empty() {
+        output.push_str("budget: within every configured threshold\n");
+    } else {
+        for violation in violations {
+            output.push_str(&format!(
+                "budget violation: {} (limit {}, actual {})\n",
+                violation.metric, violation.limit, violation.actual
+            ));
+        }
+    }
+    output
 }
 
 fn execute_inspect_modules<W>(
@@ -962,8 +1069,9 @@ mod tests {
         AdrCommand, AdrCreateArgs, AdrDeleteArgs, AdrGetArgs, AdrListArgs, AdrStatusArg, AdrTarget,
         AdrUpdateArgs, AskArgs, Cli, Command, DriftArgs, GraphCommand, GraphExportArgs,
         GraphImportArgs, GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand,
-        InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, IntegrateMcpArgs,
-        McpExportArgs, OutputFormat, ValidateMermaidArgs, WatchArgs,
+        InspectGraphArgs, InspectMetricsArgs, InspectModulesArgs, InspectTarget,
+        IntegrateAgentsArgs, IntegrateMcpArgs, McpExportArgs, OutputFormat, ValidateMermaidArgs,
+        WatchArgs,
     };
     use crate::graph::{GraphIssue, GraphIssueKind};
     use crate::inventory::{RepositoryWalker, WalkOptions};
@@ -1835,6 +1943,126 @@ mod tests {
         assert!(output.contains("symbol"));
 
         Ok(())
+    }
+
+    fn inspect_metrics_args(
+        path: &Path,
+        max_graph_nodes: Option<usize>,
+        min_cache_hit_rate_percent: Option<u8>,
+    ) -> InspectMetricsArgs {
+        InspectMetricsArgs {
+            path: path.to_path_buf(),
+            max_graph_nodes,
+            max_graph_relations: None,
+            min_cache_hit_rate_percent,
+            max_tokens: None,
+            format: OutputFormat::Table,
+        }
+    }
+
+    #[test]
+    fn execute_inspect_metrics_reports_persisted_run_metadata()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        execute(
+            Cli {
+                command: Some(Command::Init(InitArgs {
+                    path: temp.path().to_path_buf(),
+                    prompt_version: "v1".to_owned(),
+                    semantic_grouping: false,
+                })),
+            },
+            &mut Vec::new(),
+        )?;
+        let mut output = Vec::new();
+
+        execute(
+            Cli {
+                command: Some(Command::Inspect(InspectCommand {
+                    target: InspectTarget::Metrics(inspect_metrics_args(temp.path(), None, None)),
+                })),
+            },
+            &mut output,
+        )?;
+        let output = String::from_utf8(output)?;
+
+        assert!(output.contains("graph nodes:"));
+        assert!(output.contains("cache hit rate:"));
+        assert!(output.contains("estimated prompt tokens:"));
+        assert!(output.contains("stage PreprocessIndex:"));
+        assert!(output.contains("within every configured threshold"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn execute_inspect_metrics_without_a_prior_run_reports_an_actionable_error()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+
+        match execute(
+            Cli {
+                command: Some(Command::Inspect(InspectCommand {
+                    target: InspectTarget::Metrics(inspect_metrics_args(temp.path(), None, None)),
+                })),
+            },
+            &mut Vec::new(),
+        ) {
+            Ok(()) => Err("expected a missing-run-metadata error".into()),
+            Err(error) => {
+                assert!(error.to_string().contains("run `init` or `update` first"));
+                Ok(())
+            }
+        }
+    }
+
+    #[test]
+    fn execute_inspect_metrics_fails_only_through_the_configured_budget_threshold()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        execute(
+            Cli {
+                command: Some(Command::Init(InitArgs {
+                    path: temp.path().to_path_buf(),
+                    prompt_version: "v1".to_owned(),
+                    semantic_grouping: false,
+                })),
+            },
+            &mut Vec::new(),
+        )?;
+        let within_budget = Cli {
+            command: Some(Command::Inspect(InspectCommand {
+                target: InspectTarget::Metrics(inspect_metrics_args(
+                    temp.path(),
+                    Some(usize::MAX),
+                    None,
+                )),
+            })),
+        };
+        let mut within_output = Vec::new();
+        execute(within_budget, &mut within_output)?;
+        assert!(String::from_utf8(within_output)?.contains("within every configured threshold"));
+
+        let over_budget = Cli {
+            command: Some(Command::Inspect(InspectCommand {
+                target: InspectTarget::Metrics(inspect_metrics_args(temp.path(), Some(0), None)),
+            })),
+        };
+        match execute(over_budget, &mut Vec::new()) {
+            Ok(()) => Err("expected a budget-violation error".into()),
+            Err(error) => {
+                assert!(error.to_string().contains("graph_node_count"));
+                Ok(())
+            }
+        }
     }
 
     #[test]

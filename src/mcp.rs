@@ -7,7 +7,7 @@ use crate::graph::{
 };
 use crate::inventory::{RepositoryWalker, WalkOptions};
 use crate::plan::ModulePlanner;
-use crate::run::RepositorySnapshot;
+use crate::run::{RepositorySnapshot, RunMetadata};
 use crate::search::{CodeSearch, CodeSearchParams};
 use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};
@@ -87,6 +87,10 @@ pub const MCP_TOOLS: &[McpToolInfo] = &[
     McpToolInfo {
         name: "detect_changes",
         description: "Lists artifact paths changed since the last recorded snapshot.",
+    },
+    McpToolInfo {
+        name: "get_run_metrics",
+        description: "Returns the last recorded run's metrics: stage timings, graph size, cache hit rate, and estimated prompt tokens.",
     },
     McpToolInfo {
         name: "detect_drift",
@@ -291,6 +295,7 @@ impl WikiMcpServer {
                 )?)
             }
             "detect_changes" => Ok(serde_json::to_value(self.detect_changes()?)?),
+            "get_run_metrics" => Ok(serde_json::to_value(self.get_run_metrics()?)?),
             "detect_drift" => {
                 let artifacts =
                     RepositoryWalker::new(WalkOptions::default()).walk(&self.repo_root)?;
@@ -414,6 +419,20 @@ impl WikiMcpServer {
             .unwrap_or_default();
         let current = RepositorySnapshot::from_artifacts(&artifacts, pipeline);
         Ok(current.changed_since(previous.as_ref()))
+    }
+
+    /// Reads the last recorded `.lithograph/run.json` (LIT-22.8.4 AC2:
+    /// MCP-caller visibility into index/generation time, graph size, cache
+    /// hit rate, and estimated prompt tokens).
+    fn get_run_metrics(&self) -> Result<RunMetadata, Box<dyn std::error::Error>> {
+        let run_metadata_path = self.repo_root.join(".lithograph/run.json");
+        JsonStore.read(&run_metadata_path)?.ok_or_else(|| {
+            format!(
+                "no run metadata found at {}; run `init` or `update` first",
+                run_metadata_path.display()
+            )
+            .into()
+        })
     }
 
     /// Runs a JSON-line request loop until EOF.
@@ -730,8 +749,27 @@ mod tests {
         assert_eq!(changes.result, Some(json!([])));
         assert!(changes.error.is_none());
 
-        let impact = server.handle(McpRequest {
+        let metrics = server.handle(McpRequest {
             id: json!(4),
+            tool: "get_run_metrics".to_owned(),
+            params: json!({}),
+        });
+        assert!(
+            metrics
+                .result
+                .as_ref()
+                .is_some_and(|value| value.get("graph_node_count").is_some_and(Value::is_u64))
+        );
+        assert!(
+            metrics
+                .result
+                .as_ref()
+                .is_some_and(|value| value.get("estimated_prompt_tokens").is_some())
+        );
+        assert!(metrics.error.is_none());
+
+        let impact = server.handle(McpRequest {
+            id: json!(5),
             tool: "impact_analysis".to_owned(),
             params: json!({ "query": "src/python_app/service.py" }),
         });
@@ -744,7 +782,7 @@ mod tests {
         assert!(impact.error.is_none());
 
         let impact_error = server.handle(McpRequest {
-            id: json!(5),
+            id: json!(6),
             tool: "impact_analysis".to_owned(),
             params: json!({ "query": "no-such-node-anywhere" }),
         });
@@ -757,12 +795,44 @@ mod tests {
         );
 
         let trace_missing_query = server.handle(McpRequest {
-            id: json!(6),
+            id: json!(7),
             tool: "trace_path".to_owned(),
             params: json!({}),
         });
         assert!(trace_missing_query.result.is_none());
         assert!(trace_missing_query.error.is_some());
+
+        Ok(())
+    }
+
+    /// LIT-22.8.4 AC2: `get_run_metrics` reports an actionable error rather
+    /// than a panic or an empty/fabricated result when no run metadata has
+    /// been recorded yet.
+    #[test]
+    fn get_run_metrics_reports_an_actionable_error_when_run_json_is_missing()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        std::fs::remove_file(temp.path().join(".lithograph/run.json"))?;
+        let server = WikiMcpServer::new(temp.path());
+
+        let response = server.handle(McpRequest {
+            id: json!(1),
+            tool: "get_run_metrics".to_owned(),
+            params: json!({}),
+        });
+
+        assert!(response.result.is_none());
+        assert!(
+            response
+                .error
+                .as_ref()
+                .is_some_and(|error| error.contains("run `init` or `update` first"))
+        );
 
         Ok(())
     }

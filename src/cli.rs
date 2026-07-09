@@ -378,6 +378,10 @@ pub enum InspectTarget {
     Graph(InspectGraphArgs),
     /// Print the deterministic module plan.
     Modules(InspectModulesArgs),
+    /// Print the last recorded run's metrics: index/generation time, graph
+    /// size, cache hit rate, and token estimate. Optionally checks them
+    /// against explicit budget thresholds.
+    Metrics(InspectMetricsArgs),
 }
 
 /// Arguments for `inspect modules`.
@@ -408,6 +412,31 @@ pub struct InspectArtifactsArgs {
 pub struct InspectGraphArgs {
     /// Repository path to inspect.
     pub path: PathBuf,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Arguments for `inspect metrics`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct InspectMetricsArgs {
+    /// Repository path whose last recorded `.lithograph/run.json` to inspect.
+    pub path: PathBuf,
+    /// Fail with the exceeded thresholds listed when the graph has more
+    /// than this many nodes.
+    #[arg(long)]
+    pub max_graph_nodes: Option<usize>,
+    /// Fail when the graph has more than this many relations.
+    #[arg(long)]
+    pub max_graph_relations: Option<usize>,
+    /// Fail when the analysis cache hit rate drops below this percentage
+    /// (`0`-`100`). An integer percentage, not a float, so this argument
+    /// stays `Eq`-comparable like every other CLI argument struct.
+    #[arg(long)]
+    pub min_cache_hit_rate_percent: Option<u8>,
+    /// Fail when the estimated prompt token count exceeds this value.
+    #[arg(long)]
+    pub max_tokens: Option<u64>,
     /// Output format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
     pub format: OutputFormat,

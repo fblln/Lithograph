@@ -230,7 +230,7 @@ pub fn run_init_with_options(
         Ok(ResearchBuilder.build(&artifacts, &graph, &modules))
     })?;
 
-    let (manifest, written_pages) =
+    let (manifest, written_pages, prompt_chars) =
         timed_stage(PipelineStage::Compose, &mut stage_timings, || {
             let modules_by_id: BTreeMap<&str, &DocumentationModule> = modules
                 .iter()
@@ -241,6 +241,7 @@ pub fn run_init_with_options(
                 PageManifestBuilder.build(&modules, prompt_version, model_name);
             let tasks = manifest.tasks.clone();
             let mut written_pages: Vec<String> = Vec::new();
+            let mut prompt_chars: usize = 0;
 
             for task in &tasks {
                 let context = match task.kind {
@@ -270,6 +271,7 @@ pub fn run_init_with_options(
                             .as_ref(),
                     ),
                 };
+                prompt_chars += context.system_prompt.len() + context.user_prompt.len();
 
                 let request = context.clone().into_request(model_name, prompt_version);
                 let generation = model.generate_json(&request).map_err(InitError::Model)?;
@@ -289,7 +291,7 @@ pub fn run_init_with_options(
                 }
             }
 
-            Ok((manifest, written_pages))
+            Ok((manifest, written_pages, prompt_chars))
         })?;
 
     let stage_started = Instant::now();
@@ -307,6 +309,9 @@ pub fn run_init_with_options(
             written_pages: &written_pages,
             previous_snapshot: previous_snapshot.as_ref(),
             pipeline: PipelineInvalidationMetadata::current(prompt_version, semantic_grouping),
+            cache_hits: cache.hits(),
+            cache_misses: cache.misses(),
+            prompt_chars,
         })?;
 
         let graph_store_outcome = GraphStore::new(repo_root).save(&graph)?;
@@ -456,7 +461,7 @@ pub fn run_update_with_options(
         Ok(ResearchBuilder.build(&artifacts, &graph, &modules))
     })?;
 
-    let (manifest, written_pages) =
+    let (manifest, written_pages, prompt_chars) =
         timed_stage(PipelineStage::Compose, &mut stage_timings, || {
             let modules_by_id: BTreeMap<&str, &DocumentationModule> = modules
                 .iter()
@@ -467,6 +472,7 @@ pub fn run_update_with_options(
                 PageManifestBuilder.build(&modules, prompt_version, model_name);
             let tasks = manifest.tasks.clone();
             let mut written_pages: Vec<String> = Vec::new();
+            let mut prompt_chars: usize = 0;
 
             for task in &tasks {
                 let current_input_hash = manifest
@@ -527,6 +533,7 @@ pub fn run_update_with_options(
                             .as_ref(),
                     ),
                 };
+                prompt_chars += context.system_prompt.len() + context.user_prompt.len();
 
                 let request = context.clone().into_request(model_name, prompt_version);
                 let generation = model.generate_json(&request).map_err(InitError::Model)?;
@@ -546,7 +553,7 @@ pub fn run_update_with_options(
                 }
             }
 
-            Ok((manifest, written_pages))
+            Ok((manifest, written_pages, prompt_chars))
         })?;
 
     let stage_started = Instant::now();
@@ -560,6 +567,9 @@ pub fn run_update_with_options(
             written_pages: &written_pages,
             previous_snapshot: previous_snapshot.as_ref(),
             pipeline: PipelineInvalidationMetadata::current(prompt_version, semantic_grouping),
+            cache_hits: cache.hits(),
+            cache_misses: cache.misses(),
+            prompt_chars,
         })?;
 
         let graph_store_outcome = GraphStore::new(repo_root).save(&graph)?;
@@ -718,6 +728,52 @@ mod tests {
             stages,
             vec!["PreprocessIndex", "Research", "Compose", "ValidateOutput"]
         );
+
+        Ok(())
+    }
+
+    /// LIT-22.8.4 AC1/AC4: `run.json` persists graph size, cache hit/miss
+    /// counts, and a nonzero deterministic prompt token estimate -- and a
+    /// second `update` over unchanged content reports every artifact as a
+    /// cache hit (proving the cache stats reflect real reuse, not a
+    /// hardcoded zero).
+    #[test]
+    fn run_json_persists_graph_size_cache_stats_and_token_estimate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(&fixture_root(), temp.path())?;
+
+        let first = run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let first_metadata: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&first.run_metadata_path)?)?;
+        assert_eq!(
+            first_metadata["graph_node_count"].as_u64(),
+            Some(first.graph_node_count as u64)
+        );
+        assert_eq!(
+            first_metadata["graph_relation_count"].as_u64(),
+            Some(first.graph_relation_count as u64)
+        );
+        assert_eq!(
+            first_metadata["cache_misses"].as_u64(),
+            Some(first.artifact_count as u64)
+        );
+        assert_eq!(first_metadata["cache_hits"].as_u64(), Some(0));
+        assert!(
+            first_metadata["estimated_prompt_tokens"]
+                .as_u64()
+                .unwrap_or(0)
+                > 0
+        );
+
+        let second = run_update(temp.path(), &MockModel, "mock", "v1")?;
+        let second_metadata: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&second.run_metadata_path)?)?;
+        assert_eq!(
+            second_metadata["cache_hits"].as_u64(),
+            Some(second.artifact_count as u64)
+        );
+        assert_eq!(second_metadata["cache_misses"].as_u64(), Some(0));
 
         Ok(())
     }
