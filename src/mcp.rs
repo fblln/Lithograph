@@ -14,6 +14,96 @@ use std::collections::BTreeSet;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
+/// One MCP tool's stable name and human-readable purpose (LIT-22.8.1
+/// AC1/AC2): deterministic and schema-like enough for a caller to
+/// discover what's available without guessing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct McpToolInfo {
+    /// Stable tool name, passed as `McpRequest.tool`.
+    pub name: &'static str,
+    /// What the tool does and, where not obvious, its required params.
+    pub description: &'static str,
+}
+
+/// Every tool this server implements, in a stable order. The single
+/// source of truth for both the `list_tools` response and the wiki
+/// export's tool listing (AC4), so the two can never silently drift
+/// apart as new tools are added.
+pub const MCP_TOOLS: &[McpToolInfo] = &[
+    McpToolInfo {
+        name: "list_tools",
+        description: "Lists every tool this server implements.",
+    },
+    McpToolInfo {
+        name: "read_wiki_structure",
+        description: "Lists generated wiki pages (id, path, title).",
+    },
+    McpToolInfo {
+        name: "read_wiki_contents",
+        description: "Returns every generated wiki page's full content.",
+    },
+    McpToolInfo {
+        name: "read_research_memory",
+        description: "Returns the versioned research AgentMemory index.",
+    },
+    McpToolInfo {
+        name: "get_graph_schema",
+        description: "Returns the knowledge graph's node/relation label schema.",
+    },
+    McpToolInfo {
+        name: "search_graph",
+        description: "Searches graph nodes. Params: label?, query?, limit?.",
+    },
+    McpToolInfo {
+        name: "trace_path",
+        description: "Traces relations from a node. Params: query, direction?, depth?.",
+    },
+    McpToolInfo {
+        name: "impact_analysis",
+        description: "Traces what depends on a node (blast radius). Params: query, depth?.",
+    },
+    McpToolInfo {
+        name: "find_dead_code",
+        description: "Lists graph symbols with no inbound references.",
+    },
+    McpToolInfo {
+        name: "detect_changes",
+        description: "Lists artifact paths changed since the last recorded snapshot.",
+    },
+    McpToolInfo {
+        name: "detect_drift",
+        description: "Scans generated docs for drift against current repository facts.",
+    },
+    McpToolInfo {
+        name: "get_architecture",
+        description: "Returns the architecture summary. Params: aspects?.",
+    },
+    McpToolInfo {
+        name: "create_adr",
+        description: "Creates an ADR. Params: title, context, decision, consequences?.",
+    },
+    McpToolInfo {
+        name: "get_adr",
+        description: "Reads one ADR. Params: id.",
+    },
+    McpToolInfo {
+        name: "update_adr",
+        description: "Updates an ADR. Params: id, section?+value?, status?.",
+    },
+    McpToolInfo {
+        name: "delete_adr",
+        description: "Deletes an ADR. Params: id.",
+    },
+    McpToolInfo {
+        name: "list_adrs",
+        description: "Lists every ADR's id, title, and status.",
+    },
+    McpToolInfo {
+        name: "ask_question",
+        description: "Answers a question from generated wiki content. Params: question.",
+    },
+];
+
 /// One request accepted by the local server.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct McpRequest {
@@ -72,6 +162,7 @@ impl WikiMcpServer {
     fn handle_result(&self, request: &McpRequest) -> Result<Value, Box<dyn std::error::Error>> {
         let export = WikiSearch.export(&self.repo_root, None)?;
         match request.tool.as_str() {
+            "list_tools" => Ok(serde_json::to_value(MCP_TOOLS)?),
             "read_wiki_structure" => Ok(serde_json::to_value(export.structure)?),
             "read_wiki_contents" => Ok(serde_json::to_value(export.contents)?),
             "read_research_memory" => {
@@ -209,7 +300,7 @@ impl WikiMcpServer {
                 )?)
             }
             other => Ok(json!({
-                "available_tools": export.tools,
+                "available_tools": MCP_TOOLS.iter().map(|tool| tool.name).collect::<Vec<_>>(),
                 "message": format!("unknown tool `{other}`")
             })),
         }
@@ -352,7 +443,7 @@ fn adr_status_from_str(status: &str) -> Result<crate::adr::AdrStatus, Box<dyn st
 
 #[cfg(test)]
 mod tests {
-    use super::{McpRequest, WikiMcpServer};
+    use super::{MCP_TOOLS, McpRequest, WikiMcpServer};
     use crate::generation::MockModel;
     use crate::orchestrate::run_init;
     use serde_json::Value;
@@ -784,6 +875,94 @@ mod tests {
 
         assert!(output.contains("invalid request JSON"));
         assert!(output.contains("\"id\":3"));
+
+        Ok(())
+    }
+
+    /// LIT-22.8.1 AC1/AC2: `list_tools` deterministically enumerates every
+    /// tool this server implements, across every capability category
+    /// (graph/search/architecture/impact/dead-code/ADR/research-memory/
+    /// doc-content), and matches the same list the wiki export exposes
+    /// (AC4) -- the two can never drift since both read `MCP_TOOLS`.
+    #[test]
+    fn list_tools_enumerates_every_capability_and_matches_wiki_export()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let server = WikiMcpServer::new(temp.path());
+
+        let response = server.handle(McpRequest {
+            id: json!(1),
+            tool: "list_tools".to_owned(),
+            params: json!({}),
+        });
+        let names: Vec<String> = response
+            .result
+            .as_ref()
+            .and_then(Value::as_array)
+            .ok_or("expected an array of tools")?
+            .iter()
+            .map(|tool| {
+                tool.get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned()
+            })
+            .collect();
+
+        for expected in [
+            "search_graph",         // graph/search
+            "get_architecture",     // architecture
+            "impact_analysis",      // impact
+            "find_dead_code",       // dead-code
+            "create_adr",           // ADR
+            "read_research_memory", // research-memory
+            "read_wiki_contents",   // doc-content
+        ] {
+            assert!(names.contains(&expected.to_owned()), "missing {expected}");
+        }
+
+        let export = crate::ask::WikiSearch.export(temp.path(), None)?;
+        assert_eq!(names, export.tools);
+
+        Ok(())
+    }
+
+    /// LIT-22.8.1 AC2/AC3: an unrecognized tool name gets a deterministic,
+    /// actionable error result naming the tool that was requested plus
+    /// every tool that IS available, rather than a bare failure.
+    #[test]
+    fn unknown_tool_name_lists_available_tools() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let server = WikiMcpServer::new(temp.path());
+
+        let response = server.handle(McpRequest {
+            id: json!(1),
+            tool: "not_a_real_tool".to_owned(),
+            params: json!({}),
+        });
+
+        assert!(response.error.is_none());
+        let result = response.result.ok_or("expected a result")?;
+        assert_eq!(
+            result.get("message").and_then(Value::as_str),
+            Some("unknown tool `not_a_real_tool`")
+        );
+        assert!(
+            result
+                .get("available_tools")
+                .and_then(Value::as_array)
+                .is_some_and(|tools| tools.len() == MCP_TOOLS.len())
+        );
 
         Ok(())
     }

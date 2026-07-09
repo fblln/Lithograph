@@ -120,16 +120,10 @@ impl WikiSearch {
             .collect();
         let answer = question.map(|question| answer_from_pages(question, &contents));
         Ok(McpExport {
-            tools: vec![
-                "read_wiki_structure".to_owned(),
-                "read_wiki_contents".to_owned(),
-                "read_research_memory".to_owned(),
-                "get_graph_schema".to_owned(),
-                "search_graph".to_owned(),
-                "trace_path".to_owned(),
-                "get_architecture".to_owned(),
-                "ask_question".to_owned(),
-            ],
+            tools: crate::mcp::MCP_TOOLS
+                .iter()
+                .map(|tool| tool.name.to_owned())
+                .collect(),
             structure,
             contents,
             answer,
