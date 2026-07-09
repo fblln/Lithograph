@@ -6,7 +6,9 @@ use crate::graph::{
     TraceParams,
 };
 use crate::inventory::{RepositoryWalker, WalkOptions};
+use crate::plan::ModulePlanner;
 use crate::run::RepositorySnapshot;
+use crate::search::{CodeSearch, CodeSearchParams};
 use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -53,6 +55,10 @@ pub const MCP_TOOLS: &[McpToolInfo] = &[
     McpToolInfo {
         name: "search_graph",
         description: "Searches graph nodes. Params: label?, query?, limit?.",
+    },
+    McpToolInfo {
+        name: "search_code",
+        description: "Grep-like code search. Params: query, path_contains?, language?, module_id?, package?, graph_node_id?, limit?.",
     },
     McpToolInfo {
         name: "trace_path",
@@ -182,6 +188,20 @@ impl WikiMcpServer {
                 Ok(serde_json::to_value(
                     KnowledgeIndex::new(&graph).search(&params),
                 )?)
+            }
+            "search_code" => {
+                let artifacts =
+                    RepositoryWalker::new(WalkOptions::default()).walk(&self.repo_root)?;
+                let graph = self.load_graph()?;
+                let modules = ModulePlanner.plan(&graph, &artifacts);
+                let params = code_search_params(&request.params);
+                Ok(serde_json::to_value(CodeSearch.search(
+                    &self.repo_root,
+                    &artifacts,
+                    &graph,
+                    &modules,
+                    &params,
+                ))?)
             }
             "trace_path" => {
                 let graph = self.load_graph()?;
@@ -366,6 +386,41 @@ fn search_params(params: &Value) -> SearchParams {
         query: params
             .get("query")
             .or_else(|| params.get("name_pattern"))
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        limit: params
+            .get("limit")
+            .and_then(Value::as_u64)
+            .and_then(|value| usize::try_from(value).ok())
+            .unwrap_or_default(),
+    }
+}
+
+fn code_search_params(params: &Value) -> CodeSearchParams {
+    CodeSearchParams {
+        query: params
+            .get("query")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned(),
+        path_contains: params
+            .get("path_contains")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        language: params
+            .get("language")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        module_id: params
+            .get("module_id")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        package: params
+            .get("package")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        graph_node_id: params
+            .get("graph_node_id")
             .and_then(Value::as_str)
             .map(str::to_owned),
         limit: params
@@ -643,6 +698,49 @@ mod tests {
         });
         assert!(trace_missing_query.result.is_none());
         assert!(trace_missing_query.error.is_some());
+
+        Ok(())
+    }
+
+    /// LIT-22.4.2 AC1/AC2: `search_code` is reachable through the MCP
+    /// server, honors filters, and returns evidence-carrying results.
+    #[test]
+    fn search_code_returns_filtered_results_with_evidence() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let server = WikiMcpServer::new(temp.path());
+
+        let response = server.handle(McpRequest {
+            id: json!(1),
+            tool: "search_code".to_owned(),
+            params: json!({ "query": "class RouteService", "language": "python" }),
+        });
+
+        let results = response
+            .result
+            .as_ref()
+            .and_then(Value::as_array)
+            .ok_or("expected an array of results")?;
+        assert!(!results.is_empty());
+        assert!(
+            results[0]
+                .get("artifact_path")
+                .and_then(Value::as_str)
+                .is_some_and(|path| path.ends_with(".py"))
+        );
+        assert!(results[0].get("evidence").is_some());
+
+        let empty_query = server.handle(McpRequest {
+            id: json!(2),
+            tool: "search_code".to_owned(),
+            params: json!({}),
+        });
+        assert_eq!(empty_query.result, Some(json!([])));
 
         Ok(())
     }

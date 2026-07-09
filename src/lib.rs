@@ -24,6 +24,7 @@ pub mod quality;
 pub mod research;
 pub mod resolve;
 pub mod run;
+pub mod search;
 pub mod storage;
 pub mod viewer;
 
