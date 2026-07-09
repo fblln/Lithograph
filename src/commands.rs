@@ -1064,7 +1064,10 @@ impl From<&Artifact> for ArtifactOutputRow {
 
 #[cfg(test)]
 mod tests {
-    use super::{execute, render_artifacts_json, render_artifacts_table, render_graph_diagnostics};
+    use super::{
+        execute, render_artifacts_json, render_artifacts_table, render_graph_diagnostics,
+        select_model,
+    };
     use crate::cli::{
         AdrCommand, AdrCreateArgs, AdrDeleteArgs, AdrGetArgs, AdrListArgs, AdrStatusArg, AdrTarget,
         AdrUpdateArgs, AskArgs, Cli, Command, DriftArgs, GraphCommand, GraphExportArgs,
@@ -1076,6 +1079,24 @@ mod tests {
     use crate::graph::{GraphIssue, GraphIssueKind};
     use crate::inventory::{RepositoryWalker, WalkOptions};
     use std::path::{Path, PathBuf};
+
+    /// LIT-22.8.5 AC3: `init`/`update` default to the offline, network-free
+    /// `MockModel` unless a caller explicitly opts in with an API key
+    /// environment variable -- read-only (never sets or unsets an env var,
+    /// so this can't race any other test) and true in every normal test
+    /// environment, since nothing in this codebase sets either variable.
+    #[test]
+    fn select_model_defaults_to_the_offline_mock_model_without_api_keys_set()
+    -> Result<(), Box<dyn std::error::Error>> {
+        assert!(std::env::var("LITHOGRAPH_DEEPINFRA_API_KEY").is_err());
+        assert!(std::env::var("LITHOGRAPH_OPENAI_API_KEY").is_err());
+
+        let (_, model_name) = select_model()?;
+
+        assert_eq!(model_name, "mock");
+
+        Ok(())
+    }
 
     #[test]
     fn execute_init_writes_docs_and_reports_counts() -> Result<(), Box<dyn std::error::Error>> {

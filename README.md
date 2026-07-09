@@ -289,7 +289,16 @@ make coverage
   validation and regression tools.
 - `fixtures/polyglot/`: representative fixture repository used by tests.
 - `tests/`: integration and snapshot coverage.
-- `docs/dev/`: design notes for parser and prompt/context version decisions.
+- `docs/dev/`: design notes for parser and prompt/context version decisions,
+  plus distribution and security posture documentation.
+
+## Distribution and Security
+
+See `docs/dev/distribution.md` for supported platforms, install instructions,
+planned release artifacts, and the pre-release checklist. See
+`docs/dev/security.md` for what Lithograph reads, sends to a model, writes to
+disk, and the guarantees that keep `make test`/`make check-all` offline and
+deterministic.
 
 ## Current Status
 

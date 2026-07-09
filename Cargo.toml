@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "Repository knowledge compiler that builds evidence-backed documentation from semantic analysis."
 license = "MIT"
-repository = "https://github.com/fabio/lithograph"
+repository = "https://github.com/fblln/Lithograph"
 
 [dependencies]
 blake3 = "1.8.2"
