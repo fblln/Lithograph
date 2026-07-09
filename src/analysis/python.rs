@@ -114,6 +114,11 @@ pub enum PythonReferenceKind {
     ConfigPath,
     /// `requests`/`httpx`/`urllib` HTTP client call (LIT-22.3.4).
     HttpCall,
+    /// Publishes/emits an event or message (Socket.IO, `EventEmitter`,
+    /// generic pub/sub) onto a channel (LIT-22.3.5).
+    Emits,
+    /// Subscribes/listens for an event or message on a channel (LIT-22.3.5).
+    ListensOn,
 }
 
 /// One heuristic reference extracted from a call expression.
@@ -632,6 +637,8 @@ fn classify_call(
             | "urllib.request.urlopen"
     ) {
         literal_or_dynamic(first_arg, source, PythonReferenceKind::HttpCall)
+    } else if let Some(kind) = event_call_kind(callee) {
+        literal_or_dynamic(first_arg, source, kind)
     } else {
         return None;
     };
@@ -650,6 +657,31 @@ fn first_positional_argument(call: Node) -> Option<Node> {
     arguments.children(&mut cursor).find(|child| {
         !matches!(child.kind(), "(" | ")" | ",") && child.kind() != "keyword_argument"
     })
+}
+
+/// Recognizes an `.emit(...)`/`.on(...)`/`.publish(...)`/`.subscribe(...)`
+/// call as an event/channel reference (LIT-22.3.5 AC1/AC2), but only when
+/// the receiver expression itself looks event/pub-sub-related (`socket`,
+/// `emitter`, `event`, `channel`, `bus`, `pubsub`, `redis`, `broker`).
+/// `emit`/`on` are common generic method names on unrelated objects, so
+/// matching the method name alone would produce false positives; the
+/// receiver-name check keeps this to genuine Socket.IO/EventEmitter/pub-sub
+/// call shapes rather than guessing from method name alone.
+fn event_call_kind(callee: &str) -> Option<PythonReferenceKind> {
+    let (receiver, method) = callee.rsplit_once('.')?;
+    let kind = match method {
+        "emit" | "publish" => PythonReferenceKind::Emits,
+        "on" | "subscribe" => PythonReferenceKind::ListensOn,
+        _ => return None,
+    };
+    let receiver = receiver.to_lowercase();
+    const EVENT_RECEIVER_HINTS: &[&str] = &[
+        "socket", "sio", "emit", "event", "channel", "bus", "pubsub", "redis", "broker",
+    ];
+    EVENT_RECEIVER_HINTS
+        .iter()
+        .any(|hint| receiver.contains(hint))
+        .then_some(kind)
 }
 
 fn literal_or_dynamic(
@@ -1019,6 +1051,101 @@ def run():
                 .any(|reference| reference.kind == PythonReferenceKind::HttpCall
                     && reference.value == "https://auth.example.test/verify")
         );
+
+        Ok(())
+    }
+
+    /// LIT-22.3.5 AC1/AC2/AC4: a Socket.IO-shaped producer (`socket.emit`)
+    /// and consumer (`socket.on`) both extract as High-confidence
+    /// Emits/ListensOn references naming the literal channel.
+    #[test]
+    fn socket_io_emit_and_on_are_extracted_as_producer_and_consumer()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let artifact = python_artifact("app/realtime.py")?;
+        let source = "def notify(socket):\n    socket.emit(\"user.updated\", payload)\n\n\ndef handler(socket):\n    socket.on(\"user.updated\", on_update)\n";
+        let analysis = PythonAnalyzer.analyze(&artifact, source);
+
+        assert!(
+            analysis
+                .references
+                .iter()
+                .any(|reference| reference.kind == PythonReferenceKind::Emits
+                    && reference.value == "user.updated"
+                    && reference.confidence == Confidence::High)
+        );
+        assert!(
+            analysis
+                .references
+                .iter()
+                .any(|reference| reference.kind == PythonReferenceKind::ListensOn
+                    && reference.value == "user.updated"
+                    && reference.confidence == Confidence::High)
+        );
+
+        Ok(())
+    }
+
+    /// LIT-22.3.5 AC2/AC4: generic pub/sub (`redis_client.publish`) and
+    /// `EventEmitter`-shaped (`self.emitter.on`) call receivers are
+    /// covered too, not just a literal `socket` name.
+    #[test]
+    fn generic_pubsub_and_event_emitter_receivers_are_covered()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let artifact = python_artifact("app/bus.py")?;
+        let source = "def publish_event(redis_client):\n    redis_client.publish(\"orders\", payload)\n\n\nclass Service:\n    def register(self):\n        self.emitter.on(\"orders\", self.handle)\n";
+        let analysis = PythonAnalyzer.analyze(&artifact, source);
+
+        assert!(
+            analysis
+                .references
+                .iter()
+                .any(|reference| reference.kind == PythonReferenceKind::Emits
+                    && reference.value == "orders")
+        );
+        assert!(
+            analysis
+                .references
+                .iter()
+                .any(|reference| reference.kind == PythonReferenceKind::ListensOn
+                    && reference.value == "orders")
+        );
+
+        Ok(())
+    }
+
+    /// LIT-22.3.5 AC3/AC4: a dynamic (non-literal) channel name stays
+    /// Low confidence rather than being reported as a resolved fact.
+    #[test]
+    fn dynamic_channel_name_is_low_confidence() -> Result<(), Box<dyn std::error::Error>> {
+        let artifact = python_artifact("app/realtime.py")?;
+        let source = "def notify(socket, channel_name):\n    socket.emit(channel_name, payload)\n";
+        let analysis = PythonAnalyzer.analyze(&artifact, source);
+
+        let emits = analysis
+            .references
+            .iter()
+            .find(|reference| reference.kind == PythonReferenceKind::Emits)
+            .ok_or("expected an Emits reference")?;
+        assert_eq!(emits.confidence, Confidence::Low);
+
+        Ok(())
+    }
+
+    /// LIT-22.3.5 AC2: `.on(...)`/`.emit(...)` on a receiver with no
+    /// event/pub-sub naming hint is never reported -- these method names
+    /// are common on unrelated APIs, so matching on method name alone
+    /// would fabricate facts about a totally different call.
+    #[test]
+    fn unrelated_receiver_emit_and_on_calls_are_not_reported()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let artifact = python_artifact("app/widgets.py")?;
+        let source = "def configure(widget):\n    widget.emit(\"resize\")\n    widget.on(\"click\", handler)\n";
+        let analysis = PythonAnalyzer.analyze(&artifact, source);
+
+        assert!(!analysis.references.iter().any(|reference| matches!(
+            reference.kind,
+            PythonReferenceKind::Emits | PythonReferenceKind::ListensOn
+        )));
 
         Ok(())
     }

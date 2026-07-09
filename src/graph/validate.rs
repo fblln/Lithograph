@@ -204,7 +204,7 @@ fn target_kind_allowed(kind: RelationKind, target: NodeKindTag) -> bool {
         | RelationKind::TypeRefs
         | RelationKind::Usages
         | RelationKind::Ffi => matches!(target, NodeKindTag::Symbol),
-        RelationKind::References => true,
+        RelationKind::References | RelationKind::Emits | RelationKind::ListensOn => true,
     }
 }
 

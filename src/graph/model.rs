@@ -285,6 +285,10 @@ pub enum RelationKind {
     Ffi,
     /// A generic reference (path, URL, dynamic import, ctypes, service dependency).
     References,
+    /// Publishes/emits an event or message onto a channel (LIT-22.3.5).
+    Emits,
+    /// Subscribes/listens for an event or message on a channel (LIT-22.3.5).
+    ListensOn,
 }
 
 /// How a relation was extracted or resolved.

@@ -889,6 +889,26 @@ impl BuilderState {
                     )),
                 );
             }
+            PythonReferenceKind::Emits | PythonReferenceKind::ListensOn => {
+                let kind = if reference.kind == PythonReferenceKind::Emits {
+                    RelationKind::Emits
+                } else {
+                    RelationKind::ListensOn
+                };
+                let target = self.unresolved(&reference.value);
+                self.relate_with_provenance(
+                    artifact_node.clone(),
+                    target,
+                    kind,
+                    reference.confidence,
+                    vec![reference.evidence.clone()],
+                    Some(artifact_provenance(
+                        artifact,
+                        RelationResolution::SyntaxOnly,
+                        reference.confidence,
+                    )),
+                );
+            }
         }
     }
 
@@ -2788,6 +2808,43 @@ impl Drop for Route {
                 "missing artifact node for {path}"
             );
         }
+
+        Ok(())
+    }
+
+    /// LIT-22.3.5 AC1/AC4: producer (`emit`) and consumer (`on`) calls
+    /// become `Emits`/`ListensOn` relations to a shared Unresolved node
+    /// per channel name, carrying evidence and confidence.
+    #[test]
+    fn emit_and_on_calls_produce_emits_and_listens_on_relations()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("realtime.py"),
+            "def notify(socket):\n    socket.emit(\"user.updated\", payload)\n\n\ndef handler(socket):\n    socket.on(\"user.updated\", on_update)\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let emits = graph
+            .relations
+            .iter()
+            .find(|relation| relation.kind == RelationKind::Emits)
+            .ok_or("expected an Emits relation")?;
+        let listens = graph
+            .relations
+            .iter()
+            .find(|relation| relation.kind == RelationKind::ListensOn)
+            .ok_or("expected a ListensOn relation")?;
+        assert_eq!(emits.confidence, crate::domain::Confidence::High);
+        assert_eq!(listens.confidence, crate::domain::Confidence::High);
+        // Both call sites cite the same literal channel name, so they
+        // converge on one shared target node rather than two.
+        assert_eq!(emits.target, listens.target);
+        assert!(graph.nodes.iter().any(
+            |node| matches!(node, GraphNode::Unresolved(node) if node.value == "user.updated")
+        ));
 
         Ok(())
     }
