@@ -9,6 +9,7 @@ pub mod cli;
 pub mod commands;
 pub mod domain;
 pub mod drift;
+pub mod editor_agent;
 pub mod generation;
 pub mod golden;
 pub mod graph;

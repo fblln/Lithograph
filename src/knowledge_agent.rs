@@ -8,7 +8,9 @@
 //! a missing *required* source and recording (without failing) a missing
 //! *optional* one.
 
+use crate::adr::AdrRecord;
 use crate::domain::Artifact;
+use crate::drift::DriftReport;
 use crate::graph::Graph;
 use crate::plan::DocumentationModule;
 use crate::research::ResearchBrief;
@@ -32,6 +34,10 @@ pub enum DataSourceKey {
     /// Already-computed research brief (available to agents that run
     /// after the deterministic research pass, e.g. editor agents).
     ResearchBrief,
+    /// Persisted architecture decision records (LIT-22.5.4).
+    AdrRecords,
+    /// Deterministic documentation/intent drift findings (LIT-22.5.3).
+    DriftReport,
 }
 
 impl Display for DataSourceKey {
@@ -41,6 +47,8 @@ impl Display for DataSourceKey {
             Self::Graph => "graph",
             Self::Modules => "modules",
             Self::ResearchBrief => "research_brief",
+            Self::AdrRecords => "adr_records",
+            Self::DriftReport => "drift_report",
         };
         formatter.write_str(name)
     }
@@ -56,6 +64,10 @@ pub enum DataSourceValue<'a> {
     Modules(&'a [DocumentationModule]),
     /// See [`DataSourceKey::ResearchBrief`].
     ResearchBrief(&'a ResearchBrief),
+    /// See [`DataSourceKey::AdrRecords`].
+    AdrRecords(&'a [AdrRecord]),
+    /// See [`DataSourceKey::DriftReport`].
+    DriftReport(&'a DriftReport),
 }
 
 /// Registry of data sources available for one agent run. Built once per
@@ -113,6 +125,22 @@ impl<'a> AgentContext<'a> {
     pub fn research_brief(&self) -> Option<&'a ResearchBrief> {
         match self.get(DataSourceKey::ResearchBrief) {
             Some(DataSourceValue::ResearchBrief(brief)) => Some(brief),
+            _ => None,
+        }
+    }
+
+    /// Looks up the ADR records, when present.
+    pub fn adr_records(&self) -> Option<&'a [AdrRecord]> {
+        match self.get(DataSourceKey::AdrRecords) {
+            Some(DataSourceValue::AdrRecords(records)) => Some(records),
+            _ => None,
+        }
+    }
+
+    /// Looks up the drift report, when present.
+    pub fn drift_report(&self) -> Option<&'a DriftReport> {
+        match self.get(DataSourceKey::DriftReport) {
+            Some(DataSourceValue::DriftReport(report)) => Some(report),
             _ => None,
         }
     }
