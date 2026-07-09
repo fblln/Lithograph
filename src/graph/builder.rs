@@ -129,8 +129,34 @@ impl GraphBuilder {
         }
 
         state.detect_near_clones(repo_root);
-        state.finish()
+        let mut graph = state.finish();
+        // LIT-23.1: applies to every caller (init/update, inspect, MCP
+        // tools, tests) uniformly, the same way detect_near_clones already
+        // does -- a post-processing pass belongs here, not bolted onto one
+        // caller, or callers would see inconsistently-resolved graphs.
+        crate::resolve::HybridResolverPipeline::default_pipeline().resolve(&mut graph);
+        prune_orphaned_unresolved_nodes(&mut graph);
+        graph
     }
+}
+
+/// Removes `Unresolved` nodes no relation references anymore after hybrid
+/// resolution (LIT-23.1): when every relation that targeted a raw
+/// syntax-only fact gets upgraded to a real node, the placeholder is dead
+/// weight -- leaving it in the graph would still surface the very raw-text
+/// noise resolution was meant to eliminate, just disconnected from every
+/// relation. A node created and immediately shared by several relations
+/// (the common case, since `BuilderState::unresolved` deduplicates by id)
+/// survives as long as at least one relation still targets it.
+fn prune_orphaned_unresolved_nodes(graph: &mut Graph) {
+    let referenced: BTreeSet<&GraphNodeId> = graph
+        .relations
+        .iter()
+        .flat_map(|relation| [&relation.source, &relation.target])
+        .collect();
+    graph
+        .nodes
+        .retain(|node| !matches!(node, GraphNode::Unresolved(_)) || referenced.contains(node.id()));
 }
 
 /// Returns the analyzer that would handle `artifact`, or `None` when no
@@ -3095,6 +3121,85 @@ def render_report(data):
         };
         assert_eq!(similar_relations(&first), similar_relations(&second));
         assert!(!similar_relations(&first).is_empty());
+
+        Ok(())
+    }
+
+    /// LIT-23.1: a multi-line, type-only TypeScript import resolves through
+    /// the hybrid resolver pipeline (wired into `build`/`build_with_cache`)
+    /// to a real Artifact target, and the now-orphaned raw-multi-line-text
+    /// `Unresolved` node it originally targeted is pruned from the graph
+    /// entirely -- reproducing and closing the exact bug found on an
+    /// external repository, where such nodes previously lingered with a
+    /// value containing the whole raw statement, newlines included.
+    #[test]
+    fn resolved_multi_line_import_prunes_its_orphaned_unresolved_node()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(
+            temp.path().join("src/types.ts"),
+            "export type CameraRig = { fov: number };\nexport type RouteSummary = { name: string };\n",
+        )?;
+        std::fs::write(
+            temp.path().join("src/app.ts"),
+            "import type {\n  CameraRig,\n  RouteSummary,\n} from \"./types\";\nexport function noop(): CameraRig | RouteSummary | null {\n  return null;\n}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        assert!(
+            graph.nodes.iter().all(|node| match node {
+                GraphNode::Unresolved(unresolved) => !unresolved.value.contains('\n'),
+                _ => true,
+            }),
+            "no Unresolved node should retain a raw multi-line import statement as its value"
+        );
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::Imports
+                    && relation.target.as_str() == "artifact:src/types.ts"),
+            "the import should still resolve to the real local artifact"
+        );
+
+        Ok(())
+    }
+
+    /// A relation that stays genuinely unresolved keeps its `Unresolved`
+    /// node in the graph -- pruning only removes nodes no relation targets
+    /// anymore, never a node a caller might still want to inspect.
+    #[test]
+    fn unresolved_nodes_still_targeted_by_a_relation_are_not_pruned()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src/main/java"))?;
+        std::fs::write(
+            temp.path().join("src/main/java/App.java"),
+            "import com.example.totally.unknown.Widget;\nclass App {}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let relation = graph
+            .relations
+            .iter()
+            .find(|relation| {
+                relation.kind == RelationKind::Imports
+                    && relation.source.as_str() == "artifact:src/main/java/App.java"
+            })
+            .ok_or("missing import relation")?;
+        assert!(
+            graph
+                .nodes
+                .iter()
+                .any(|node| node.id() == &relation.target
+                    && matches!(node, GraphNode::Unresolved(_))),
+            "an unresolvable import's Unresolved node must still be present, not pruned"
+        );
 
         Ok(())
     }

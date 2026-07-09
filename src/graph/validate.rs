@@ -192,17 +192,32 @@ fn target_kind_allowed(kind: RelationKind, target: NodeKindTag) -> bool {
         RelationKind::BelongsToPackage | RelationKind::DependsOnPackage => {
             target == NodeKindTag::Package
         }
-        RelationKind::Imports => matches!(target, NodeKindTag::Module | NodeKindTag::Package),
+        // LIT-23.1: the generic hybrid resolver pipeline (src/resolve/mod.rs)
+        // upgrades any SyntaxOnly/Fallback relation -- regardless of kind --
+        // whose Unresolved value matches a known package name or local
+        // artifact path, so an Imports or generic reference relation can
+        // legitimately end up targeting an Artifact or Package node, not
+        // just a Module/Symbol as when only the specialized Python/Rust
+        // analyzers produced hybrid-resolved relations.
+        RelationKind::Imports => matches!(
+            target,
+            NodeKindTag::Module | NodeKindTag::Package | NodeKindTag::Artifact
+        ),
         RelationKind::Calls => matches!(target, NodeKindTag::Symbol),
         RelationKind::ReadsEnv => target == NodeKindTag::EnvVar,
         RelationKind::RunsCommand => target == NodeKindTag::Command,
         RelationKind::UsesImage | RelationKind::BuildsImage | RelationKind::PublishesImage => {
             target == NodeKindTag::Container
         }
+        RelationKind::TypeRefs | RelationKind::Usages => matches!(
+            target,
+            NodeKindTag::Symbol
+                | NodeKindTag::Module
+                | NodeKindTag::Package
+                | NodeKindTag::Artifact
+        ),
         RelationKind::Implements
         | RelationKind::Inherits
-        | RelationKind::TypeRefs
-        | RelationKind::Usages
         | RelationKind::Ffi
         | RelationKind::DataFlows
         | RelationKind::SimilarTo => matches!(target, NodeKindTag::Symbol),
