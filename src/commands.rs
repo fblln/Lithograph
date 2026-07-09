@@ -21,7 +21,10 @@ use crate::graph::{
 };
 use crate::inventory::{RepositoryWalker, WalkOptions};
 use crate::mcp::WikiMcpServer;
-use crate::mermaid::{render_report as render_mermaid_report, validate as validate_mermaid};
+use crate::mermaid::{
+    fix_path as fix_mermaid_path, render_report as render_mermaid_report,
+    validate as validate_mermaid,
+};
 use crate::orchestrate::{
     InitReport, UpdateReport, run_init_with_options, run_update_with_options,
 };
@@ -282,6 +285,10 @@ fn execute_validate_mermaid<W>(
 where
     W: Write,
 {
+    if args.fix {
+        let files_changed = fix_mermaid_path(&args.path)?;
+        writer.write_all(format!("fixed node ids in {files_changed} file(s)\n").as_bytes())?;
+    }
     let report = validate_mermaid(&args.path, args.node_validator.as_deref())?;
     writer.write_all(render_mermaid_report(&report).as_bytes())?;
     if report.is_clean() {
@@ -831,7 +838,7 @@ mod tests {
         AdrUpdateArgs, AskArgs, Cli, Command, DriftArgs, GraphCommand, GraphExportArgs,
         GraphImportArgs, GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand,
         InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs,
-        OutputFormat,
+        OutputFormat, ValidateMermaidArgs,
     };
     use crate::graph::{GraphIssue, GraphIssueKind};
     use crate::inventory::{RepositoryWalker, WalkOptions};
@@ -1460,5 +1467,51 @@ mod tests {
         assert!(message.contains("symbol:missing"));
         assert!(message.contains("InvalidSourceSpan"));
         assert!(message.contains("only 5 lines"));
+    }
+
+    /// LIT-22.7.2 AC3: `validate-mermaid --fix` rewrites unsafe node ids
+    /// in place before re-validating; without `--fix`, the same command
+    /// leaves the file untouched and still fails.
+    #[test]
+    fn validate_mermaid_fix_flag_rewrites_ids_then_passes() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("diagram.md"),
+            "```mermaid\nflowchart TD\n  caf\u{e9}[\"Overview\"]\n```\n",
+        )?;
+
+        let without_fix = Cli {
+            command: Some(Command::ValidateMermaid(ValidateMermaidArgs {
+                path: temp.path().to_path_buf(),
+                node_validator: None,
+                fix: false,
+            })),
+        };
+        let mut output = Vec::new();
+        assert!(execute(without_fix, &mut output).is_err());
+        assert!(
+            std::fs::read_to_string(temp.path().join("diagram.md"))?.contains('\u{e9}'),
+            "without --fix the file must be untouched"
+        );
+
+        let with_fix = Cli {
+            command: Some(Command::ValidateMermaid(ValidateMermaidArgs {
+                path: temp.path().to_path_buf(),
+                node_validator: None,
+                fix: true,
+            })),
+        };
+        let mut output = Vec::new();
+        execute(with_fix, &mut output)?;
+        let output = String::from_utf8(output)?;
+
+        assert!(output.contains("fixed node ids in 1 file(s)"));
+        assert!(
+            !std::fs::read_to_string(temp.path().join("diagram.md"))?.contains('\u{e9}'),
+            "--fix must rewrite the unsafe id"
+        );
+
+        Ok(())
     }
 }

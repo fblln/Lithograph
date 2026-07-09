@@ -240,6 +240,10 @@ pub struct ValidateMermaidArgs {
     /// Optional local Node validator script. It receives Mermaid text on stdin.
     #[arg(long)]
     pub node_validator: Option<PathBuf>,
+    /// Rewrite unsafe node ids to deterministic ASCII ids in place, then
+    /// re-validate. Never run unless explicitly requested (LIT-22.7.2 AC3).
+    #[arg(long)]
+    pub fix: bool,
 }
 
 /// Arguments for `mcp-server`.
@@ -752,6 +756,7 @@ mod tests {
             Some(Command::ValidateMermaid(ValidateMermaidArgs {
                 path: PathBuf::from("docs"),
                 node_validator: Some(PathBuf::from("scripts/validate-mermaid.mjs")),
+                fix: false,
             }))
         );
         assert_eq!(
