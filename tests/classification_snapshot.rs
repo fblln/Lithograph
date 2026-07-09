@@ -37,9 +37,9 @@ rust/src/lib.rs|SourceCode|rust|DeepLanguage|Text|Specialized(rust)|Allowed|0|0
 src/python_app/__init__.py|SourceCode|python|DeepLanguage|Text|Specialized(python)|Allowed|0|0
 src/python_app/service.py|SourceCode|python|DeepLanguage|Text|Specialized(python)|Allowed|0|0
 vendor/example/lib.rs|SourceCode|rust|DeepLanguage|Text|Specialized(rust)|Allowed|0|100
-web/index.html|Template|html|GenericText|Text|GenericText|Allowed|0|0
-web/package.json|Configuration|json|StructuredFormat|Text|Structured(json)|Allowed|0|0
-web/src/App.tsx|SourceCode|tsx|GenericText|Text|GenericText|Allowed|0|0"
+web/index.html|Template|html|StructuredFormat|Text|SyntaxIndexed(html)|Allowed|0|0
+web/package.json|PackageManifest|npm|StructuredFormat|Text|Specialized(npm)|Allowed|0|0
+web/src/App.tsx|SourceCode|tsx|StructuredFormat|Text|SyntaxIndexed(tsx)|Allowed|0|0"
     );
 
     Ok(())
@@ -65,6 +65,7 @@ fn analyzer_name(analyzer: &AnalyzerSelection) -> String {
         AnalyzerSelection::Unassigned => "Unassigned".to_owned(),
         AnalyzerSelection::Specialized(name) => format!("Specialized({name})"),
         AnalyzerSelection::Structured(name) => format!("Structured({name})"),
+        AnalyzerSelection::SyntaxIndexed(name) => format!("SyntaxIndexed({name})"),
         AnalyzerSelection::GenericText => "GenericText".to_owned(),
         AnalyzerSelection::Opaque => "Opaque".to_owned(),
     }

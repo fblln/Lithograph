@@ -47,6 +47,12 @@ pub enum TaskKind {
     Boundaries,
     /// Repository-wide configuration/deployment page.
     Configuration,
+    /// Repository-wide database overview page (LIT-22.7.3).
+    Database,
+    /// Repository-wide key-modules page (LIT-22.7.3).
+    KeyModules,
+    /// Repository-wide architecture-decisions-and-drift page (LIT-22.7.3).
+    AdrDrift,
     /// One module's leaf documentation page.
     ModulePage,
 }
@@ -61,6 +67,9 @@ impl TaskKind {
             Self::Workflows => "workflows-context-v1",
             Self::Boundaries => "boundaries-context-v1",
             Self::Configuration => "configuration-context-v1",
+            Self::Database => "database-context-v1",
+            Self::KeyModules => "key-modules-context-v1",
+            Self::AdrDrift => "adr-drift-context-v1",
             Self::ModulePage => "module-context-v1",
         }
     }
@@ -216,6 +225,21 @@ impl PageManifestBuilder {
                 "page:configuration",
                 "docs/lithograph/configuration.md",
             ),
+            (
+                TaskKind::Database,
+                "page:database",
+                "docs/lithograph/database.md",
+            ),
+            (
+                TaskKind::KeyModules,
+                "page:key-modules",
+                "docs/lithograph/key-modules.md",
+            ),
+            (
+                TaskKind::AdrDrift,
+                "page:adr-drift",
+                "docs/lithograph/adr-and-drift.md",
+            ),
         ] {
             pages.push(DocumentationPage {
                 id: id.to_owned(),
@@ -289,6 +313,9 @@ mod tests {
             "page:workflows",
             "page:boundaries",
             "page:configuration",
+            "page:database",
+            "page:key-modules",
+            "page:adr-drift",
         ] {
             assert!(manifest.pages.iter().any(|page| page.id == id), "{id}");
         }
@@ -298,7 +325,7 @@ mod tests {
             .filter(|page| page.module_id.is_some())
             .count();
         assert_eq!(module_pages, 11);
-        assert_eq!(manifest.pages.len(), module_pages + 6);
+        assert_eq!(manifest.pages.len(), module_pages + 9);
         assert_eq!(manifest.tasks.len(), manifest.pages.len());
         assert!(
             manifest

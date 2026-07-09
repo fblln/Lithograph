@@ -38,6 +38,7 @@ fn init_writes_docs_and_manifest_for_the_fixture() -> Result<(), Box<dyn Error>>
         );
     }
     assert!(temp.path().join(".lithograph/graph.json").exists());
+    assert!(temp.path().join(".lithograph/graph/current.json").exists());
     assert!(temp.path().join(".lithograph/manifest.json").exists());
     assert!(temp.path().join(".lithograph/snapshot.json").exists());
     assert!(temp.path().join(".lithograph/run.json").exists());

@@ -5,13 +5,16 @@ pub mod dockerfile;
 pub mod external_symbols;
 pub mod generic_text;
 pub mod markdown;
+pub mod packages;
 pub mod profiles;
+pub mod protocols;
 pub mod python;
 pub mod rust_metadata;
 pub mod rust_source;
 pub mod structured;
+pub mod tree_sitter_adapter;
 
-pub use cache::{AnalysisCache, AnalyzerKind, AnalyzerOutput};
+pub use cache::{ANALYSIS_CACHE_VERSION, AnalysisCache, AnalyzerKind, AnalyzerOutput};
 pub use dockerfile::{
     DockerCommand, DockerCommandKind, DockerCopy, DockerEnv, DockerInstruction,
     DockerInstructionKind, DockerPort, DockerSingleValue, DockerStage, DockerfileAnalysis,
@@ -23,6 +26,10 @@ pub use markdown::{
     CodeFence, DriftKind, LinkKind, MarkdownAnalysis, MarkdownAnalyzer, MarkdownCommand,
     MarkdownDrift, MarkdownHeading, MarkdownLink, MarkdownPathReference,
 };
+pub use packages::{
+    ComposerAnalyzer, CsprojAnalyzer, GoModAnalyzer, GradleAnalyzer, MavenPomAnalyzer,
+    NpmPackageAnalyzer, PackageDependency, PackageManifestAnalysis, PackageManifestFormat,
+};
 pub use profiles::{
     ActionsJob, ActionsProfile, ActionsProfileAnalyzer, ActionsStep, ActionsStepHint,
     CargoDependency, CargoDependencyKind, CargoFeature, CargoPackage, CargoProfile,
@@ -31,6 +38,7 @@ pub use profiles::{
     PyProjectProfile, PythonDependency, PythonProject, PythonRequirement, RequirementsAnalyzer,
     RequirementsProfile,
 };
+pub use protocols::{GraphQlAnalyzer, ProtoAnalyzer, ProtocolFormat, ProtocolRoute};
 pub use python::{
     PythonAnalysis, PythonAnalyzer, PythonClass, PythonFunction, PythonImport, PythonImportKind,
     PythonImportName, PythonReference, PythonReferenceKind,
@@ -46,4 +54,9 @@ pub use rust_source::{
 pub use structured::{
     ConfigEntity, ConfigReference, ConfigReferenceKind, StructuredAnalysis, StructuredAnalyzer,
     StructuredFormat,
+};
+pub use tree_sitter_adapter::{
+    SyntaxIndexedLanguage, TreeSitterAdapterOutput, TreeSitterComment, TreeSitterParseStatus,
+    TreeSitterParserAdapter, TreeSitterSyntaxError, TreeSitterSyntaxFact,
+    parse_with_optional_adapter,
 };

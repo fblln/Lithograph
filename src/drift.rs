@@ -1,10 +1,13 @@
-//! Documentation drift: likely-stale Markdown facts checked against the
-//! current repository and graph -- broken links, missing referenced paths,
-//! documented commands that no longer match a known script/manifest entry,
-//! and image/service mentions absent from the current graph.
+//! Architecture drift (LIT-22.5.3): likely-stale Markdown facts checked
+//! against the current repository and graph -- broken links, missing
+//! referenced paths, documented commands that no longer match a known
+//! script/manifest entry, image/service mentions absent from the current
+//! graph, graph facts (routes) with no documentation coverage at all, and
+//! documented intent (TODO/planned/not-yet-implemented) that hasn't
+//! resolved into a matching graph fact.
 
 use crate::analysis::{DriftKind as MarkdownDriftKind, MarkdownAnalyzer, MarkdownDrift};
-use crate::domain::{Artifact, EvidenceRef};
+use crate::domain::{Artifact, EvidenceRef, SourceSpan};
 use crate::graph::{ConfigNodeKind, Graph, GraphNode};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -30,19 +33,33 @@ pub enum DriftKind {
     /// being absent from it -- e.g. an inline-code image reference names a
     /// real, current image but with a tag that no longer matches.
     ContradictsCurrentFact,
+    /// A real graph fact (an HTTP/RPC/GraphQL route) has no mention in any
+    /// scanned Markdown document.
+    MissingDocumentation,
+    /// Documentation names a planned/TODO/not-yet-implemented intent that
+    /// has no matching current graph fact.
+    UnresolvedIntent,
 }
 
-/// One likely-stale documentation fact.
+/// One likely-stale documentation fact, or a graph fact missing coverage.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DriftFinding {
     /// Finding category.
     pub kind: DriftKind,
-    /// Markdown artifact this finding was found in.
+    /// Primary artifact this finding cites: the Markdown doc for
+    /// doc-anchored kinds, or the defining artifact for
+    /// `MissingDocumentation` (LIT-22.5.3 AC2).
     pub artifact_path: String,
-    /// The stale text itself (link target, path, command, image, or service name).
+    /// The stale text itself (link target, path, command, image, service
+    /// name, or documented-intent excerpt).
     pub detail: String,
     /// Evidence for this finding.
     pub evidence: EvidenceRef,
+    /// Graph node id cited by this finding, when applicable (LIT-22.5.3
+    /// AC2: `MissingDocumentation` always sets this; doc-anchored kinds
+    /// leave it `None` since they cite a Markdown artifact, not a node).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub graph_node: Option<String>,
 }
 
 /// Full drift scan result.
@@ -82,6 +99,7 @@ impl DriftDetector {
             .collect();
 
         let mut findings = Vec::new();
+        let mut markdown_corpus = String::new();
         for artifact in artifacts {
             if artifact.detected_format.as_deref() != Some("markdown") {
                 continue;
@@ -94,6 +112,19 @@ impl DriftDetector {
             for drift in &analysis.drift {
                 findings.push(from_markdown_drift(artifact.path.as_str(), drift));
             }
+            for (line_number, line) in text.lines().enumerate() {
+                if let Some(excerpt) = unresolved_intent_excerpt(line) {
+                    findings.push(DriftFinding {
+                        kind: DriftKind::UnresolvedIntent,
+                        artifact_path: artifact.path.as_str().to_owned(),
+                        detail: excerpt,
+                        evidence: line_evidence(artifact, line_number as u32 + 1),
+                        graph_node: None,
+                    });
+                }
+            }
+            markdown_corpus.push_str(&text);
+            markdown_corpus.push('\n');
             for command in &analysis.commands {
                 if let Some(detail) =
                     stale_command(&command.command, &known_make_targets, &known_npm_scripts)
@@ -103,6 +134,7 @@ impl DriftDetector {
                         artifact_path: artifact.path.as_str().to_owned(),
                         detail,
                         evidence: command.evidence.clone(),
+                        graph_node: None,
                     });
                 }
             }
@@ -131,6 +163,7 @@ impl DriftDetector {
                             crate::domain::ArtifactId::from_path(&artifact.path),
                             artifact.path.clone(),
                         ),
+                        graph_node: None,
                     });
                 } else if token.near_service_keyword
                     && is_service_name_like(token.text)
@@ -144,12 +177,72 @@ impl DriftDetector {
                             crate::domain::ArtifactId::from_path(&artifact.path),
                             artifact.path.clone(),
                         ),
+                        graph_node: None,
                     });
                 }
             }
         }
 
+        let markdown_corpus_lower = markdown_corpus.to_lowercase();
+        for node in &graph.nodes {
+            let GraphNode::Config(config) = node else {
+                continue;
+            };
+            if config.kind != ConfigNodeKind::Route {
+                continue;
+            }
+            if !markdown_corpus_lower.contains(&config.name.to_lowercase()) {
+                findings.push(DriftFinding {
+                    kind: DriftKind::MissingDocumentation,
+                    artifact_path: config.evidence.path.as_str().to_owned(),
+                    detail: config.name.clone(),
+                    evidence: config.evidence.clone(),
+                    graph_node: Some(node.id().as_str().to_owned()),
+                });
+            }
+        }
+
         DriftReport { findings }
+    }
+}
+
+/// Matches a documentation line naming a planned/TODO/not-yet-implemented
+/// intent, returning a trimmed excerpt when it does. Deliberately coarse
+/// (a keyword match, not NLP): a false positive here is a line a human
+/// reviews and dismisses, but a missed one is a drift finding nobody sees.
+fn unresolved_intent_excerpt(line: &str) -> Option<String> {
+    const INTENT_KEYWORDS: &[&str] = &[
+        "todo",
+        "fixme",
+        "not yet implemented",
+        "not implemented",
+        "coming soon",
+        "planned",
+        "will support",
+        "should support",
+    ];
+    let lower = line.to_lowercase();
+    INTENT_KEYWORDS
+        .iter()
+        .any(|keyword| lower.contains(keyword))
+        .then(|| {
+            let trimmed = line.trim();
+            if trimmed.len() > 160 {
+                format!("{}...", char_boundary_slice(trimmed, 0, 160))
+            } else {
+                trimmed.to_owned()
+            }
+        })
+}
+
+fn line_evidence(artifact: &Artifact, line_number: u32) -> EvidenceRef {
+    let base = EvidenceRef::file(
+        crate::domain::ArtifactId::from_path(&artifact.path),
+        artifact.path.clone(),
+    );
+    match SourceSpan::new(line_number, line_number) {
+        Ok(span) => base.with_span(span),
+        Err(_) => base,
     }
 }
 
@@ -163,6 +256,7 @@ fn from_markdown_drift(artifact_path: &str, drift: &MarkdownDrift) -> DriftFindi
         artifact_path: artifact_path.to_owned(),
         detail: drift.target.clone(),
         evidence: drift.evidence.clone(),
+        graph_node: None,
     }
 }
 
@@ -457,6 +551,89 @@ services:
                 .any(|finding| finding.kind == DriftKind::StaleImageMention),
             "a name match with a different tag is a contradiction, not a stale mention"
         );
+
+        Ok(())
+    }
+
+    /// LIT-22.5.3 AC1/AC2/AC4: a graph fact (an HTTP route) with no
+    /// mention in any Markdown doc is `MissingDocumentation`, citing the
+    /// route's own graph node id and defining artifact.
+    #[test]
+    fn undocumented_route_is_missing_documentation() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("service.py"),
+            "@app.get(\"/users/{id}\")\ndef get_user(id):\n    return None\n",
+        )?;
+        std::fs::write(temp.path().join("README.md"), "# Nothing here\n")?;
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let report = DriftDetector.scan(&artifacts, &graph, temp.path());
+
+        let finding = report
+            .findings
+            .iter()
+            .find(|finding| finding.kind == DriftKind::MissingDocumentation)
+            .ok_or("missing MissingDocumentation finding")?;
+        assert_eq!(finding.detail, "GET /users/{id}");
+        assert_eq!(finding.artifact_path, "service.py");
+        assert!(finding.graph_node.is_some());
+
+        Ok(())
+    }
+
+    /// LIT-22.5.3 AC1/AC4: a documented route stays undetected as missing.
+    #[test]
+    fn documented_route_is_not_missing_documentation() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("service.py"),
+            "@app.get(\"/users/{id}\")\ndef get_user(id):\n    return None\n",
+        )?;
+        std::fs::write(
+            temp.path().join("README.md"),
+            "The `GET /users/{id}` route returns a user.\n",
+        )?;
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let report = DriftDetector.scan(&artifacts, &graph, temp.path());
+
+        assert!(
+            !report
+                .findings
+                .iter()
+                .any(|finding| finding.kind == DriftKind::MissingDocumentation),
+            "unexpected drift: {:#?}",
+            report.findings
+        );
+
+        Ok(())
+    }
+
+    /// LIT-22.5.3 AC1/AC2/AC4: a TODO/planned mention in a doc is
+    /// `UnresolvedIntent`, citing the doc artifact and line.
+    #[test]
+    fn documented_todo_is_unresolved_intent() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("README.md"),
+            "# Roadmap\n\nTODO: add a `/health` endpoint once the service is stable.\n",
+        )?;
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let report = DriftDetector.scan(&artifacts, &graph, temp.path());
+
+        let finding = report
+            .findings
+            .iter()
+            .find(|finding| finding.kind == DriftKind::UnresolvedIntent)
+            .ok_or("missing UnresolvedIntent finding")?;
+        assert_eq!(finding.artifact_path, "README.md");
+        assert!(finding.detail.contains("TODO"));
+        assert!(finding.evidence.span.is_some());
 
         Ok(())
     }

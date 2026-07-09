@@ -1,0 +1,47 @@
+{
+  "modules": [
+    "web (Directory) score 66",
+    "Configuration (Configuration) score 50",
+    "Documentation (Documentation) score 44",
+    "Infrastructure (Infrastructure) score 42",
+    "python_app (PythonPackage) score 38",
+    "fixture-worker (RustCrate) score 32",
+    "root (Directory) score 14",
+    "generated (Directory) score 6",
+    "vendor (Directory) score 6",
+    "assets (Directory) score 5"
+  ],
+  "evidence": [
+    {
+      "reference": ".github/workflows/ci.yml"
+    },
+    {
+      "reference": "Dockerfile"
+    },
+    {
+      "reference": "LICENSE"
+    },
+    {
+      "reference": "Makefile"
+    },
+    {
+      "reference": "README.md"
+    },
+    {
+      "reference": "assets/logo.svg"
+    },
+    {
+      "reference": "config/schema.json"
+    },
+    {
+      "reference": "config/settings.yaml"
+    },
+    {
+      "reference": "data/sample.bin"
+    },
+    {
+      "reference": "docker-compose.yml"
+    }
+  ],
+  "confidence": 85
+}

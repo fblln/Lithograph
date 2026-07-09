@@ -123,18 +123,34 @@ pub fn check_or_update(
     }
 }
 
+/// Every non-run-specific artifact `init`/`update` can write, tracked as a
+/// golden snapshot source (LIT-22.2.5 AC2). Kept as one explicit list
+/// (rather than a generic directory walk of `.lithograph/`) so `run.json`
+/// -- deliberately non-deterministic (a fresh `run_id`/timestamp every
+/// run, see `orchestrate.rs`) -- is never accidentally golden-tracked.
+const LITHOGRAPH_SNAPSHOT_FILES: &[&str] = &[
+    ".lithograph/manifest.json",
+    ".lithograph/graph.json",
+    ".lithograph/graph/current.json",
+    ".lithograph/fts-index.json",
+    ".lithograph/research/brief.json",
+    ".lithograph/research/agent-memory.json",
+    ".lithograph/research/system-context.json",
+    ".lithograph/research/domain-modules.json",
+    ".lithograph/research/architecture-report.json",
+    ".lithograph/research/workflows.json",
+    ".lithograph/research/boundaries.json",
+    ".lithograph/research/configuration.json",
+    ".lithograph/research/key-modules.json",
+    ".lithograph/research/database.json",
+    ".lithograph/research/cross-service.json",
+    ".lithograph/research/deployment.json",
+];
+
 fn snapshot_sources(repo_root: &Path) -> Result<Vec<PathBuf>, GoldenError> {
     let mut files = Vec::new();
     collect_files(&repo_root.join("docs/lithograph"), &mut files)?;
-    for relative in [
-        ".lithograph/manifest.json",
-        ".lithograph/research/brief.json",
-        ".lithograph/research/system-context.json",
-        ".lithograph/research/workflows.json",
-        ".lithograph/research/boundaries.json",
-        ".lithograph/research/configuration.json",
-        ".lithograph/research/key-modules.json",
-    ] {
+    for relative in LITHOGRAPH_SNAPSHOT_FILES {
         let path = repo_root.join(relative);
         if path.exists() {
             files.push(path);

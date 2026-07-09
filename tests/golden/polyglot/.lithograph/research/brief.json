@@ -1,0 +1,985 @@
+{
+  "system_context": [
+    "Repository contains 23 artifact(s), 130 graph node(s), 142 graph relation(s), and 11 documentation module(s).",
+    "Configuration (Configuration) owns 23 graph member(s)",
+    "assets (Directory) owns 2 graph member(s)",
+    "data (Directory) owns 1 graph member(s)",
+    "generated (Directory) owns 3 graph member(s)",
+    "root (Directory) owns 6 graph member(s)",
+    "vendor (Directory) owns 3 graph member(s)",
+    "web (Directory) owns 33 graph member(s)",
+    "Documentation (Documentation) owns 13 graph member(s)",
+    "Infrastructure (Infrastructure) owns 19 graph member(s)",
+    "python_app (PythonPackage) owns 16 graph member(s)",
+    "fixture-worker (RustCrate) owns 14 graph member(s)",
+    "language support: bin current Detected, target Detected via inventory-fallback (1 artifact(s))",
+    "language support: docker-compose current SyntaxIndexed, target SyntaxIndexed via structured-syntax (1 artifact(s))",
+    "language support: dockerfile current SyntaxIndexed, target SyntaxIndexed via structured-syntax (1 artifact(s))",
+    "language support: github-actions current SyntaxIndexed, target SyntaxIndexed via structured-syntax (1 artifact(s))",
+    "language support: html current SyntaxIndexed, target SyntaxIndexed via syntax-indexed-treesitter (1 artifact(s))",
+    "language support: json current SyntaxIndexed, target SyntaxIndexed via structured-syntax (1 artifact(s))",
+    "language support: license current Detected, target Detected via inventory-fallback (1 artifact(s))",
+    "language support: makefile current Detected, target SyntaxIndexed via generic-text-fallback (1 artifact(s))",
+    "language support: markdown current SyntaxIndexed, target SyntaxIndexed via structured-syntax (2 artifact(s))",
+    "language support: npm current SyntaxIndexed, target SyntaxIndexed via inventory-fallback (1 artifact(s))",
+    "language support: python current HybridResolved, target HybridResolved via specialized-hybrid (3 artifact(s))",
+    "language support: requirements-txt current Detected, target Detected via inventory-fallback (1 artifact(s))"
+  ],
+  "workflows": [
+    "Dockerfile -[ReadsEnv]-> RIDGELINE_WORKER (High)",
+    "Dockerfile -[RunsCommand]-> [\"python\", \"-m\", \"python_app.service\"] (High)",
+    "Dockerfile -[RunsCommand]-> cargo build --manifest-path rust/Cargo.toml --release (High)",
+    "Dockerfile -[RunsCommand]-> pip install --no-cache-dir -r requirements.txt (High)",
+    "Dockerfile -[UsesImage]-> python:3.13-slim (High)",
+    "Dockerfile -[UsesImage]-> rust:1.96 (High)",
+    "Makefile -[RunsCommand]-> npm --prefix web run lint (Low)",
+    "Makefile -[RunsCommand]-> docker build -t ghcr.io/example/route-api:dev . (Low)",
+    "Makefile -[RunsCommand]-> python -m pytest (Low)",
+    "Makefile -[RunsCommand]-> cargo test --manifest-path rust/Cargo.toml (Low)",
+    "config/schema.json -[UsesImage]-> ghcr.io/example/worker:1.0 (High)",
+    "config/settings.yaml -[ReadsEnv]-> RIDGELINE_CACHE_DIR (High)",
+    "config/settings.yaml -[ReadsEnv]-> RIDGELINE_WORKER (High)",
+    "config/settings.yaml -[ReadsEnv]-> VERSION (High)",
+    "config/settings.yaml -[RunsCommand]-> python -m python_app.service (High)",
+    "config/settings.yaml -[UsesImage]-> ghcr.io/example/route-api:${VERSION} (High)",
+    "docs/architecture.md -[RunsCommand]-> make test (High)",
+    "docs/architecture.md -[RunsCommand]-> cargo test --manifest-path rust/Cargo.toml (High)",
+    "docs/architecture.md -[RunsCommand]-> python -m pytest (High)",
+    "rust/src/lib.rs -[ReadsEnv]-> RIDGELINE_CACHE_DIR (High)",
+    "src/python_app/service.py -[ReadsEnv]-> RIDGELINE_WORKER (High)",
+    "src/python_app/service.py -[RunsCommand]-> [worker_path, \"--route\", str(route_file)] (Low)",
+    "checks -[RunsCommand]-> python -m pytest (High)",
+    "checks -[RunsCommand]-> cargo test --manifest-path rust/Cargo.toml (High)",
+    "checks -[RunsCommand]-> npm --prefix web run lint (High)",
+    "checks -[RunsCommand]-> docker build -t ghcr.io/example/route-api:${{ github.sha }} . (High)",
+    "checks -[BuildsImage]-> ghcr.io/example/route-api:${{ (High)",
+    "api -[ReadsEnv]-> RIDGELINE_WORKER (High)",
+    "api -[UsesImage]-> ghcr.io/example/route-api:${VERSION:-dev} (High)",
+    "web -[UsesImage]-> node:24-alpine (High)"
+  ],
+  "boundaries": [
+    "environment variable: RIDGELINE_CACHE_DIR",
+    "environment variable: RIDGELINE_WORKER",
+    "environment variable: VERSION",
+    "external package: @vitejs/plugin-react",
+    "external package: __future__",
+    "external package: anyhow",
+    "external package: json",
+    "external package: os",
+    "external package: pathlib",
+    "external package: pydantic",
+    "external package: pytest",
+    "external package: std",
+    "external package: subprocess",
+    "external package: typescript",
+    "external package: vite",
+    "unresolved reference: /usr/local/bin/worker",
+    "unresolved reference: /var/cache/ridgeline",
+    "unresolved reference: App",
+    "unresolved reference: React",
+    "unresolved reference: RouteSummary",
+    "unresolved reference: assets/",
+    "unresolved reference: body",
+    "unresolved reference: charset",
+    "unresolved reference: div",
+    "unresolved reference: fixture_worker::bake_route",
+    "unresolved reference: ghcr.io/example/route-api:dev",
+    "unresolved reference: h1",
+    "unresolved reference: head",
+    "unresolved reference: html",
+    "unresolved reference: https://json-schema.org/draft/2020-12/schema",
+    "unresolved reference: id",
+    "unresolved reference: import React from \"react\";",
+    "unresolved reference: lang",
+    "unresolved reference: main",
+    "unresolved reference: meta",
+    "unresolved reference: p",
+    "unresolved reference: route",
+    "unresolved reference: rust/",
+    "unresolved reference: script",
+    "unresolved reference: src"
+  ],
+  "configuration": [
+    "ContinuousIntegration: .github/workflows/ci.yml",
+    "ContainerDefinition: Dockerfile",
+    "BuildDefinition: Makefile",
+    "Configuration: config/schema.json",
+    "Configuration: config/settings.yaml",
+    "ContainerDefinition: docker-compose.yml",
+    "PackageManifest: pyproject.toml",
+    "PackageManifest: requirements.txt",
+    "PackageManifest: rust/Cargo.toml",
+    "PackageManifest: web/package.json",
+    "Job: checks",
+    "Service: route-api",
+    "Port: 8080",
+    "Service: api",
+    "Service: web",
+    "package: @vitejs/plugin-react (external)",
+    "package: __future__ (external)",
+    "package: anyhow (external)",
+    "package: fixture-worker",
+    "package: json (external)",
+    "package: os (external)",
+    "package: pathlib (external)",
+    "package: polyglot-fixture",
+    "package: pydantic (external)",
+    "package: pytest (external)",
+    "package: std (external)",
+    "package: subprocess (external)",
+    "package: typescript (external)",
+    "package: vite (external)"
+  ],
+  "key_modules": [
+    "web (Directory) score 66",
+    "Configuration (Configuration) score 50",
+    "Documentation (Documentation) score 44",
+    "Infrastructure (Infrastructure) score 42",
+    "python_app (PythonPackage) score 38",
+    "fixture-worker (RustCrate) score 32",
+    "root (Directory) score 14",
+    "generated (Directory) score 6",
+    "vendor (Directory) score 6",
+    "assets (Directory) score 5"
+  ],
+  "agent_memory": {
+    "system_context": {
+      "project_summary": "Repository contains 23 artifact(s), 130 graph node(s), 142 graph relation(s), and 11 documentation module(s).",
+      "included_components": [
+        "Configuration (Configuration)",
+        "assets (Directory)",
+        "data (Directory)",
+        "generated (Directory)",
+        "root (Directory)",
+        "vendor (Directory)",
+        "web (Directory)",
+        "Documentation (Documentation)",
+        "Infrastructure (Infrastructure)",
+        "python_app (PythonPackage)",
+        "fixture-worker (RustCrate)"
+      ],
+      "external_systems": [
+        "@vitejs/plugin-react",
+        "__future__",
+        "anyhow",
+        "json",
+        "os",
+        "pathlib",
+        "pydantic",
+        "pytest",
+        "std",
+        "subprocess",
+        "typescript",
+        "vite",
+        "/usr/local/bin/worker",
+        "/var/cache/ridgeline",
+        "App",
+        "React",
+        "RouteSummary",
+        "assets/",
+        "body",
+        "charset"
+      ],
+      "evidence": [
+        {
+          "reference": ".github/workflows/ci.yml"
+        },
+        {
+          "reference": "Dockerfile"
+        },
+        {
+          "reference": "LICENSE"
+        },
+        {
+          "reference": "Makefile"
+        },
+        {
+          "reference": "README.md"
+        },
+        {
+          "reference": "assets/logo.svg"
+        },
+        {
+          "reference": "config/schema.json"
+        },
+        {
+          "reference": "config/settings.yaml"
+        }
+      ],
+      "confidence": 85
+    },
+    "domain_modules": {
+      "modules": [
+        {
+          "name": "Configuration",
+          "kind": "Configuration",
+          "member_count": 23,
+          "evidence": [
+            "artifact:config/schema.json",
+            "artifact:config/settings.yaml",
+            "artifact:pyproject.toml",
+            "artifact:requirements.txt"
+          ]
+        },
+        {
+          "name": "assets",
+          "kind": "Directory",
+          "member_count": 2,
+          "evidence": [
+            "artifact:assets/logo.svg",
+            "unresolved:xmlns=\"http://www.w3.org/2000/svg"
+          ]
+        },
+        {
+          "name": "data",
+          "kind": "Directory",
+          "member_count": 1,
+          "evidence": [
+            "artifact:data/sample.bin"
+          ]
+        },
+        {
+          "name": "generated",
+          "kind": "Directory",
+          "member_count": 3,
+          "evidence": [
+            "artifact:generated/client.py",
+            "module:generated.client",
+            "symbol:generated/client.py#generated.client::call_route_api"
+          ]
+        },
+        {
+          "name": "root",
+          "kind": "Directory",
+          "member_count": 6,
+          "evidence": [
+            "artifact:Makefile",
+            "command:Makefile#12",
+            "command:Makefile#15",
+            "command:Makefile#6"
+          ]
+        },
+        {
+          "name": "vendor",
+          "kind": "Directory",
+          "member_count": 3,
+          "evidence": [
+            "artifact:vendor/example/lib.rs",
+            "module:vendor::example",
+            "symbol:vendor/example/lib.rs#vendor::example::vendored_helper"
+          ]
+        },
+        {
+          "name": "web",
+          "kind": "Directory",
+          "member_count": 33,
+          "evidence": [
+            "artifact:web/index.html",
+            "artifact:web/src/App.tsx",
+            "module:web/index.html",
+            "module:web/src/App.tsx"
+          ]
+        },
+        {
+          "name": "Documentation",
+          "kind": "Documentation",
+          "member_count": 13,
+          "evidence": [
+            "artifact:LICENSE",
+            "artifact:README.md",
+            "artifact:docs/architecture.md",
+            "command:docs/architecture.md#21"
+          ]
+        },
+        {
+          "name": "Infrastructure",
+          "kind": "Infrastructure",
+          "member_count": 19,
+          "evidence": [
+            "artifact:.github/workflows/ci.yml",
+            "artifact:Dockerfile",
+            "artifact:docker-compose.yml",
+            "command:.github/workflows/ci.yml#jobs.checks.steps[1]"
+          ]
+        },
+        {
+          "name": "python_app",
+          "kind": "PythonPackage",
+          "member_count": 16,
+          "evidence": [
+            "artifact:src/python_app/__init__.py",
+            "artifact:src/python_app/service.py",
+            "command:src/python_app/service.py#29",
+            "env:RIDGELINE_WORKER"
+          ]
+        },
+        {
+          "name": "fixture-worker",
+          "kind": "RustCrate",
+          "member_count": 14,
+          "evidence": [
+            "artifact:rust/Cargo.toml",
+            "artifact:rust/src/bin/worker.rs",
+            "artifact:rust/src/lib.rs",
+            "env:RIDGELINE_CACHE_DIR"
+          ]
+        }
+      ],
+      "relations": [
+        "Makefile -[References]-> rust/Cargo.toml (Low)",
+        "Makefile -[References]-> ghcr.io/example/route-api:dev (Low)",
+        "Makefile -[References]-> ghcr.io/example/route-api:dev (Low)",
+        "README.md -[References]-> .github/workflows/ci.yml (High)",
+        "README.md -[References]-> Dockerfile (High)",
+        "README.md -[References]-> Makefile (High)",
+        "README.md -[References]-> README.md (High)",
+        "README.md -[References]-> assets/logo.svg (High)",
+        "README.md -[References]-> config/schema.json (High)",
+        "README.md -[References]-> config/settings.yaml (High)",
+        "README.md -[References]-> data/sample.bin (High)",
+        "README.md -[References]-> docker-compose.yml (High)",
+        "README.md -[References]-> docs/architecture.md (High)",
+        "README.md -[References]-> generated/client.py (High)",
+        "README.md -[References]-> pyproject.toml (High)",
+        "README.md -[References]-> rust/Cargo.toml (High)",
+        "README.md -[References]-> rust/src/bin/worker.rs (High)",
+        "README.md -[References]-> rust/src/lib.rs (High)",
+        "README.md -[References]-> src/python_app/__init__.py (High)",
+        "README.md -[References]-> src/python_app/service.py (High)",
+        "README.md -[References]-> vendor/example/lib.rs (High)",
+        "README.md -[References]-> web/index.html (High)",
+        "README.md -[References]-> web/src/App.tsx (High)",
+        "assets/logo.svg -[References]-> xmlns=\"http://www.w3.org/2000/svg (Low)",
+        "assets/logo.svg -[References]-> xmlns=\"http://www.w3.org/2000/svg (Low)",
+        "config/schema.json -[References]-> https://json-schema.org/draft/2020-12/schema (Low)",
+        "config/settings.yaml -[References]-> config/schema.json (High)",
+        "config/settings.yaml -[References]-> /usr/local/bin/worker (Low)",
+        "config/settings.yaml -[References]-> /var/cache/ridgeline (Low)",
+        "config/settings.yaml -[References]-> assets/ (Low)",
+        "docs/architecture.md -[References]-> rust/Cargo.toml (High)",
+        "docs/architecture.md -[References]-> rust/ (High)",
+        "docs/architecture.md -[References]-> src/python_app/ (High)",
+        "docs/architecture.md -[References]-> web/ (High)",
+        "requirements.txt -[DependsOnPackage]-> pydantic (High)",
+        "requirements.txt -[DependsOnPackage]-> pytest (High)",
+        "rust/src/bin/worker.rs -[Imports]-> fixture_worker::bake_route (High)",
+        "rust/src/lib.rs -[Imports]-> std (High)",
+        "src/python_app/__init__.py -[Imports]-> src.python_app.service (High)",
+        "src/python_app/service.py -[Imports]-> __future__ (High)"
+      ],
+      "evidence": [
+        {
+          "reference": ".github/workflows/ci.yml"
+        },
+        {
+          "reference": "Dockerfile"
+        },
+        {
+          "reference": "LICENSE"
+        },
+        {
+          "reference": "Makefile"
+        },
+        {
+          "reference": "README.md"
+        },
+        {
+          "reference": "assets/logo.svg"
+        },
+        {
+          "reference": "config/schema.json"
+        },
+        {
+          "reference": "config/settings.yaml"
+        }
+      ],
+      "confidence": 85
+    },
+    "architecture": {
+      "languages": [
+        {
+          "language": "bin",
+          "tier": "Detected",
+          "target_tier": "Detected",
+          "resolver_strategy": "inventory-fallback",
+          "artifact_count": 1
+        },
+        {
+          "language": "docker-compose",
+          "tier": "SyntaxIndexed",
+          "target_tier": "SyntaxIndexed",
+          "resolver_strategy": "structured-syntax",
+          "artifact_count": 1
+        },
+        {
+          "language": "dockerfile",
+          "tier": "SyntaxIndexed",
+          "target_tier": "SyntaxIndexed",
+          "resolver_strategy": "structured-syntax",
+          "artifact_count": 1
+        },
+        {
+          "language": "github-actions",
+          "tier": "SyntaxIndexed",
+          "target_tier": "SyntaxIndexed",
+          "resolver_strategy": "structured-syntax",
+          "artifact_count": 1
+        },
+        {
+          "language": "html",
+          "tier": "SyntaxIndexed",
+          "target_tier": "SyntaxIndexed",
+          "resolver_strategy": "syntax-indexed-treesitter",
+          "artifact_count": 1
+        },
+        {
+          "language": "json",
+          "tier": "SyntaxIndexed",
+          "target_tier": "SyntaxIndexed",
+          "resolver_strategy": "structured-syntax",
+          "artifact_count": 1
+        },
+        {
+          "language": "license",
+          "tier": "Detected",
+          "target_tier": "Detected",
+          "resolver_strategy": "inventory-fallback",
+          "artifact_count": 1
+        },
+        {
+          "language": "makefile",
+          "tier": "Detected",
+          "target_tier": "SyntaxIndexed",
+          "resolver_strategy": "generic-text-fallback",
+          "artifact_count": 1
+        },
+        {
+          "language": "markdown",
+          "tier": "SyntaxIndexed",
+          "target_tier": "SyntaxIndexed",
+          "resolver_strategy": "structured-syntax",
+          "artifact_count": 2
+        },
+        {
+          "language": "npm",
+          "tier": "SyntaxIndexed",
+          "target_tier": "SyntaxIndexed",
+          "resolver_strategy": "inventory-fallback",
+          "artifact_count": 1
+        },
+        {
+          "language": "python",
+          "tier": "HybridResolved",
+          "target_tier": "HybridResolved",
+          "resolver_strategy": "specialized-hybrid",
+          "artifact_count": 3
+        },
+        {
+          "language": "requirements-txt",
+          "tier": "Detected",
+          "target_tier": "Detected",
+          "resolver_strategy": "inventory-fallback",
+          "artifact_count": 1
+        },
+        {
+          "language": "rust",
+          "tier": "HybridResolved",
+          "target_tier": "HybridResolved",
+          "resolver_strategy": "specialized-hybrid",
+          "artifact_count": 3
+        },
+        {
+          "language": "svg",
+          "tier": "Detected",
+          "target_tier": "Detected",
+          "resolver_strategy": "inventory-fallback",
+          "artifact_count": 1
+        },
+        {
+          "language": "toml",
+          "tier": "SyntaxIndexed",
+          "target_tier": "SyntaxIndexed",
+          "resolver_strategy": "structured-syntax",
+          "artifact_count": 2
+        },
+        {
+          "language": "tsx",
+          "tier": "SyntaxIndexed",
+          "target_tier": "HybridResolved",
+          "resolver_strategy": "syntax-indexed-treesitter",
+          "artifact_count": 1
+        },
+        {
+          "language": "yaml",
+          "tier": "SyntaxIndexed",
+          "target_tier": "SyntaxIndexed",
+          "resolver_strategy": "structured-syntax",
+          "artifact_count": 1
+        }
+      ],
+      "layers": [
+        {
+          "artifact_path": ".github/workflows/ci.yml",
+          "layer": "Infra",
+          "confidence": "High",
+          "reason": "path contains `.github`"
+        },
+        {
+          "artifact_path": "Dockerfile",
+          "layer": "Infra",
+          "confidence": "High",
+          "reason": "artifact category is ContainerDefinition"
+        },
+        {
+          "artifact_path": "LICENSE",
+          "layer": "Unknown",
+          "confidence": "Low",
+          "reason": "no path, category, or graph-role evidence matched a known layer"
+        },
+        {
+          "artifact_path": "Makefile",
+          "layer": "Infra",
+          "confidence": "High",
+          "reason": "artifact category is BuildDefinition"
+        },
+        {
+          "artifact_path": "README.md",
+          "layer": "Unknown",
+          "confidence": "Low",
+          "reason": "no path, category, or graph-role evidence matched a known layer"
+        },
+        {
+          "artifact_path": "assets/logo.svg",
+          "layer": "Unknown",
+          "confidence": "Low",
+          "reason": "no path, category, or graph-role evidence matched a known layer"
+        },
+        {
+          "artifact_path": "config/schema.json",
+          "layer": "Unknown",
+          "confidence": "Low",
+          "reason": "no path, category, or graph-role evidence matched a known layer"
+        },
+        {
+          "artifact_path": "config/settings.yaml",
+          "layer": "Unknown",
+          "confidence": "Low",
+          "reason": "no path, category, or graph-role evidence matched a known layer"
+        },
+        {
+          "artifact_path": "data/sample.bin",
+          "layer": "Data",
+          "confidence": "High",
+          "reason": "path contains `data`"
+        },
+        {
+          "artifact_path": "docker-compose.yml",
+          "layer": "Infra",
+          "confidence": "High",
+          "reason": "artifact category is ContainerDefinition"
+        },
+        {
+          "artifact_path": "docs/architecture.md",
+          "layer": "Unknown",
+          "confidence": "Low",
+          "reason": "no path, category, or graph-role evidence matched a known layer"
+        },
+        {
+          "artifact_path": "generated/client.py",
+          "layer": "Unknown",
+          "confidence": "Low",
+          "reason": "no path, category, or graph-role evidence matched a known layer"
+        },
+        {
+          "artifact_path": "pyproject.toml",
+          "layer": "Infra",
+          "confidence": "High",
+          "reason": "artifact category is PackageManifest"
+        },
+        {
+          "artifact_path": "requirements.txt",
+          "layer": "Infra",
+          "confidence": "High",
+          "reason": "artifact category is PackageManifest"
+        },
+        {
+          "artifact_path": "rust/Cargo.toml",
+          "layer": "Infra",
+          "confidence": "High",
+          "reason": "artifact category is PackageManifest"
+        },
+        {
+          "artifact_path": "rust/src/bin/worker.rs",
+          "layer": "Unknown",
+          "confidence": "Low",
+          "reason": "no path, category, or graph-role evidence matched a known layer"
+        },
+        {
+          "artifact_path": "rust/src/lib.rs",
+          "layer": "Unknown",
+          "confidence": "Low",
+          "reason": "no path, category, or graph-role evidence matched a known layer"
+        },
+        {
+          "artifact_path": "src/python_app/__init__.py",
+          "layer": "Unknown",
+          "confidence": "Low",
+          "reason": "no path, category, or graph-role evidence matched a known layer"
+        },
+        {
+          "artifact_path": "src/python_app/service.py",
+          "layer": "Domain",
+          "confidence": "High",
+          "reason": "path contains `service`"
+        },
+        {
+          "artifact_path": "vendor/example/lib.rs",
+          "layer": "Unknown",
+          "confidence": "Low",
+          "reason": "no path, category, or graph-role evidence matched a known layer"
+        },
+        {
+          "artifact_path": "web/index.html",
+          "layer": "Ui",
+          "confidence": "High",
+          "reason": "path contains `web`"
+        },
+        {
+          "artifact_path": "web/package.json",
+          "layer": "Ui",
+          "confidence": "High",
+          "reason": "path contains `web`"
+        },
+        {
+          "artifact_path": "web/src/App.tsx",
+          "layer": "Ui",
+          "confidence": "High",
+          "reason": "path contains `web`"
+        }
+      ],
+      "architecture_facts": [
+        "knowledge graph schema: 130 node(s), 142 relation(s)",
+        "container/component candidate: Configuration (Configuration)",
+        "container/component candidate: assets (Directory)",
+        "container/component candidate: data (Directory)",
+        "container/component candidate: generated (Directory)",
+        "container/component candidate: root (Directory)",
+        "container/component candidate: vendor (Directory)",
+        "container/component candidate: web (Directory)",
+        "container/component candidate: Documentation (Documentation)",
+        "container/component candidate: Infrastructure (Infrastructure)",
+        "container/component candidate: python_app (PythonPackage)"
+      ],
+      "hotspots": [
+        "web (Directory) score 66",
+        "Configuration (Configuration) score 50",
+        "Documentation (Documentation) score 44",
+        "Infrastructure (Infrastructure) score 42",
+        "python_app (PythonPackage) score 38",
+        "fixture-worker (RustCrate) score 32",
+        "root (Directory) score 14",
+        "generated (Directory) score 6",
+        "vendor (Directory) score 6",
+        "assets (Directory) score 5"
+      ],
+      "decisions_and_docs": [
+        "existing architecture knowledge: docs/architecture.md"
+      ],
+      "mermaid": "```mermaid\nflowchart LR\n  M1[\"Configuration\"]\n  M2[\"assets\"]\n  M3[\"data\"]\n  M4[\"generated\"]\n  M5[\"root\"]\n  M6[\"vendor\"]\n  M7[\"web\"]\n  M8[\"Documentation\"]\n  M9[\"Infrastructure\"]\n  M10[\"python_app\"]\n  M9 -->|ReadsEnv| M1\n  M8 -->|References| M9\n  M8 -->|References| M9\n  M8 -->|References| M5\n  M8 -->|References| M2\n  M8 -->|References| M1\n  M8 -->|References| M1\n  M8 -->|References| M3\n  M8 -->|References| M9\n  M8 -->|References| M4\n  M8 -->|References| M1\n```",
+      "evidence": [
+        {
+          "reference": ".github/workflows/ci.yml"
+        },
+        {
+          "reference": "Dockerfile"
+        },
+        {
+          "reference": "LICENSE"
+        },
+        {
+          "reference": "Makefile"
+        },
+        {
+          "reference": "README.md"
+        },
+        {
+          "reference": "assets/logo.svg"
+        },
+        {
+          "reference": "config/schema.json"
+        },
+        {
+          "reference": "config/settings.yaml"
+        },
+        {
+          "reference": "data/sample.bin"
+        },
+        {
+          "reference": "docker-compose.yml"
+        },
+        {
+          "reference": "docs/architecture.md"
+        },
+        {
+          "reference": "generated/client.py"
+        }
+      ],
+      "confidence": 85
+    },
+    "workflows": {
+      "workflows": [
+        "Dockerfile -[ReadsEnv]-> RIDGELINE_WORKER (High)",
+        "Dockerfile -[RunsCommand]-> [\"python\", \"-m\", \"python_app.service\"] (High)",
+        "Dockerfile -[RunsCommand]-> cargo build --manifest-path rust/Cargo.toml --release (High)",
+        "Dockerfile -[RunsCommand]-> pip install --no-cache-dir -r requirements.txt (High)",
+        "Dockerfile -[UsesImage]-> python:3.13-slim (High)",
+        "Dockerfile -[UsesImage]-> rust:1.96 (High)",
+        "Makefile -[RunsCommand]-> npm --prefix web run lint (Low)",
+        "Makefile -[RunsCommand]-> docker build -t ghcr.io/example/route-api:dev . (Low)",
+        "Makefile -[RunsCommand]-> python -m pytest (Low)",
+        "Makefile -[RunsCommand]-> cargo test --manifest-path rust/Cargo.toml (Low)",
+        "config/schema.json -[UsesImage]-> ghcr.io/example/worker:1.0 (High)",
+        "config/settings.yaml -[ReadsEnv]-> RIDGELINE_CACHE_DIR (High)",
+        "config/settings.yaml -[ReadsEnv]-> RIDGELINE_WORKER (High)",
+        "config/settings.yaml -[ReadsEnv]-> VERSION (High)",
+        "config/settings.yaml -[RunsCommand]-> python -m python_app.service (High)",
+        "config/settings.yaml -[UsesImage]-> ghcr.io/example/route-api:${VERSION} (High)",
+        "docs/architecture.md -[RunsCommand]-> make test (High)",
+        "docs/architecture.md -[RunsCommand]-> cargo test --manifest-path rust/Cargo.toml (High)",
+        "docs/architecture.md -[RunsCommand]-> python -m pytest (High)",
+        "rust/src/lib.rs -[ReadsEnv]-> RIDGELINE_CACHE_DIR (High)",
+        "src/python_app/service.py -[ReadsEnv]-> RIDGELINE_WORKER (High)",
+        "src/python_app/service.py -[RunsCommand]-> [worker_path, \"--route\", str(route_file)] (Low)",
+        "checks -[RunsCommand]-> python -m pytest (High)",
+        "checks -[RunsCommand]-> cargo test --manifest-path rust/Cargo.toml (High)",
+        "checks -[RunsCommand]-> npm --prefix web run lint (High)",
+        "checks -[RunsCommand]-> docker build -t ghcr.io/example/route-api:${{ github.sha }} . (High)",
+        "checks -[BuildsImage]-> ghcr.io/example/route-api:${{ (High)",
+        "api -[ReadsEnv]-> RIDGELINE_WORKER (High)",
+        "api -[UsesImage]-> ghcr.io/example/route-api:${VERSION:-dev} (High)",
+        "web -[UsesImage]-> node:24-alpine (High)"
+      ],
+      "evidence": [
+        {
+          "reference": "relation:1"
+        },
+        {
+          "reference": "relation:9"
+        },
+        {
+          "reference": "relation:12"
+        },
+        {
+          "reference": "relation:10"
+        },
+        {
+          "reference": "relation:11"
+        },
+        {
+          "reference": "relation:8"
+        },
+        {
+          "reference": "relation:7"
+        },
+        {
+          "reference": "relation:16"
+        },
+        {
+          "reference": "relation:17"
+        },
+        {
+          "reference": "relation:13"
+        },
+        {
+          "reference": "relation:14"
+        },
+        {
+          "reference": "relation:15"
+        }
+      ],
+      "confidence": 85
+    },
+    "boundaries": {
+      "boundaries": [
+        "environment variable: RIDGELINE_CACHE_DIR",
+        "environment variable: RIDGELINE_WORKER",
+        "environment variable: VERSION",
+        "external package: @vitejs/plugin-react",
+        "external package: __future__",
+        "external package: anyhow",
+        "external package: json",
+        "external package: os",
+        "external package: pathlib",
+        "external package: pydantic",
+        "external package: pytest",
+        "external package: std",
+        "external package: subprocess",
+        "external package: typescript",
+        "external package: vite",
+        "unresolved reference: /usr/local/bin/worker",
+        "unresolved reference: /var/cache/ridgeline",
+        "unresolved reference: App",
+        "unresolved reference: React",
+        "unresolved reference: RouteSummary",
+        "unresolved reference: assets/",
+        "unresolved reference: body",
+        "unresolved reference: charset",
+        "unresolved reference: div",
+        "unresolved reference: fixture_worker::bake_route",
+        "unresolved reference: ghcr.io/example/route-api:dev",
+        "unresolved reference: h1",
+        "unresolved reference: head",
+        "unresolved reference: html",
+        "unresolved reference: https://json-schema.org/draft/2020-12/schema",
+        "unresolved reference: id",
+        "unresolved reference: import React from \"react\";",
+        "unresolved reference: lang",
+        "unresolved reference: main",
+        "unresolved reference: meta",
+        "unresolved reference: p",
+        "unresolved reference: route",
+        "unresolved reference: rust/",
+        "unresolved reference: script",
+        "unresolved reference: src"
+      ],
+      "evidence": [
+        {
+          "reference": "relation:1"
+        },
+        {
+          "reference": "relation:9"
+        },
+        {
+          "reference": "relation:12"
+        },
+        {
+          "reference": "relation:10"
+        },
+        {
+          "reference": "relation:11"
+        },
+        {
+          "reference": "relation:8"
+        },
+        {
+          "reference": "relation:7"
+        },
+        {
+          "reference": "relation:16"
+        },
+        {
+          "reference": "relation:17"
+        },
+        {
+          "reference": "relation:13"
+        },
+        {
+          "reference": "relation:14"
+        },
+        {
+          "reference": "relation:15"
+        }
+      ],
+      "confidence": 85
+    },
+    "key_modules": {
+      "modules": [
+        "web (Directory) score 66",
+        "Configuration (Configuration) score 50",
+        "Documentation (Documentation) score 44",
+        "Infrastructure (Infrastructure) score 42",
+        "python_app (PythonPackage) score 38",
+        "fixture-worker (RustCrate) score 32",
+        "root (Directory) score 14",
+        "generated (Directory) score 6",
+        "vendor (Directory) score 6",
+        "assets (Directory) score 5"
+      ],
+      "evidence": [
+        {
+          "reference": ".github/workflows/ci.yml"
+        },
+        {
+          "reference": "Dockerfile"
+        },
+        {
+          "reference": "LICENSE"
+        },
+        {
+          "reference": "Makefile"
+        },
+        {
+          "reference": "README.md"
+        },
+        {
+          "reference": "assets/logo.svg"
+        },
+        {
+          "reference": "config/schema.json"
+        },
+        {
+          "reference": "config/settings.yaml"
+        },
+        {
+          "reference": "data/sample.bin"
+        },
+        {
+          "reference": "docker-compose.yml"
+        }
+      ],
+      "confidence": 85
+    },
+    "database": null,
+    "cross_service": null,
+    "deployment": {
+      "deployment_facts": [
+        "ContainerDefinition: Dockerfile",
+        "ContainerDefinition: docker-compose.yml",
+        "compose service: route-api",
+        "compose service: api",
+        "compose service: web",
+        "container image: ghcr.io/example/route-api:${VERSION:-dev}",
+        "container image: ghcr.io/example/route-api:${VERSION}",
+        "container image: ghcr.io/example/route-api:${{",
+        "container image: ghcr.io/example/worker:1.0",
+        "container image: node:24-alpine",
+        "container image: python:3.13-slim",
+        "container image: rust:1.96"
+      ],
+      "evidence": [
+        {
+          "reference": ".github/workflows/ci.yml"
+        },
+        {
+          "reference": "Dockerfile"
+        },
+        {
+          "reference": "LICENSE"
+        },
+        {
+          "reference": "Makefile"
+        },
+        {
+          "reference": "README.md"
+        },
+        {
+          "reference": "assets/logo.svg"
+        },
+        {
+          "reference": "config/schema.json"
+        },
+        {
+          "reference": "config/settings.yaml"
+        },
+        {
+          "reference": "data/sample.bin"
+        },
+        {
+          "reference": "docker-compose.yml"
+        }
+      ],
+      "confidence": 85
+    }
+  },
+  "input_hash": "654c5a2a75587df3aea92f73269a8a08a9fd75ccdff233bee971fa2d25a235a1"
+}

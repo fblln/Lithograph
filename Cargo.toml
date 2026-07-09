@@ -4,24 +4,38 @@ version = "0.1.0"
 edition = "2024"
 description = "Repository knowledge compiler that builds evidence-backed documentation from semantic analysis."
 license = "MIT"
-repository = "https://github.com/fabio/lithograph"
+repository = "https://github.com/fblln/Lithograph"
 
 [dependencies]
 blake3 = "1.8.2"
 camino = { version = "1.2.1", features = ["serde1"] }
 cargo_metadata = "0.23.1"
 clap = { version = "4.5.50", features = ["derive"] }
+flate2 = "1.1.5"
 globset = "0.4.18"
 ignore = "0.4.25"
 rig-core = "0.39.0"
+roxmltree = "0.20"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 serde_yaml = "0.9.34"
 tokio = { version = "1", features = ["rt"] }
 toml = "0.9.8"
 tree-sitter = "0.26.10"
+tree-sitter-c = "0.24"
+tree-sitter-c-sharp = "0.23"
+tree-sitter-cpp = "0.23"
+tree-sitter-css = "0.23"
+tree-sitter-go = "0.23"
+tree-sitter-html = "0.23"
+tree-sitter-java = "0.23"
+tree-sitter-javascript = "0.23"
+tree-sitter-kotlin-ng = "1"
+tree-sitter-php = "0.23"
 tree-sitter-python = "0.25.0"
 tree-sitter-rust = "0.24.2"
+tree-sitter-sequel = "0.3"
+tree-sitter-typescript = "0.23"
 ureq = { version = "3.3.0", features = ["json"] }
 
 [dev-dependencies]

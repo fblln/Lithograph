@@ -601,6 +601,62 @@ tool.pytest.ini_options.testpaths[0]|String|tests"
         Ok(())
     }
 
+    /// LIT-22.2.4 AC1: K8s and Kustomize manifests are plain YAML, so the
+    /// path-based heuristics `StructuredAnalyzer` already applies to every
+    /// YAML file (no K8s-specific analyzer needed) already extract their
+    /// container image and local resource-path facts.
+    #[test]
+    fn structured_extracts_kubernetes_and_kustomize_facts() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let deployment_artifact = structured_artifact("k8s/deployment.yaml")?;
+        let deployment = r#"
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: route-api
+spec:
+  template:
+    spec:
+      containers:
+        - name: route-api
+          image: ghcr.io/example/route-api:1.2.3
+"#;
+        let analysis =
+            StructuredAnalyzer.analyze(&deployment_artifact, deployment, StructuredFormat::Yaml);
+        assert!(has_ref(
+            &analysis,
+            ConfigReferenceKind::Image,
+            "ghcr.io/example/route-api:1.2.3",
+            "spec.template.spec.containers[0].image"
+        ));
+
+        let kustomization_artifact = structured_artifact("k8s/kustomization.yaml")?;
+        let kustomization = r#"
+resources:
+  - ./deployment.yaml
+  - ../base
+"#;
+        let analysis = StructuredAnalyzer.analyze(
+            &kustomization_artifact,
+            kustomization,
+            StructuredFormat::Yaml,
+        );
+        assert!(has_ref(
+            &analysis,
+            ConfigReferenceKind::Path,
+            "./deployment.yaml",
+            "resources[0]"
+        ));
+        assert!(has_ref(
+            &analysis,
+            ConfigReferenceKind::Path,
+            "../base",
+            "resources[1]"
+        ));
+
+        Ok(())
+    }
+
     fn fixture_root() -> std::path::PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot")
     }

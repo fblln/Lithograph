@@ -1,27 +1,62 @@
 //! `init` orchestration: wires scan, analysis, graph, module planning,
 //! generation, evidence validation, and writes into one product loop.
 
+use crate::adr::AdrStore;
 use crate::analysis::AnalysisCache;
 use crate::domain::{Artifact, EvidenceRef};
-use crate::generation::{ContextBuilder, LanguageModel, ModelError, PageRenderer, RenderError};
-use crate::graph::{Graph, GraphBuilder, GraphIssue, GraphValidator};
+use crate::drift::DriftDetector;
+use crate::fts::FtsIndex;
+use crate::generation::{
+    ArchitectureViewContext, ContextBuilder, LanguageModel, ModelError, PageRenderer, RenderError,
+};
+use crate::graph::{Graph, GraphBuilder, GraphIssue, GraphStore, GraphValidator};
 use crate::inventory::{RepositoryWalker, WalkError, WalkOptions};
 use crate::manifest::{
     DocumentationPage, GenerationTask, PageManifest, PageManifestBuilder, TaskKind,
 };
 use crate::plan::{DocumentationModule, ModulePlanner};
-use crate::research::{ResearchBrief, ResearchBuilder};
-use crate::run::{RepositorySnapshot, RunMetadata};
+use crate::research::{AgentMemoryIndex, ResearchBrief, ResearchBuilder};
+use crate::run::{
+    PipelineInvalidationMetadata, PipelineStage, RepositorySnapshot, RunMetadata, RunMetadataInput,
+    StageTiming,
+};
 use crate::storage::JsonStore;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
+
+/// Runs one pipeline stage, recording its wall-clock duration into `timings`
+/// and tagging any error with which stage produced it (LIT-22.6.1 AC1/AC3).
+fn timed_stage<T>(
+    stage: PipelineStage,
+    timings: &mut Vec<StageTiming>,
+    run: impl FnOnce() -> Result<T, InitError>,
+) -> Result<T, InitError> {
+    let started = Instant::now();
+    let result = run();
+    timings.push(StageTiming {
+        stage,
+        duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+    });
+    result.map_err(|error| InitError::Stage(stage, Box::new(error)))
+}
 
 /// Exclude patterns shared by every scan: Lithograph's own output must
 /// never become input to its next run, or every run would document (and
 /// hash-invalidate on) the previous run's generated pages and metadata.
-fn scan_exclude_globs() -> Vec<String> {
+pub(crate) fn scan_exclude_globs() -> Vec<String> {
     vec!["docs/lithograph/**".to_owned(), ".lithograph/**".to_owned()]
+}
+
+/// Excludes only Lithograph's internal cache/graph/manifest state, keeping
+/// `docs/lithograph/**` walkable. Used by callers that must actually read
+/// the generated documentation prose (drift detection compares it against
+/// current repository facts) but must never re-ingest cached analysis JSON
+/// as if it were repository source -- unlike [`scan_exclude_globs`], which
+/// is for callers that would otherwise document their own output.
+pub(crate) fn cache_exclude_globs() -> Vec<String> {
+    vec![".lithograph/**".to_owned()]
 }
 
 /// Runs the shared scan -> graph -> validate -> plan pipeline used by both
@@ -57,6 +92,24 @@ fn scan_and_plan(
 /// [`scan_exclude_globs`].
 fn analysis_cache(repo_root: &Path) -> AnalysisCache {
     AnalysisCache::new(repo_root.join(".lithograph/cache/analysis"))
+}
+
+/// Scans drift and loads ADR summaries for the architecture page only
+/// (LIT-22.7.1): every other page kind skips this entirely, since it's
+/// only worth the filesystem scan when actually building that one page.
+fn architecture_view_context(
+    task_kind: TaskKind,
+    artifacts: &[Artifact],
+    graph: &Graph,
+    repo_root: &Path,
+) -> Option<ArchitectureViewContext> {
+    if !matches!(task_kind, TaskKind::Architecture | TaskKind::AdrDrift) {
+        return None;
+    }
+    Some(ArchitectureViewContext {
+        drift: DriftDetector.scan(artifacts, graph, repo_root),
+        adr_summaries: AdrStore::new(repo_root).list(),
+    })
 }
 
 /// Counts and output paths from one `init` run.
@@ -107,6 +160,8 @@ pub enum InitError {
     Io(std::io::Error),
     /// An internal consistency invariant (page/task/module correspondence) broke.
     Message(String),
+    /// An error occurred within a specific pipeline stage (LIT-22.6.1 AC3).
+    Stage(PipelineStage, Box<InitError>),
 }
 
 impl Display for InitError {
@@ -129,6 +184,7 @@ impl Display for InitError {
             Self::Json(error) => write!(formatter, "failed to serialize output: {error}"),
             Self::Io(error) => write!(formatter, "failed to write output: {error}"),
             Self::Message(message) => formatter.write_str(message),
+            Self::Stage(stage, error) => write!(formatter, "{stage:?} stage failed: {error}"),
         }
     }
 }
@@ -173,100 +229,142 @@ pub fn run_init_with_options(
     semantic_grouping: bool,
 ) -> Result<InitReport, InitError> {
     let cache = analysis_cache(repo_root);
-    let (artifacts, graph, modules) = scan_and_plan(repo_root, Some(&cache), semantic_grouping)?;
-    let research = ResearchBuilder.build(&artifacts, &graph, &modules);
-    let modules_by_id: BTreeMap<&str, &DocumentationModule> = modules
-        .iter()
-        .map(|module| (module.id.as_str(), module))
-        .collect();
+    let mut stage_timings: Vec<StageTiming> = Vec::new();
 
-    let mut manifest: PageManifest =
-        PageManifestBuilder.build(&modules, prompt_version, model_name);
-    let tasks = manifest.tasks.clone();
-    let mut written_pages: Vec<String> = Vec::new();
+    let (artifacts, graph, modules) =
+        timed_stage(PipelineStage::PreprocessIndex, &mut stage_timings, || {
+            scan_and_plan(repo_root, Some(&cache), semantic_grouping)
+        })?;
 
-    for task in &tasks {
-        let context = match task.kind {
-            TaskKind::ModulePage => {
+    let research = timed_stage(PipelineStage::Research, &mut stage_timings, || {
+        Ok(ResearchBuilder.build(&artifacts, &graph, &modules))
+    })?;
+
+    let (manifest, written_pages, prompt_chars) =
+        timed_stage(PipelineStage::Compose, &mut stage_timings, || {
+            let modules_by_id: BTreeMap<&str, &DocumentationModule> = modules
+                .iter()
+                .map(|module| (module.id.as_str(), module))
+                .collect();
+
+            let mut manifest: PageManifest =
+                PageManifestBuilder.build(&modules, prompt_version, model_name);
+            let tasks = manifest.tasks.clone();
+            let mut written_pages: Vec<String> = Vec::new();
+            let mut prompt_chars: usize = 0;
+
+            for task in &tasks {
+                let context = match task.kind {
+                    TaskKind::ModulePage => {
+                        let page = manifest
+                            .pages
+                            .iter()
+                            .find(|page| page.id == task.page_id)
+                            .ok_or_else(|| {
+                                InitError::Message(format!("no page planned for task {}", task.id))
+                            })?;
+                        let module_id = page.module_id.as_deref().ok_or_else(|| {
+                            InitError::Message(format!("module page {} has no module_id", page.id))
+                        })?;
+                        let module = modules_by_id.get(module_id).ok_or_else(|| {
+                            InitError::Message(format!("no planned module {module_id}"))
+                        })?;
+                        ContextBuilder.build_module_context(module, &graph, &artifacts, repo_root)
+                    }
+                    _ => ContextBuilder.build_summary_context(
+                        task.kind,
+                        &modules,
+                        &graph,
+                        &artifacts,
+                        Some(&research),
+                        architecture_view_context(task.kind, &artifacts, &graph, repo_root)
+                            .as_ref(),
+                    ),
+                };
+                prompt_chars += context.system_prompt.len() + context.user_prompt.len();
+
+                let request = context.clone().into_request(model_name, prompt_version);
+                let generation = model.generate_json(&request).map_err(InitError::Model)?;
+
                 let page = manifest
                     .pages
-                    .iter()
+                    .iter_mut()
                     .find(|page| page.id == task.page_id)
                     .ok_or_else(|| {
                         InitError::Message(format!("no page planned for task {}", task.id))
                     })?;
-                let module_id = page.module_id.as_deref().ok_or_else(|| {
-                    InitError::Message(format!("module page {} has no module_id", page.id))
-                })?;
-                let module = modules_by_id
-                    .get(module_id)
-                    .ok_or_else(|| InitError::Message(format!("no planned module {module_id}")))?;
-                ContextBuilder.build_module_context(module, &graph, &artifacts, repo_root)
+                let outcome = PageRenderer
+                    .render_and_write(page, &generation, &context, repo_root)
+                    .map_err(InitError::Render)?;
+                if outcome.written {
+                    written_pages.push(task.page_id.clone());
+                }
             }
-            _ => ContextBuilder.build_summary_context(
-                task.kind,
-                &modules,
-                &graph,
-                &artifacts,
-                Some(&research),
-            ),
-        };
 
-        let request = context.clone().into_request(model_name, prompt_version);
-        let generation = model.generate_json(&request).map_err(InitError::Model)?;
+            Ok((manifest, written_pages, prompt_chars))
+        })?;
 
-        let page = manifest
-            .pages
-            .iter_mut()
-            .find(|page| page.id == task.page_id)
-            .ok_or_else(|| InitError::Message(format!("no page planned for task {}", task.id)))?;
-        let outcome = PageRenderer
-            .render_and_write(page, &generation, &context, repo_root)
-            .map_err(InitError::Render)?;
-        if outcome.written {
-            written_pages.push(task.page_id.clone());
-        }
-    }
+    let stage_started = Instant::now();
+    let validate_output = (|| -> Result<InitReport, InitError> {
+        let lithograph_dir = repo_root.join(".lithograph");
+        let snapshot_path = lithograph_dir.join("snapshot.json");
+        let previous_snapshot: Option<RepositorySnapshot> = JsonStore.read(&snapshot_path)?;
 
-    let lithograph_dir = repo_root.join(".lithograph");
-    let snapshot_path = lithograph_dir.join("snapshot.json");
-    let previous_snapshot: Option<RepositorySnapshot> = JsonStore.read(&snapshot_path)?;
+        let (mut run_metadata, snapshot) = RunMetadata::compute(RunMetadataInput {
+            command: "init",
+            repo_root,
+            artifacts: &artifacts,
+            graph: &graph,
+            manifest: &manifest,
+            written_pages: &written_pages,
+            previous_snapshot: previous_snapshot.as_ref(),
+            pipeline: PipelineInvalidationMetadata::current(prompt_version, semantic_grouping),
+            cache_hits: cache.hits(),
+            cache_misses: cache.misses(),
+            prompt_chars,
+        })?;
 
-    let (run_metadata, snapshot) = RunMetadata::compute(
-        "init",
-        repo_root,
-        &artifacts,
-        &graph,
-        &manifest,
-        &written_pages,
-        previous_snapshot.as_ref(),
-    )?;
+        let graph_store_outcome = GraphStore::new(repo_root).save(&graph)?;
+        let graph_path = graph_store_outcome.legacy_graph_path;
+        // The FTS index is a pure function of the graph (LIT-22.4.3 AC1),
+        // so it is rebuilt from scratch every run and only actually
+        // rewritten (`write_if_changed`) when its content differs.
+        JsonStore.write_if_changed(
+            &lithograph_dir.join("fts-index.json"),
+            &FtsIndex::build(&graph),
+        )?;
+        write_research_artifacts(&lithograph_dir, &research)?;
+        let manifest_path = lithograph_dir.join("manifest.json");
+        JsonStore.write_if_changed(&manifest_path, &manifest)?;
+        JsonStore.write_if_changed(&snapshot_path, &snapshot)?;
+        // run.json is an append-style record of this run's own facts
+        // (including a fresh run_id and this run's stage timings), so it is
+        // always (re)written, unlike the state files above which stay
+        // byte-stable across a true no-op run (AC2).
+        stage_timings.push(StageTiming {
+            stage: PipelineStage::ValidateOutput,
+            duration_ms: u64::try_from(stage_started.elapsed().as_millis()).unwrap_or(u64::MAX),
+        });
+        run_metadata.stage_timings = stage_timings.clone();
+        let run_metadata_path = lithograph_dir.join("run.json");
+        JsonStore.write(&run_metadata_path, &run_metadata)?;
 
-    let graph_path = lithograph_dir.join("graph.json");
-    JsonStore.write_if_changed(&graph_path, &graph)?;
-    write_research_artifacts(&lithograph_dir, &research)?;
-    let manifest_path = lithograph_dir.join("manifest.json");
-    JsonStore.write_if_changed(&manifest_path, &manifest)?;
-    JsonStore.write_if_changed(&snapshot_path, &snapshot)?;
-    // run.json is an append-style record of this run's own facts (including
-    // a fresh run_id), so it is always (re)written, unlike the state files
-    // above which stay byte-stable across a true no-op run.
-    let run_metadata_path = lithograph_dir.join("run.json");
-    JsonStore.write(&run_metadata_path, &run_metadata)?;
-
-    Ok(InitReport {
-        artifact_count: artifacts.len(),
-        graph_node_count: graph.nodes.len(),
-        graph_relation_count: graph.relations.len(),
-        module_count: modules.len(),
-        page_count: manifest.pages.len(),
-        pages_written: written_pages.len(),
-        changed_artifact_count: run_metadata.changed_artifacts.len(),
-        artifacts_reanalyzed_count: cache.misses(),
-        graph_path,
-        manifest_path,
-        run_metadata_path,
-    })
+        Ok(InitReport {
+            artifact_count: artifacts.len(),
+            graph_node_count: graph.nodes.len(),
+            graph_relation_count: graph.relations.len(),
+            module_count: modules.len(),
+            page_count: manifest.pages.len(),
+            pages_written: written_pages.len(),
+            changed_artifact_count: run_metadata.changed_artifacts.len(),
+            artifacts_reanalyzed_count: cache.misses(),
+            graph_path,
+            manifest_path,
+            run_metadata_path,
+        })
+    })();
+    validate_output
+        .map_err(|error| InitError::Stage(PipelineStage::ValidateOutput, Box::new(error)))
 }
 
 /// Counts and output paths from one `update` run.
@@ -331,8 +429,23 @@ pub fn run_update_with_options(
     let lithograph_dir = repo_root.join(".lithograph");
     let manifest_path = lithograph_dir.join("manifest.json");
     let snapshot_path = lithograph_dir.join("snapshot.json");
-    let previous_manifest: Option<PageManifest> = JsonStore.read(&manifest_path)?;
-    let previous_snapshot: Option<RepositorySnapshot> = JsonStore.read(&snapshot_path)?;
+    let cache = analysis_cache(repo_root);
+    let mut stage_timings: Vec<StageTiming> = Vec::new();
+
+    let (artifacts, graph, modules, previous_manifest, previous_snapshot) =
+        timed_stage(PipelineStage::PreprocessIndex, &mut stage_timings, || {
+            let previous_manifest: Option<PageManifest> = JsonStore.read(&manifest_path)?;
+            let previous_snapshot: Option<RepositorySnapshot> = JsonStore.read(&snapshot_path)?;
+            let (artifacts, graph, modules) =
+                scan_and_plan(repo_root, Some(&cache), semantic_grouping)?;
+            Ok((
+                artifacts,
+                graph,
+                modules,
+                previous_manifest,
+                previous_snapshot,
+            ))
+        })?;
     let previous_pages_by_id: BTreeMap<&str, &DocumentationPage> = previous_manifest
         .as_ref()
         .map(|manifest| {
@@ -354,35 +467,87 @@ pub fn run_update_with_options(
         })
         .unwrap_or_default();
 
-    let cache = analysis_cache(repo_root);
-    let (artifacts, graph, modules) = scan_and_plan(repo_root, Some(&cache), semantic_grouping)?;
-    let research = ResearchBuilder.build(&artifacts, &graph, &modules);
-    let modules_by_id: BTreeMap<&str, &DocumentationModule> = modules
-        .iter()
-        .map(|module| (module.id.as_str(), module))
-        .collect();
+    let research = timed_stage(PipelineStage::Research, &mut stage_timings, || {
+        Ok(ResearchBuilder.build(&artifacts, &graph, &modules))
+    })?;
 
-    let mut manifest: PageManifest =
-        PageManifestBuilder.build(&modules, prompt_version, model_name);
-    let tasks = manifest.tasks.clone();
-    let mut written_pages: Vec<String> = Vec::new();
+    let (manifest, written_pages, prompt_chars) =
+        timed_stage(PipelineStage::Compose, &mut stage_timings, || {
+            let modules_by_id: BTreeMap<&str, &DocumentationModule> = modules
+                .iter()
+                .map(|module| (module.id.as_str(), module))
+                .collect();
 
-    for task in &tasks {
-        let current_input_hash = manifest
-            .pages
-            .iter()
-            .find(|page| page.id == task.page_id)
-            .ok_or_else(|| InitError::Message(format!("no page planned for task {}", task.id)))?
-            .input_hash
-            .clone();
-        let previous_page = previous_pages_by_id.get(task.page_id.as_str());
-        let previous_task = previous_tasks_by_page_id.get(task.page_id.as_str());
-        let needs_regeneration = previous_page
-            .is_none_or(|previous| previous.input_hash != current_input_hash)
-            || previous_task.is_none_or(|previous| !task.is_version_compatible_with(previous));
+            let mut manifest: PageManifest =
+                PageManifestBuilder.build(&modules, prompt_version, model_name);
+            let tasks = manifest.tasks.clone();
+            let mut written_pages: Vec<String> = Vec::new();
+            let mut prompt_chars: usize = 0;
 
-        if !needs_regeneration {
-            if let Some(previous) = previous_page {
+            for task in &tasks {
+                let current_input_hash = manifest
+                    .pages
+                    .iter()
+                    .find(|page| page.id == task.page_id)
+                    .ok_or_else(|| {
+                        InitError::Message(format!("no page planned for task {}", task.id))
+                    })?
+                    .input_hash
+                    .clone();
+                let previous_page = previous_pages_by_id.get(task.page_id.as_str());
+                let previous_task = previous_tasks_by_page_id.get(task.page_id.as_str());
+                let needs_regeneration = previous_page
+                    .is_none_or(|previous| previous.input_hash != current_input_hash)
+                    || previous_task
+                        .is_none_or(|previous| !task.is_version_compatible_with(previous));
+
+                if !needs_regeneration {
+                    if let Some(previous) = previous_page {
+                        let page = manifest
+                            .pages
+                            .iter_mut()
+                            .find(|page| page.id == task.page_id)
+                            .ok_or_else(|| {
+                                InitError::Message(format!("no page planned for task {}", task.id))
+                            })?;
+                        page.evidence = previous.evidence.clone();
+                        page.output_hash = previous.output_hash.clone();
+                    }
+                    continue;
+                }
+
+                let context = match task.kind {
+                    TaskKind::ModulePage => {
+                        let page = manifest
+                            .pages
+                            .iter()
+                            .find(|page| page.id == task.page_id)
+                            .ok_or_else(|| {
+                                InitError::Message(format!("no page planned for task {}", task.id))
+                            })?;
+                        let module_id = page.module_id.as_deref().ok_or_else(|| {
+                            InitError::Message(format!("module page {} has no module_id", page.id))
+                        })?;
+                        let module = modules_by_id.get(module_id).ok_or_else(|| {
+                            InitError::Message(format!("no planned module {module_id}"))
+                        })?;
+                        ContextBuilder.build_module_context(module, &graph, &artifacts, repo_root)
+                    }
+                    _ => ContextBuilder.build_summary_context(
+                        task.kind,
+                        &modules,
+                        &graph,
+                        &artifacts,
+                        Some(&research),
+                        architecture_view_context(task.kind, &artifacts, &graph, repo_root)
+                            .as_ref(),
+                    ),
+                };
+                prompt_chars += context.system_prompt.len() + context.user_prompt.len();
+
+                let request = context.clone().into_request(model_name, prompt_version);
+                let generation = model.generate_json(&request).map_err(InitError::Model)?;
+
                 let page = manifest
                     .pages
                     .iter_mut()
@@ -390,85 +555,69 @@ pub fn run_update_with_options(
                     .ok_or_else(|| {
                         InitError::Message(format!("no page planned for task {}", task.id))
                     })?;
-                page.evidence = previous.evidence.clone();
-                page.output_hash = previous.output_hash.clone();
+                let outcome = PageRenderer
+                    .render_and_write(page, &generation, &context, repo_root)
+                    .map_err(InitError::Render)?;
+                if outcome.written {
+                    written_pages.push(task.page_id.clone());
+                }
             }
-            continue;
-        }
 
-        let context = match task.kind {
-            TaskKind::ModulePage => {
-                let page = manifest
-                    .pages
-                    .iter()
-                    .find(|page| page.id == task.page_id)
-                    .ok_or_else(|| {
-                        InitError::Message(format!("no page planned for task {}", task.id))
-                    })?;
-                let module_id = page.module_id.as_deref().ok_or_else(|| {
-                    InitError::Message(format!("module page {} has no module_id", page.id))
-                })?;
-                let module = modules_by_id
-                    .get(module_id)
-                    .ok_or_else(|| InitError::Message(format!("no planned module {module_id}")))?;
-                ContextBuilder.build_module_context(module, &graph, &artifacts, repo_root)
-            }
-            _ => ContextBuilder.build_summary_context(
-                task.kind,
-                &modules,
-                &graph,
-                &artifacts,
-                Some(&research),
-            ),
-        };
+            Ok((manifest, written_pages, prompt_chars))
+        })?;
 
-        let request = context.clone().into_request(model_name, prompt_version);
-        let generation = model.generate_json(&request).map_err(InitError::Model)?;
+    let stage_started = Instant::now();
+    let validate_output = (|| -> Result<UpdateReport, InitError> {
+        let (mut run_metadata, snapshot) = RunMetadata::compute(RunMetadataInput {
+            command: "update",
+            repo_root,
+            artifacts: &artifacts,
+            graph: &graph,
+            manifest: &manifest,
+            written_pages: &written_pages,
+            previous_snapshot: previous_snapshot.as_ref(),
+            pipeline: PipelineInvalidationMetadata::current(prompt_version, semantic_grouping),
+            cache_hits: cache.hits(),
+            cache_misses: cache.misses(),
+            prompt_chars,
+        })?;
 
-        let page = manifest
-            .pages
-            .iter_mut()
-            .find(|page| page.id == task.page_id)
-            .ok_or_else(|| InitError::Message(format!("no page planned for task {}", task.id)))?;
-        let outcome = PageRenderer
-            .render_and_write(page, &generation, &context, repo_root)
-            .map_err(InitError::Render)?;
-        if outcome.written {
-            written_pages.push(task.page_id.clone());
-        }
-    }
+        let graph_store_outcome = GraphStore::new(repo_root).save(&graph)?;
+        let graph_path = graph_store_outcome.legacy_graph_path;
+        // The FTS index is a pure function of the graph (LIT-22.4.3 AC1),
+        // so it is rebuilt from scratch every run and only actually
+        // rewritten (`write_if_changed`) when its content differs.
+        JsonStore.write_if_changed(
+            &lithograph_dir.join("fts-index.json"),
+            &FtsIndex::build(&graph),
+        )?;
+        write_research_artifacts(&lithograph_dir, &research)?;
+        JsonStore.write_if_changed(&manifest_path, &manifest)?;
+        JsonStore.write_if_changed(&snapshot_path, &snapshot)?;
+        stage_timings.push(StageTiming {
+            stage: PipelineStage::ValidateOutput,
+            duration_ms: u64::try_from(stage_started.elapsed().as_millis()).unwrap_or(u64::MAX),
+        });
+        run_metadata.stage_timings = stage_timings.clone();
+        let run_metadata_path = lithograph_dir.join("run.json");
+        JsonStore.write(&run_metadata_path, &run_metadata)?;
 
-    let (run_metadata, snapshot) = RunMetadata::compute(
-        "update",
-        repo_root,
-        &artifacts,
-        &graph,
-        &manifest,
-        &written_pages,
-        previous_snapshot.as_ref(),
-    )?;
-
-    let graph_path = lithograph_dir.join("graph.json");
-    JsonStore.write_if_changed(&graph_path, &graph)?;
-    write_research_artifacts(&lithograph_dir, &research)?;
-    JsonStore.write_if_changed(&manifest_path, &manifest)?;
-    JsonStore.write_if_changed(&snapshot_path, &snapshot)?;
-    let run_metadata_path = lithograph_dir.join("run.json");
-    JsonStore.write(&run_metadata_path, &run_metadata)?;
-
-    Ok(UpdateReport {
-        artifact_count: artifacts.len(),
-        graph_node_count: graph.nodes.len(),
-        graph_relation_count: graph.relations.len(),
-        module_count: modules.len(),
-        page_count: manifest.pages.len(),
-        pages_regenerated: written_pages.len(),
-        changed_artifact_count: run_metadata.changed_artifacts.len(),
-        artifacts_reanalyzed_count: cache.misses(),
-        graph_path,
-        manifest_path,
-        run_metadata_path,
-    })
+        Ok(UpdateReport {
+            artifact_count: artifacts.len(),
+            graph_node_count: graph.nodes.len(),
+            graph_relation_count: graph.relations.len(),
+            module_count: modules.len(),
+            page_count: manifest.pages.len(),
+            pages_regenerated: written_pages.len(),
+            changed_artifact_count: run_metadata.changed_artifacts.len(),
+            artifacts_reanalyzed_count: cache.misses(),
+            graph_path,
+            manifest_path,
+            run_metadata_path,
+        })
+    })();
+    validate_output
+        .map_err(|error| InitError::Stage(PipelineStage::ValidateOutput, Box::new(error)))
 }
 
 /// Returns every evidence ref recorded across the written manifest's pages,
@@ -489,28 +638,39 @@ fn write_research_artifacts(
 ) -> Result<(), InitError> {
     let research_dir = lithograph_dir.join("research");
     JsonStore.write_if_changed(&research_dir.join("brief.json"), research)?;
-    JsonStore.write_if_changed(
-        &research_dir.join("system-context.json"),
-        &research.system_context,
-    )?;
-    JsonStore.write_if_changed(&research_dir.join("workflows.json"), &research.workflows)?;
-    JsonStore.write_if_changed(&research_dir.join("boundaries.json"), &research.boundaries)?;
+    AgentMemoryIndex::new(research.agent_memory.clone(), research.input_hash.clone())
+        .persist(&research_dir)?;
     JsonStore.write_if_changed(
         &research_dir.join("configuration.json"),
         &research.configuration,
-    )?;
-    JsonStore.write_if_changed(
-        &research_dir.join("key-modules.json"),
-        &research.key_modules,
     )?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{run_init, run_update};
-    use crate::generation::MockModel;
+    use super::{InitError, run_init, run_update};
+    use crate::generation::{LanguageModel, MockModel, ModelError, ModelRequest, PageGeneration};
+    use crate::run::PipelineStage;
     use std::path::Path;
+
+    /// Always fails, so tests can assert `Compose`-stage error attribution
+    /// (LIT-22.6.1 AC3) without needing a real model failure.
+    struct FailingModel;
+
+    impl LanguageModel for FailingModel {
+        fn generate_text(&self, _request: &ModelRequest) -> Result<String, ModelError> {
+            Err(ModelError {
+                message: "synthetic failure".to_owned(),
+            })
+        }
+
+        fn generate_json(&self, _request: &ModelRequest) -> Result<PageGeneration, ModelError> {
+            Err(ModelError {
+                message: "synthetic failure".to_owned(),
+            })
+        }
+    }
 
     fn fixture_root() -> std::path::PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot")
@@ -528,7 +688,7 @@ mod tests {
         assert!(report.graph_node_count > 0);
         assert!(report.graph_relation_count > 0);
         assert_eq!(report.module_count, 11);
-        assert_eq!(report.page_count, report.module_count + 6);
+        assert_eq!(report.page_count, report.module_count + 9);
         assert_eq!(report.pages_written, report.page_count);
 
         assert!(temp.path().join("docs/lithograph/overview.md").exists());
@@ -541,11 +701,115 @@ mod tests {
                 .join("docs/lithograph/configuration.md")
                 .exists()
         );
+        assert!(temp.path().join("docs/lithograph/database.md").exists());
+        assert!(temp.path().join("docs/lithograph/key-modules.md").exists());
+        assert!(
+            temp.path()
+                .join("docs/lithograph/adr-and-drift.md")
+                .exists()
+        );
         assert!(temp.path().join(".lithograph/graph.json").exists());
+        assert!(temp.path().join(".lithograph/graph/current.json").exists());
         assert!(temp.path().join(".lithograph/manifest.json").exists());
 
         let manifest_json = std::fs::read_to_string(temp.path().join(".lithograph/manifest.json"))?;
         assert!(manifest_json.contains("\"output_hash\""));
+
+        Ok(())
+    }
+
+    /// LIT-22.6.1 AC1: every run persists all four stages' timing to
+    /// `run.json`, in pipeline order.
+    #[test]
+    fn run_json_persists_all_four_stage_timings() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(&fixture_root(), temp.path())?;
+
+        let report = run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let run_json = std::fs::read_to_string(&report.run_metadata_path)?;
+        let run_metadata: serde_json::Value = serde_json::from_str(&run_json)?;
+        let stages: Vec<&str> = run_metadata["stage_timings"]
+            .as_array()
+            .ok_or("missing stage_timings array")?
+            .iter()
+            .map(|entry| entry["stage"].as_str().unwrap_or(""))
+            .collect();
+        assert_eq!(
+            stages,
+            vec!["PreprocessIndex", "Research", "Compose", "ValidateOutput"]
+        );
+
+        Ok(())
+    }
+
+    /// LIT-22.8.4 AC1/AC4: `run.json` persists graph size, cache hit/miss
+    /// counts, and a nonzero deterministic prompt token estimate -- and a
+    /// second `update` over unchanged content reports every artifact as a
+    /// cache hit (proving the cache stats reflect real reuse, not a
+    /// hardcoded zero).
+    #[test]
+    fn run_json_persists_graph_size_cache_stats_and_token_estimate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(&fixture_root(), temp.path())?;
+
+        let first = run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let first_metadata: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&first.run_metadata_path)?)?;
+        assert_eq!(
+            first_metadata["graph_node_count"].as_u64(),
+            Some(first.graph_node_count as u64)
+        );
+        assert_eq!(
+            first_metadata["graph_relation_count"].as_u64(),
+            Some(first.graph_relation_count as u64)
+        );
+        assert_eq!(
+            first_metadata["cache_misses"].as_u64(),
+            Some(first.artifact_count as u64)
+        );
+        assert_eq!(first_metadata["cache_hits"].as_u64(), Some(0));
+        assert!(
+            first_metadata["estimated_prompt_tokens"]
+                .as_u64()
+                .unwrap_or(0)
+                > 0
+        );
+
+        let second = run_update(temp.path(), &MockModel, "mock", "v1")?;
+        let second_metadata: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&second.run_metadata_path)?)?;
+        assert_eq!(
+            second_metadata["cache_hits"].as_u64(),
+            Some(second.artifact_count as u64)
+        );
+        assert_eq!(second_metadata["cache_misses"].as_u64(), Some(0));
+
+        Ok(())
+    }
+
+    /// LIT-22.6.1 AC3/AC4: a failure inside the compose stage (a failing
+    /// model) is tagged with `PipelineStage::Compose`, and no run.json,
+    /// manifest, or graph file is written for the failed run (partial
+    /// output never looks like a completed one).
+    #[test]
+    fn model_failure_is_tagged_with_the_compose_stage_and_writes_nothing()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(&fixture_root(), temp.path())?;
+
+        match run_init(temp.path(), &FailingModel, "mock", "v1") {
+            Ok(_) => return Err("expected a Compose-stage failure".into()),
+            Err(InitError::Stage(PipelineStage::Compose, inner)) => {
+                assert!(matches!(*inner, InitError::Model(_)));
+            }
+            Err(other) => {
+                return Err(format!("expected a Compose-stage error, got: {other}").into());
+            }
+        }
+        assert!(!temp.path().join(".lithograph/manifest.json").exists());
+        assert!(!temp.path().join(".lithograph/run.json").exists());
+        assert!(!temp.path().join(".lithograph/graph.json").exists());
 
         Ok(())
     }
@@ -629,7 +893,8 @@ mod tests {
         let report = super::run_update(temp.path(), &MockModel, "mock", "v2")?;
         let manifest_json = std::fs::read_to_string(temp.path().join(".lithograph/manifest.json"))?;
 
-        assert_eq!(report.changed_artifact_count, 0);
+        assert_eq!(report.changed_artifact_count, report.artifact_count);
+        assert_eq!(report.artifacts_reanalyzed_count, 0);
         assert_eq!(report.pages_regenerated, report.page_count);
         assert!(manifest_json.contains("\"prompt_version\": \"v2\""));
         assert!(manifest_json.contains("\"context_schema_version\""));
@@ -674,7 +939,7 @@ mod tests {
         );
         // Rust crate page + every repository-level page regenerates; the
         // unrelated Python package page does not.
-        assert_eq!(report.pages_regenerated, 7);
+        assert_eq!(report.pages_regenerated, 10);
 
         Ok(())
     }

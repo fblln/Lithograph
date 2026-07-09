@@ -44,6 +44,215 @@ pub enum Command {
     McpServer(McpServerArgs),
     /// Generate a lightweight static viewer for generated docs.
     Viewer(ViewerArgs),
+    /// Export or import team-shareable graph artifacts.
+    Graph(GraphCommand),
+    /// Create, read, update, delete, and list architecture decision records.
+    Adr(AdrCommand),
+    /// Poll a repository for staleness against its last recorded snapshot.
+    /// Disabled by default beyond this explicit command: reports staleness
+    /// only, unless `--auto-index` is passed.
+    Watch(WatchArgs),
+    /// Detect, preview, or apply per-agent MCP server integration (Codex,
+    /// Claude, Gemini, Zed). Without `--target`, only detects and reports;
+    /// `--apply` requires `--target` and is the only way anything is written.
+    IntegrateMcp(IntegrateMcpArgs),
+}
+
+/// Arguments for `integrate-mcp`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct IntegrateMcpArgs {
+    /// Repository path to integrate.
+    pub path: PathBuf,
+    /// Agent target id (`codex`, `claude`, `gemini`, `zed`, `aider`). When
+    /// omitted, every target is detected and reported without writing.
+    #[arg(long)]
+    pub target: Option<String>,
+    /// Write the target's merged MCP config. Requires `--target`; without
+    /// this flag a given `--target` is only previewed, never written.
+    #[arg(long, requires = "target")]
+    pub apply: bool,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Arguments for `watch`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct WatchArgs {
+    /// Repository path to watch.
+    pub path: PathBuf,
+    /// Maximum artifacts one poll may scan before refusing to proceed.
+    #[arg(long, default_value_t = 20_000)]
+    pub max_artifacts: usize,
+    /// Seconds to wait between polls when watching continuously.
+    #[arg(long, default_value_t = 5)]
+    pub interval_secs: u64,
+    /// Poll exactly once and exit, instead of watching continuously.
+    #[arg(long)]
+    pub once: bool,
+    /// Automatically run `update` when staleness is detected. Disabled by
+    /// default: without this flag, `watch` only reports staleness.
+    #[arg(long)]
+    pub auto_index: bool,
+}
+
+/// ADR command namespace.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct AdrCommand {
+    /// ADR operation.
+    #[command(subcommand)]
+    pub target: AdrTarget,
+}
+
+/// ADR operations.
+#[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
+pub enum AdrTarget {
+    /// Create a new ADR.
+    Create(AdrCreateArgs),
+    /// Read one ADR by id.
+    Get(AdrGetArgs),
+    /// Update one ADR's section content or status.
+    Update(AdrUpdateArgs),
+    /// Delete one ADR by id.
+    Delete(AdrDeleteArgs),
+    /// List every ADR.
+    List(AdrListArgs),
+}
+
+/// Arguments for `adr create`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct AdrCreateArgs {
+    /// Repository path.
+    pub path: PathBuf,
+    /// Short decision title.
+    #[arg(long)]
+    pub title: String,
+    /// Context section content.
+    #[arg(long)]
+    pub context: String,
+    /// Decision section content.
+    #[arg(long)]
+    pub decision: String,
+    /// Optional consequences section content.
+    #[arg(long)]
+    pub consequences: Option<String>,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Arguments for `adr get`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct AdrGetArgs {
+    /// Repository path.
+    pub path: PathBuf,
+    /// ADR id, e.g. `ADR-0001`.
+    pub id: String,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Arguments for `adr update`. Provide either `--section`/`--value`, or
+/// `--status`, or both.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct AdrUpdateArgs {
+    /// Repository path.
+    pub path: PathBuf,
+    /// ADR id, e.g. `ADR-0001`.
+    pub id: String,
+    /// Section to update: `context`, `decision`, or `consequences`.
+    #[arg(long, requires = "value")]
+    pub section: Option<String>,
+    /// New content for `--section`.
+    #[arg(long, requires = "section")]
+    pub value: Option<String>,
+    /// New lifecycle status.
+    #[arg(long, value_enum)]
+    pub status: Option<AdrStatusArg>,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Arguments for `adr delete`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct AdrDeleteArgs {
+    /// Repository path.
+    pub path: PathBuf,
+    /// ADR id, e.g. `ADR-0001`.
+    pub id: String,
+}
+
+/// Arguments for `adr list`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct AdrListArgs {
+    /// Repository path.
+    pub path: PathBuf,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// CLI-facing mirror of [`crate::adr::AdrStatus`] (clap's `ValueEnum` derive
+/// needs a local type in most configurations here).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum AdrStatusArg {
+    /// Drafted, not yet decided.
+    Proposed,
+    /// Actively in effect.
+    Accepted,
+    /// No longer recommended, but not replaced by a specific other ADR.
+    Deprecated,
+    /// Replaced by a later decision.
+    Superseded,
+}
+
+impl From<AdrStatusArg> for crate::adr::AdrStatus {
+    fn from(value: AdrStatusArg) -> Self {
+        match value {
+            AdrStatusArg::Proposed => Self::Proposed,
+            AdrStatusArg::Accepted => Self::Accepted,
+            AdrStatusArg::Deprecated => Self::Deprecated,
+            AdrStatusArg::Superseded => Self::Superseded,
+        }
+    }
+}
+
+/// Graph artifact command namespace.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct GraphCommand {
+    /// Graph artifact operation.
+    #[command(subcommand)]
+    pub target: GraphTarget,
+}
+
+/// Graph artifact operations.
+#[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
+pub enum GraphTarget {
+    /// Export the current graph snapshot as a compressed artifact.
+    Export(GraphExportArgs),
+    /// Import a compressed graph artifact into this repository's graph store.
+    Import(GraphImportArgs),
+}
+
+/// Arguments for `graph export`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct GraphExportArgs {
+    /// Repository path with a generated Lithograph graph store.
+    pub path: PathBuf,
+    /// Output compressed artifact path.
+    #[arg(long)]
+    pub output: PathBuf,
+}
+
+/// Arguments for `graph import`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct GraphImportArgs {
+    /// Repository path whose graph store should receive the artifact.
+    pub path: PathBuf,
+    /// Compressed artifact path to import.
+    pub artifact: PathBuf,
 }
 
 /// Arguments for `golden`.
@@ -77,6 +286,10 @@ pub struct ValidateMermaidArgs {
     /// Optional local Node validator script. It receives Mermaid text on stdin.
     #[arg(long)]
     pub node_validator: Option<PathBuf>,
+    /// Rewrite unsafe node ids to deterministic ASCII ids in place, then
+    /// re-validate. Never run unless explicitly requested (LIT-22.7.2 AC3).
+    #[arg(long)]
+    pub fix: bool,
 }
 
 /// Arguments for `mcp-server`.
@@ -165,6 +378,10 @@ pub enum InspectTarget {
     Graph(InspectGraphArgs),
     /// Print the deterministic module plan.
     Modules(InspectModulesArgs),
+    /// Print the last recorded run's metrics: index/generation time, graph
+    /// size, cache hit rate, and token estimate. Optionally checks them
+    /// against explicit budget thresholds.
+    Metrics(InspectMetricsArgs),
 }
 
 /// Arguments for `inspect modules`.
@@ -195,6 +412,31 @@ pub struct InspectArtifactsArgs {
 pub struct InspectGraphArgs {
     /// Repository path to inspect.
     pub path: PathBuf,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Arguments for `inspect metrics`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct InspectMetricsArgs {
+    /// Repository path whose last recorded `.lithograph/run.json` to inspect.
+    pub path: PathBuf,
+    /// Fail with the exceeded thresholds listed when the graph has more
+    /// than this many nodes.
+    #[arg(long)]
+    pub max_graph_nodes: Option<usize>,
+    /// Fail when the graph has more than this many relations.
+    #[arg(long)]
+    pub max_graph_relations: Option<usize>,
+    /// Fail when the analysis cache hit rate drops below this percentage
+    /// (`0`-`100`). An integer percentage, not a float, so this argument
+    /// stays `Eq`-comparable like every other CLI argument struct.
+    #[arg(long)]
+    pub min_cache_hit_rate_percent: Option<u8>,
+    /// Fail when the estimated prompt token count exceeds this value.
+    #[arg(long)]
+    pub max_tokens: Option<u64>,
     /// Output format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
     pub format: OutputFormat,
@@ -231,9 +473,11 @@ impl Cli {
 #[cfg(test)]
 mod tests {
     use super::{
-        AskArgs, Cli, Command, DriftArgs, GoldenArgs, InitArgs, InspectArtifactsArgs,
-        InspectCommand, InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs,
-        McpExportArgs, McpServerArgs, OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
+        AdrCommand, AdrCreateArgs, AdrListArgs, AdrStatusArg, AdrTarget, AdrUpdateArgs, AskArgs,
+        Cli, Command, DriftArgs, GoldenArgs, GraphCommand, GraphExportArgs, GraphImportArgs,
+        GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectGraphArgs,
+        InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs, McpServerArgs,
+        OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
     };
     use std::path::PathBuf;
 
@@ -447,6 +691,110 @@ mod tests {
     }
 
     #[test]
+    fn parses_graph_artifact_commands() {
+        assert_eq!(
+            Cli::parse_from_args([
+                "lithograph",
+                "graph",
+                "export",
+                "fixtures/polyglot",
+                "--output",
+                "graph.lithograph-graph.gz",
+            ])
+            .command,
+            Some(Command::Graph(GraphCommand {
+                target: GraphTarget::Export(GraphExportArgs {
+                    path: PathBuf::from("fixtures/polyglot"),
+                    output: PathBuf::from("graph.lithograph-graph.gz"),
+                }),
+            }))
+        );
+
+        assert_eq!(
+            Cli::parse_from_args([
+                "lithograph",
+                "graph",
+                "import",
+                "fixtures/polyglot",
+                "graph.lithograph-graph.gz",
+            ])
+            .command,
+            Some(Command::Graph(GraphCommand {
+                target: GraphTarget::Import(GraphImportArgs {
+                    path: PathBuf::from("fixtures/polyglot"),
+                    artifact: PathBuf::from("graph.lithograph-graph.gz"),
+                }),
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_adr_commands() {
+        assert_eq!(
+            Cli::parse_from_args([
+                "lithograph",
+                "adr",
+                "create",
+                "fixtures/polyglot",
+                "--title",
+                "Use Postgres",
+                "--context",
+                "We need a database.",
+                "--decision",
+                "Use Postgres.",
+            ])
+            .command,
+            Some(Command::Adr(AdrCommand {
+                target: AdrTarget::Create(AdrCreateArgs {
+                    path: PathBuf::from("fixtures/polyglot"),
+                    title: "Use Postgres".to_owned(),
+                    context: "We need a database.".to_owned(),
+                    decision: "Use Postgres.".to_owned(),
+                    consequences: None,
+                    format: OutputFormat::Table,
+                }),
+            }))
+        );
+
+        assert_eq!(
+            Cli::parse_from_args([
+                "lithograph",
+                "adr",
+                "update",
+                "fixtures/polyglot",
+                "ADR-0001",
+                "--section",
+                "consequences",
+                "--value",
+                "Adds an ops dependency.",
+                "--status",
+                "accepted",
+            ])
+            .command,
+            Some(Command::Adr(AdrCommand {
+                target: AdrTarget::Update(AdrUpdateArgs {
+                    path: PathBuf::from("fixtures/polyglot"),
+                    id: "ADR-0001".to_owned(),
+                    section: Some("consequences".to_owned()),
+                    value: Some("Adds an ops dependency.".to_owned()),
+                    status: Some(AdrStatusArg::Accepted),
+                    format: OutputFormat::Table,
+                }),
+            }))
+        );
+
+        assert_eq!(
+            Cli::parse_from_args(["lithograph", "adr", "list", "fixtures/polyglot"]).command,
+            Some(Command::Adr(AdrCommand {
+                target: AdrTarget::List(AdrListArgs {
+                    path: PathBuf::from("fixtures/polyglot"),
+                    format: OutputFormat::Table,
+                }),
+            }))
+        );
+    }
+
+    #[test]
     fn parses_lit_15_stabilization_commands() {
         assert_eq!(
             Cli::parse_from_args([
@@ -483,6 +831,7 @@ mod tests {
             Some(Command::ValidateMermaid(ValidateMermaidArgs {
                 path: PathBuf::from("docs"),
                 node_validator: Some(PathBuf::from("scripts/validate-mermaid.mjs")),
+                fix: false,
             }))
         );
         assert_eq!(

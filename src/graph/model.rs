@@ -106,6 +106,10 @@ pub enum SymbolKind {
     Enum,
     /// Rust trait.
     Trait,
+    /// Definition-like syntax fact from a generic syntax-indexed language
+    /// (see LIT-22.2.3), e.g. a class, function, or struct in a language
+    /// with a tree-sitter adapter but no specialized deep analyzer.
+    Definition,
 }
 
 /// Code symbol node.
@@ -132,6 +136,11 @@ pub enum ConfigNodeKind {
     Job,
     /// Network port.
     Port,
+    /// An HTTP route, gRPC/protobuf RPC, or GraphQL Query/Mutation field
+    /// (LIT-22.3.4). `ConfigNode::name` is `"METHOD path"` for HTTP (e.g.
+    /// `"GET /users/{id}"`), `"service.rpc"` for gRPC, or the GraphQL field
+    /// name.
+    Route,
     /// Other named configuration value.
     Value,
 }
@@ -198,6 +207,9 @@ pub enum ModuleLanguage {
     Python,
     /// Rust module.
     Rust,
+    /// A generic syntax-indexed language (see LIT-22.2.3), backed by a
+    /// tree-sitter adapter but not yet a specialized deep analyzer.
+    SyntaxIndexed(crate::analysis::SyntaxIndexedLanguage),
 }
 
 /// Source module node.
@@ -260,8 +272,53 @@ pub enum RelationKind {
     PublishesImage,
     /// A type implements a trait.
     Implements,
+    /// A class/type inherits from (extends) a base class/type.
+    Inherits,
+    /// A definition references another type by name (field type, parameter
+    /// type, return type, generic argument).
+    TypeRefs,
+    /// A file-scoped reference to a symbol name that is neither a
+    /// definition nor an import (a use site).
+    Usages,
+    /// A foreign-function-interface boundary: a function or static
+    /// declared `extern` for another ABI.
+    Ffi,
     /// A generic reference (path, URL, dynamic import, ctypes, service dependency).
     References,
+    /// Publishes/emits an event or message onto a channel (LIT-22.3.5).
+    Emits,
+    /// Subscribes/listens for an event or message on a channel (LIT-22.3.5).
+    ListensOn,
+    /// Data flows from the source symbol into the target symbol via a call
+    /// argument or a `self.field` assignment (LIT-22.3.6 AC1).
+    DataFlows,
+    /// Two symbols are near-clones by deterministic lexical/structural
+    /// similarity (LIT-22.3.6 AC2) -- never live embeddings.
+    SimilarTo,
+}
+
+/// How a relation was extracted or resolved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RelationResolution {
+    /// Parser or structured syntax identified the relation, with no cross-file refinement.
+    SyntaxOnly,
+    /// Generic text or heuristic fallback identified the relation.
+    Fallback,
+    /// Syntax facts were refined against package/module/reference indexes.
+    HybridResolved,
+}
+
+/// Provenance for a graph relation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RelationProvenance {
+    /// Detected language or format responsible for the relation, when known.
+    pub language: Option<String>,
+    /// Stable resolver strategy label.
+    pub resolver_strategy: String,
+    /// Relation extraction/resolution level.
+    pub resolution: RelationResolution,
+    /// Confidence assigned by that resolver.
+    pub confidence: Confidence,
 }
 
 /// One relation between two graph nodes.
@@ -279,6 +336,9 @@ pub struct Relation {
     pub confidence: Confidence,
     /// Evidence supporting this relation.
     pub evidence: Vec<EvidenceRef>,
+    /// Resolver provenance for this relation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<RelationProvenance>,
 }
 
 /// The complete typed semantic graph for one repository snapshot.

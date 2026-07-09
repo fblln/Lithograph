@@ -145,6 +145,9 @@ fn mock_title(task_kind: TaskKind) -> String {
         TaskKind::Workflows => "Workflows".to_owned(),
         TaskKind::Boundaries => "Boundaries".to_owned(),
         TaskKind::Configuration => "Configuration".to_owned(),
+        TaskKind::Database => "Database".to_owned(),
+        TaskKind::KeyModules => "Key Modules".to_owned(),
+        TaskKind::AdrDrift => "Architecture Decisions and Drift".to_owned(),
         TaskKind::ModulePage => "Module".to_owned(),
     }
 }

@@ -1,0 +1,187 @@
+{
+  "modules": [
+    {
+      "name": "Configuration",
+      "kind": "Configuration",
+      "member_count": 23,
+      "evidence": [
+        "artifact:config/schema.json",
+        "artifact:config/settings.yaml",
+        "artifact:pyproject.toml",
+        "artifact:requirements.txt"
+      ]
+    },
+    {
+      "name": "assets",
+      "kind": "Directory",
+      "member_count": 2,
+      "evidence": [
+        "artifact:assets/logo.svg",
+        "unresolved:xmlns=\"http://www.w3.org/2000/svg"
+      ]
+    },
+    {
+      "name": "data",
+      "kind": "Directory",
+      "member_count": 1,
+      "evidence": [
+        "artifact:data/sample.bin"
+      ]
+    },
+    {
+      "name": "generated",
+      "kind": "Directory",
+      "member_count": 3,
+      "evidence": [
+        "artifact:generated/client.py",
+        "module:generated.client",
+        "symbol:generated/client.py#generated.client::call_route_api"
+      ]
+    },
+    {
+      "name": "root",
+      "kind": "Directory",
+      "member_count": 6,
+      "evidence": [
+        "artifact:Makefile",
+        "command:Makefile#12",
+        "command:Makefile#15",
+        "command:Makefile#6"
+      ]
+    },
+    {
+      "name": "vendor",
+      "kind": "Directory",
+      "member_count": 3,
+      "evidence": [
+        "artifact:vendor/example/lib.rs",
+        "module:vendor::example",
+        "symbol:vendor/example/lib.rs#vendor::example::vendored_helper"
+      ]
+    },
+    {
+      "name": "web",
+      "kind": "Directory",
+      "member_count": 33,
+      "evidence": [
+        "artifact:web/index.html",
+        "artifact:web/src/App.tsx",
+        "module:web/index.html",
+        "module:web/src/App.tsx"
+      ]
+    },
+    {
+      "name": "Documentation",
+      "kind": "Documentation",
+      "member_count": 13,
+      "evidence": [
+        "artifact:LICENSE",
+        "artifact:README.md",
+        "artifact:docs/architecture.md",
+        "command:docs/architecture.md#21"
+      ]
+    },
+    {
+      "name": "Infrastructure",
+      "kind": "Infrastructure",
+      "member_count": 19,
+      "evidence": [
+        "artifact:.github/workflows/ci.yml",
+        "artifact:Dockerfile",
+        "artifact:docker-compose.yml",
+        "command:.github/workflows/ci.yml#jobs.checks.steps[1]"
+      ]
+    },
+    {
+      "name": "python_app",
+      "kind": "PythonPackage",
+      "member_count": 16,
+      "evidence": [
+        "artifact:src/python_app/__init__.py",
+        "artifact:src/python_app/service.py",
+        "command:src/python_app/service.py#29",
+        "env:RIDGELINE_WORKER"
+      ]
+    },
+    {
+      "name": "fixture-worker",
+      "kind": "RustCrate",
+      "member_count": 14,
+      "evidence": [
+        "artifact:rust/Cargo.toml",
+        "artifact:rust/src/bin/worker.rs",
+        "artifact:rust/src/lib.rs",
+        "env:RIDGELINE_CACHE_DIR"
+      ]
+    }
+  ],
+  "relations": [
+    "Makefile -[References]-> rust/Cargo.toml (Low)",
+    "Makefile -[References]-> ghcr.io/example/route-api:dev (Low)",
+    "Makefile -[References]-> ghcr.io/example/route-api:dev (Low)",
+    "README.md -[References]-> .github/workflows/ci.yml (High)",
+    "README.md -[References]-> Dockerfile (High)",
+    "README.md -[References]-> Makefile (High)",
+    "README.md -[References]-> README.md (High)",
+    "README.md -[References]-> assets/logo.svg (High)",
+    "README.md -[References]-> config/schema.json (High)",
+    "README.md -[References]-> config/settings.yaml (High)",
+    "README.md -[References]-> data/sample.bin (High)",
+    "README.md -[References]-> docker-compose.yml (High)",
+    "README.md -[References]-> docs/architecture.md (High)",
+    "README.md -[References]-> generated/client.py (High)",
+    "README.md -[References]-> pyproject.toml (High)",
+    "README.md -[References]-> rust/Cargo.toml (High)",
+    "README.md -[References]-> rust/src/bin/worker.rs (High)",
+    "README.md -[References]-> rust/src/lib.rs (High)",
+    "README.md -[References]-> src/python_app/__init__.py (High)",
+    "README.md -[References]-> src/python_app/service.py (High)",
+    "README.md -[References]-> vendor/example/lib.rs (High)",
+    "README.md -[References]-> web/index.html (High)",
+    "README.md -[References]-> web/src/App.tsx (High)",
+    "assets/logo.svg -[References]-> xmlns=\"http://www.w3.org/2000/svg (Low)",
+    "assets/logo.svg -[References]-> xmlns=\"http://www.w3.org/2000/svg (Low)",
+    "config/schema.json -[References]-> https://json-schema.org/draft/2020-12/schema (Low)",
+    "config/settings.yaml -[References]-> config/schema.json (High)",
+    "config/settings.yaml -[References]-> /usr/local/bin/worker (Low)",
+    "config/settings.yaml -[References]-> /var/cache/ridgeline (Low)",
+    "config/settings.yaml -[References]-> assets/ (Low)",
+    "docs/architecture.md -[References]-> rust/Cargo.toml (High)",
+    "docs/architecture.md -[References]-> rust/ (High)",
+    "docs/architecture.md -[References]-> src/python_app/ (High)",
+    "docs/architecture.md -[References]-> web/ (High)",
+    "requirements.txt -[DependsOnPackage]-> pydantic (High)",
+    "requirements.txt -[DependsOnPackage]-> pytest (High)",
+    "rust/src/bin/worker.rs -[Imports]-> fixture_worker::bake_route (High)",
+    "rust/src/lib.rs -[Imports]-> std (High)",
+    "src/python_app/__init__.py -[Imports]-> src.python_app.service (High)",
+    "src/python_app/service.py -[Imports]-> __future__ (High)"
+  ],
+  "evidence": [
+    {
+      "reference": ".github/workflows/ci.yml"
+    },
+    {
+      "reference": "Dockerfile"
+    },
+    {
+      "reference": "LICENSE"
+    },
+    {
+      "reference": "Makefile"
+    },
+    {
+      "reference": "README.md"
+    },
+    {
+      "reference": "assets/logo.svg"
+    },
+    {
+      "reference": "config/schema.json"
+    },
+    {
+      "reference": "config/settings.yaml"
+    }
+  ],
+  "confidence": 85
+}

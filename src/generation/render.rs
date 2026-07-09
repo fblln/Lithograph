@@ -153,7 +153,7 @@ fn validate_mermaid_fences(body: &str) -> Vec<String> {
     let mut issues = Vec::new();
     let mut in_mermaid = false;
     let mut block_start = 0usize;
-    let mut saw_body_line = false;
+    let mut fence_body = String::new();
 
     for (index, line) in body.lines().enumerate() {
         let line_number = index + 1;
@@ -161,20 +161,30 @@ fn validate_mermaid_fences(body: &str) -> Vec<String> {
         if !in_mermaid && trimmed.eq_ignore_ascii_case("```mermaid") {
             in_mermaid = true;
             block_start = line_number;
-            saw_body_line = false;
+            fence_body.clear();
             continue;
         }
         if in_mermaid && trimmed == "```" {
-            if !saw_body_line {
+            if fence_body.trim().is_empty() {
                 issues.push(format!(
                     "Mermaid block starting at line {block_start} is empty"
                 ));
+            } else {
+                // AC1: node ids must be ASCII, with labels kept separate
+                // in brackets, so a page fails validation before it's
+                // ever written rather than shipping a broken diagram.
+                for detail in crate::mermaid::validate_node_ids(&fence_body) {
+                    issues.push(format!(
+                        "Mermaid block starting at line {block_start}: {detail}"
+                    ));
+                }
             }
             in_mermaid = false;
             continue;
         }
-        if in_mermaid && !trimmed.is_empty() {
-            saw_body_line = true;
+        if in_mermaid {
+            fence_body.push_str(line);
+            fence_body.push('\n');
         }
     }
 

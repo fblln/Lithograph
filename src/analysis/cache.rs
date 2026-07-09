@@ -7,13 +7,19 @@
 
 use crate::analysis::{
     ActionsProfile, CargoProfile, ComposeProfile, DockerfileAnalysis, MarkdownAnalysis,
+    PackageManifestAnalysis, PackageManifestFormat, ProtocolFormat, ProtocolRoute,
     PyProjectProfile, PythonAnalysis, RequirementsProfile, RustAnalysis, RustWorkspaceAnalysis,
-    StructuredAnalysis, StructuredFormat, TextFinding,
+    StructuredAnalysis, StructuredFormat, SyntaxIndexedLanguage, TextFinding,
+    TreeSitterAdapterOutput,
 };
 use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::path::PathBuf;
+
+/// Bump when analyzer output semantics or serialization change in a way that
+/// should force fresh analyzer output instead of reusing old cache entries.
+pub const ANALYSIS_CACHE_VERSION: u32 = 4;
 
 /// Tags which analyzer produced an [`AnalyzerOutput`], so a cache lookup can
 /// reject a stale entry whose artifact has since been reclassified to a
@@ -43,6 +49,12 @@ pub enum AnalyzerKind {
     PyProject,
     /// `StructuredAnalyzer`, for one specific format.
     Structured(StructuredFormat),
+    /// `TreeSitterParserAdapter`, for one specific syntax-indexed language.
+    SyntaxIndexed(SyntaxIndexedLanguage),
+    /// A `PackageManifestFormat` analyzer, for one specific manifest format.
+    PackageManifest(PackageManifestFormat),
+    /// `ProtoAnalyzer`/`GraphQlAnalyzer`, for one specific protocol format.
+    Protocol(ProtocolFormat),
     /// `GenericTextExtractor`.
     GenericText,
 }
@@ -79,6 +91,18 @@ pub enum AnalyzerOutput {
     /// Carries its own [`StructuredFormat`] alongside the analysis, since
     /// `StructuredAnalysis` itself does not record which format produced it.
     Structured(StructuredFormat, StructuredAnalysis),
+    /// [`TreeSitterParserAdapter`](crate::analysis::TreeSitterParserAdapter)
+    /// output. Carries its own [`SyntaxIndexedLanguage`] alongside the
+    /// output, since `TreeSitterAdapterOutput` only records a `&str`
+    /// language id, not this cache-key-safe `Copy` discriminant.
+    SyntaxIndexed(SyntaxIndexedLanguage, TreeSitterAdapterOutput),
+    /// A package manifest analyzer's output (LIT-22.2.4). Carries its own
+    /// [`PackageManifestFormat`] alongside the analysis, matching the
+    /// `Structured`/`SyntaxIndexed` pattern above.
+    PackageManifest(PackageManifestFormat, PackageManifestAnalysis),
+    /// [`ProtoAnalyzer`](crate::analysis::ProtoAnalyzer)/[`GraphQlAnalyzer`](crate::analysis::GraphQlAnalyzer)
+    /// output. Carries its own [`ProtocolFormat`], matching the pattern above.
+    Protocol(ProtocolFormat, Vec<ProtocolRoute>),
     /// [`GenericTextExtractor`](crate::analysis::GenericTextExtractor) output.
     GenericText(Vec<TextFinding>),
 }
@@ -98,6 +122,9 @@ impl AnalyzerOutput {
             Self::RustWorkspace(_) => AnalyzerKind::RustWorkspace,
             Self::PyProject(_) => AnalyzerKind::PyProject,
             Self::Structured(format, _) => AnalyzerKind::Structured(*format),
+            Self::SyntaxIndexed(language, _) => AnalyzerKind::SyntaxIndexed(*language),
+            Self::PackageManifest(format, _) => AnalyzerKind::PackageManifest(*format),
+            Self::Protocol(format, _) => AnalyzerKind::Protocol(*format),
             Self::GenericText(_) => AnalyzerKind::GenericText,
         }
     }
@@ -169,8 +196,10 @@ impl AnalysisCache {
     /// file bytes), so the entry path is a function of `(content_hash, kind)`,
     /// not content hash alone.
     fn entry_path(&self, content_hash: &str, kind: AnalyzerKind) -> PathBuf {
-        self.dir
-            .join(format!("{content_hash}-{}.json", kind_slug(kind)))
+        self.dir.join(format!(
+            "v{ANALYSIS_CACHE_VERSION}-{content_hash}-{}.json",
+            kind_slug(kind)
+        ))
     }
 }
 
@@ -186,7 +215,7 @@ fn kind_slug(kind: AnalyzerKind) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{AnalysisCache, AnalyzerKind, AnalyzerOutput};
+    use super::{ANALYSIS_CACHE_VERSION, AnalysisCache, AnalyzerKind, AnalyzerOutput};
     use crate::analysis::{FindingConfidence, PythonAnalysis, TextFinding, TextFindingKind};
 
     fn sample_python() -> AnalyzerOutput {
@@ -234,11 +263,30 @@ mod tests {
     #[test]
     fn corrupt_entry_is_a_miss_not_a_panic() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::TempDir::new()?;
-        std::fs::write(temp.path().join("bad.json"), "{ not json")?;
         let cache = AnalysisCache::new(temp.path());
+        std::fs::write(cache.entry_path("bad", AnalyzerKind::Python), "{ not json")?;
 
         assert_eq!(cache.get("bad", AnalyzerKind::Python), None);
         assert_eq!(cache.misses(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn cache_entry_names_include_analyzer_cache_version() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let temp = tempfile::TempDir::new()?;
+        let cache = AnalysisCache::new(temp.path());
+
+        cache.put("hash", &sample_python());
+
+        let names: Vec<String> = std::fs::read_dir(temp.path())?
+            .map(|entry| entry.map(|entry| entry.file_name().to_string_lossy().into_owned()))
+            .collect::<Result<_, _>>()?;
+        assert_eq!(
+            names,
+            vec![format!("v{ANALYSIS_CACHE_VERSION}-hash-python.json")]
+        );
 
         Ok(())
     }

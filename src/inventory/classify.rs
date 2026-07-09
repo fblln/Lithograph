@@ -3,6 +3,7 @@
 use crate::domain::{
     AnalyzerSelection, ArtifactCategory, ModelExposurePolicy, RepoPath, SupportTier, TextStatus,
 };
+use crate::inventory::language::{LanguageRegistryEntry, by_extension};
 use std::path::Path;
 
 /// Input passed to the artifact classifier.
@@ -124,6 +125,11 @@ fn exact_filename_rule(path: &str) -> Option<Classification> {
         "docker-compose.yml" | "docker-compose.yaml" | "compose.yml" | "compose.yaml" => Some(
             structured(ArtifactCategory::ContainerDefinition, "docker-compose"),
         ),
+        "package.json" => Some(package_manifest("npm")),
+        "go.mod" => Some(package_manifest("go-mod")),
+        "composer.json" => Some(package_manifest("composer")),
+        "pom.xml" => Some(package_manifest("maven")),
+        "build.gradle" | "build.gradle.kts" => Some(package_manifest("gradle")),
         _ => None,
     }
 }
@@ -136,10 +142,10 @@ fn path_context_rule(path: &str, text_status: TextStatus) -> Option<Classificati
         ));
     }
     if has_component(path, "migrations") {
-        return Some(generic(
-            ArtifactCategory::DatabaseMigration,
-            extension_name(path),
-        ));
+        return Some(match extension_name(path).and_then(by_extension) {
+            Some(entry) => registry_with_category(entry, ArtifactCategory::DatabaseMigration),
+            None => generic(ArtifactCategory::DatabaseMigration, extension_name(path)),
+        });
     }
     if path.contains("tests/fixtures/") || path.contains("test/fixtures/") {
         return Some(test_data_classification(path, text_status));
@@ -158,16 +164,6 @@ fn path_context_rule(path: &str, text_status: TextStatus) -> Option<Classificati
 fn extension_rule(path: &str, text_status: TextStatus) -> Option<Classification> {
     let extension = extension_name(path)?;
     match extension {
-        "py" => Some(language("python", SupportTier::DeepLanguage)),
-        "rs" => Some(language("rust", SupportTier::DeepLanguage)),
-        "ts" => Some(language("typescript", SupportTier::GenericText)),
-        "tsx" => Some(language("tsx", SupportTier::GenericText)),
-        "js" => Some(language("javascript", SupportTier::GenericText)),
-        "html" | "htm" => Some(generic(ArtifactCategory::Template, Some("html"))),
-        "md" | "markdown" => Some(structured(ArtifactCategory::Documentation, "markdown")),
-        "yaml" | "yml" => Some(structured(ArtifactCategory::Configuration, "yaml")),
-        "json" => Some(structured(ArtifactCategory::Configuration, "json")),
-        "toml" => Some(structured(ArtifactCategory::Configuration, "toml")),
         "lock" => Some(
             structured(ArtifactCategory::DependencyLockfile, "lockfile")
                 .with_model_policy(ModelExposurePolicy::ExcerptOnly),
@@ -177,7 +173,8 @@ fn extension_rule(path: &str, text_status: TextStatus) -> Option<Classification>
             Some(static_asset(extension, text_status))
         }
         "bin" | "dat" | "wasm" | "so" | "dylib" | "dll" | "exe" => Some(binary_asset(extension)),
-        _ => None,
+        "csproj" => Some(package_manifest("csproj")),
+        _ => by_extension(extension).map(registry),
     }
 }
 
@@ -260,12 +257,43 @@ fn language(format: &str, support_tier: SupportTier) -> Classification {
     )
 }
 
+fn registry(entry: &LanguageRegistryEntry) -> Classification {
+    registry_with_category(entry, entry.category)
+}
+
+fn registry_with_category(
+    entry: &LanguageRegistryEntry,
+    category: ArtifactCategory,
+) -> Classification {
+    Classification::new(
+        category,
+        Some(entry.name),
+        entry.support_tier,
+        entry.analyzer_selection(),
+    )
+}
+
 fn structured(category: ArtifactCategory, format: &str) -> Classification {
     Classification::new(
         category,
         Some(format),
         SupportTier::StructuredFormat,
         AnalyzerSelection::Structured(format.to_owned()),
+    )
+}
+
+/// Classification for a package manifest routed to a
+/// [`PackageManifestAnalyzer`](crate::analysis::packages) implementation
+/// (see LIT-22.2.4). Unlike `structured()`, this always uses
+/// `AnalyzerSelection::Specialized`, since each package manifest format has
+/// its own unambiguous format id (no shared-format filename disambiguation
+/// like `Cargo.toml`/`pyproject.toml` need for `"toml"`).
+fn package_manifest(format: &str) -> Classification {
+    Classification::new(
+        ArtifactCategory::PackageManifest,
+        Some(format),
+        SupportTier::StructuredFormat,
+        AnalyzerSelection::Specialized(format.to_owned()),
     )
 }
 
@@ -342,7 +370,7 @@ fn has_component(path: &str, component: &str) -> bool {
 mod tests {
     use super::{ArtifactClassifier, ClassificationInput};
     use crate::domain::{
-        AnalyzerSelection, ArtifactCategory, ModelExposurePolicy, RepoPath, TextStatus,
+        AnalyzerSelection, ArtifactCategory, ModelExposurePolicy, RepoPath, SupportTier, TextStatus,
     };
 
     fn classify(
@@ -460,6 +488,83 @@ mod tests {
         assert_eq!(text.category, ArtifactCategory::UnknownText);
         assert_eq!(binary.category, ArtifactCategory::BinaryAsset);
         assert_eq!(binary.model_policy, ModelExposurePolicy::Never);
+
+        Ok(())
+    }
+
+    #[test]
+    fn phase_one_registry_languages_and_formats_are_classified()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // LIT-22.2.3: each of these now has a wired tree-sitter adapter, so
+        // it classifies as syntax-indexed by registry id (which differs
+        // from the display name for c_sharp) rather than a generic-text
+        // fallback.
+        let cases = [
+            (
+                "web/src/app.tsx",
+                "tsx",
+                "tsx",
+                ArtifactCategory::SourceCode,
+            ),
+            (
+                "web/src/component.jsx",
+                "javascript",
+                "javascript",
+                ArtifactCategory::SourceCode,
+            ),
+            ("cmd/server.go", "go", "go", ArtifactCategory::SourceCode),
+            (
+                "src/main/java/App.java",
+                "java",
+                "java",
+                ArtifactCategory::SourceCode,
+            ),
+            (
+                "src/main/kotlin/App.kt",
+                "kotlin",
+                "kotlin",
+                ArtifactCategory::SourceCode,
+            ),
+            (
+                "src/Program.cs",
+                "csharp",
+                "c_sharp",
+                ArtifactCategory::SourceCode,
+            ),
+            (
+                "public/index.php",
+                "php",
+                "php",
+                ArtifactCategory::SourceCode,
+            ),
+            (
+                "schema/tables.sql",
+                "sql",
+                "sql",
+                ArtifactCategory::DatabaseSchema,
+            ),
+            (
+                "web/styles/site.css",
+                "css",
+                "css",
+                ArtifactCategory::StaticAsset,
+            ),
+        ];
+
+        for (path, format, registry_id, category) in cases {
+            let classification = classify(path, TextStatus::Text, Some(""))?;
+            assert_eq!(classification.detected_format.as_deref(), Some(format));
+            assert_eq!(classification.category, category);
+            assert_eq!(classification.support_tier, SupportTier::StructuredFormat);
+            assert_eq!(
+                classification.analyzer,
+                AnalyzerSelection::SyntaxIndexed(registry_id.to_owned())
+            );
+        }
+
+        let migration = classify("db/migrations/001_init.sql", TextStatus::Text, Some(""))?;
+        assert_eq!(migration.detected_format.as_deref(), Some("sql"));
+        assert_eq!(migration.category, ArtifactCategory::DatabaseMigration);
 
         Ok(())
     }

@@ -5,11 +5,13 @@ use crate::analysis::{
     ActionsProfile, ActionsProfileAnalyzer, ActionsStepHint, AnalysisCache, AnalyzerKind,
     AnalyzerOutput, CargoProfile, CargoProfileAnalyzer, ComposeProfile, ComposeProfileAnalyzer,
     ConfigReferenceKind, DockerfileAnalysis, DockerfileAnalyzer, GenericTextExtractor,
-    MarkdownAnalysis, MarkdownAnalyzer, PyProjectAnalyzer, PyProjectProfile, PythonAnalysis,
+    MarkdownAnalysis, MarkdownAnalyzer, PackageManifestAnalysis, PackageManifestFormat,
+    ProtocolFormat, ProtocolRoute, PyProjectAnalyzer, PyProjectProfile, PythonAnalysis,
     PythonAnalyzer, PythonImportKind, PythonReferenceKind, RequirementsAnalyzer,
     RequirementsProfile, RustAnalysis, RustAnalyzer, RustReferenceKind, RustWorkspaceAnalysis,
-    RustWorkspaceAnalyzer, StructuredAnalysis, StructuredAnalyzer, StructuredFormat, TextFinding,
-    TextFindingKind, is_python_stdlib_module, python, rust_source, rust_std_crate,
+    RustWorkspaceAnalyzer, StructuredAnalysis, StructuredAnalyzer, StructuredFormat,
+    SyntaxIndexedLanguage, TextFinding, TextFindingKind, TreeSitterAdapterOutput,
+    is_python_stdlib_module, python, rust_source, rust_std_crate,
 };
 use crate::domain::{
     AnalyzerSelection, Artifact, ArtifactId, Confidence, EvidenceRef, ModelExposurePolicy,
@@ -18,8 +20,9 @@ use crate::domain::{
 use crate::graph::model::{
     ArtifactNode, CommandNode, ConfigNode, ConfigNodeKind, ContainerImageNode, DocumentationNode,
     EnvVarNode, Graph, GraphNode, GraphNodeId, ModuleLanguage, ModuleNode, PackageNode, Relation,
-    RelationKind, SymbolKind, SymbolNode, UnresolvedNode,
+    RelationKind, RelationProvenance, RelationResolution, SymbolKind, SymbolNode, UnresolvedNode,
 };
+use crate::inventory::language::by_name as registry_language;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
@@ -125,6 +128,7 @@ impl GraphBuilder {
             state.apply_output(artifact, output);
         }
 
+        state.detect_near_clones(repo_root);
         state.finish()
     }
 }
@@ -142,6 +146,11 @@ fn analyzer_kind(artifact: &Artifact) -> Option<AnalyzerKind> {
         (AnalyzerSelection::Specialized(format), _) if format == "rust" => Some(AnalyzerKind::Rust),
         (AnalyzerSelection::Specialized(format), _) if format == "requirements-txt" => {
             Some(AnalyzerKind::Requirements)
+        }
+        (AnalyzerSelection::Specialized(format), _) => {
+            PackageManifestFormat::from_format_id(format)
+                .map(AnalyzerKind::PackageManifest)
+                .or_else(|| ProtocolFormat::from_format_id(format).map(AnalyzerKind::Protocol))
         }
         (AnalyzerSelection::Structured(format), _) if format == "dockerfile" => {
             Some(AnalyzerKind::Dockerfile)
@@ -167,6 +176,9 @@ fn analyzer_kind(artifact: &Artifact) -> Option<AnalyzerKind> {
             if matches!(format.as_str(), "yaml" | "json" | "toml") =>
         {
             Some(AnalyzerKind::Structured(structured_format(format)))
+        }
+        (AnalyzerSelection::SyntaxIndexed(id), _) => {
+            SyntaxIndexedLanguage::from_registry_id(id).map(AnalyzerKind::SyntaxIndexed)
         }
         (AnalyzerSelection::GenericText, _) => Some(AnalyzerKind::GenericText),
         _ => None,
@@ -213,6 +225,15 @@ fn compute_fresh(
         }
         AnalyzerKind::Structured(format) => {
             AnalyzerOutput::Structured(format, StructuredAnalyzer.analyze(artifact, text, format))
+        }
+        AnalyzerKind::SyntaxIndexed(language) => {
+            AnalyzerOutput::SyntaxIndexed(language, language.adapter().parse(text))
+        }
+        AnalyzerKind::PackageManifest(format) => {
+            AnalyzerOutput::PackageManifest(format, format.analyze(artifact, text))
+        }
+        AnalyzerKind::Protocol(format) => {
+            AnalyzerOutput::Protocol(format, format.analyze(artifact, text))
         }
         AnalyzerKind::GenericText => {
             AnalyzerOutput::GenericText(GenericTextExtractor.extract(artifact, text))
@@ -309,6 +330,30 @@ impl BuilderState {
         confidence: Confidence,
         evidence: Vec<EvidenceRef>,
     ) {
+        self.relate_with_provenance(
+            source,
+            target,
+            kind,
+            confidence,
+            evidence,
+            Some(RelationProvenance {
+                language: None,
+                resolver_strategy: "graph-builder".to_owned(),
+                resolution: RelationResolution::SyntaxOnly,
+                confidence,
+            }),
+        );
+    }
+
+    fn relate_with_provenance(
+        &mut self,
+        source: GraphNodeId,
+        target: GraphNodeId,
+        kind: RelationKind,
+        confidence: Confidence,
+        evidence: Vec<EvidenceRef>,
+        provenance: Option<RelationProvenance>,
+    ) {
         self.relation_count += 1;
         self.relations.push(Relation {
             id: format!("relation:{}", self.relation_count),
@@ -317,6 +362,7 @@ impl BuilderState {
             kind,
             confidence,
             evidence,
+            provenance,
         });
     }
 
@@ -474,6 +520,15 @@ impl BuilderState {
             AnalyzerOutput::Structured(_, analysis) => {
                 self.process_structured(artifact, analysis, &node);
             }
+            AnalyzerOutput::SyntaxIndexed(language, output) => {
+                self.process_syntax_indexed(artifact, language, output, &node);
+            }
+            AnalyzerOutput::PackageManifest(format, analysis) => {
+                self.process_package_manifest(format, analysis, &node);
+            }
+            AnalyzerOutput::Protocol(_, routes) => {
+                self.process_protocol_routes(artifact, &routes, &node);
+            }
             AnalyzerOutput::GenericText(findings) => {
                 self.process_generic_text(artifact, &findings, &node);
             }
@@ -562,6 +617,7 @@ impl BuilderState {
                 Confidence::High,
                 vec![function.evidence.clone()],
             );
+            self.process_python_route_decorators(artifact, artifact_node, function);
             symbol_ids.insert(function.name.clone(), id);
         }
 
@@ -577,6 +633,34 @@ impl BuilderState {
 
         for reference in &analysis.references {
             self.process_python_reference(artifact, artifact_node, reference, &symbol_ids);
+        }
+
+        // Base classes (LIT-22.3.3): only resolves to a same-file class by
+        // bare name -- cross-module base classes stay `Unresolved` rather
+        // than guessing which import they came from (AC3).
+        for class in &analysis.classes {
+            let Some(class_id) = symbol_ids.get(&class.name) else {
+                continue;
+            };
+            for base in &class.bases {
+                let base_name = base.rsplit('.').next().unwrap_or(base.as_str());
+                let target = symbol_ids
+                    .get(base_name)
+                    .cloned()
+                    .unwrap_or_else(|| self.unresolved(base));
+                self.relate_with_provenance(
+                    class_id.clone(),
+                    target,
+                    RelationKind::Inherits,
+                    Confidence::Low,
+                    vec![class.evidence.clone()],
+                    Some(format_provenance(
+                        "python",
+                        RelationResolution::SyntaxOnly,
+                        Confidence::Low,
+                    )),
+                );
+            }
         }
     }
 
@@ -596,12 +680,17 @@ impl BuilderState {
                         .get(&name.name)
                         .cloned()
                         .unwrap_or_else(|| self.python_external_target(&name.name));
-                    self.relate(
+                    self.relate_with_provenance(
                         artifact_node.clone(),
                         target,
                         RelationKind::Imports,
                         Confidence::High,
                         vec![import.evidence.clone()],
+                        Some(artifact_provenance(
+                            artifact,
+                            RelationResolution::HybridResolved,
+                            Confidence::High,
+                        )),
                     );
                 }
             }
@@ -631,16 +720,59 @@ impl BuilderState {
                             self.unresolved(&marker)
                         }
                     });
-                self.relate(
+                self.relate_with_provenance(
                     artifact_node.clone(),
                     target,
                     RelationKind::Imports,
                     Confidence::High,
                     vec![import.evidence.clone()],
+                    Some(artifact_provenance(
+                        artifact,
+                        RelationResolution::HybridResolved,
+                        Confidence::High,
+                    )),
                 );
             }
         }
-        let _ = artifact;
+    }
+
+    /// Turns a module-level function's decorators that look like an HTTP
+    /// route registration into a first-class `Route` config node
+    /// (LIT-22.3.4 AC1). Class-based views/routers aren't covered -- most
+    /// Flask/FastAPI routes are plain module-level functions, and guessing
+    /// at class-method route registration without more evidence would risk
+    /// false positives.
+    fn process_python_route_decorators(
+        &mut self,
+        artifact: &Artifact,
+        artifact_node: &GraphNodeId,
+        function: &crate::analysis::PythonFunction,
+    ) {
+        for (index, decorator) in function.decorators.iter().enumerate() {
+            let Some((method, path)) = python::parse_route_decorator(decorator) else {
+                continue;
+            };
+            let key = format!("route.{}.{index}", function.name);
+            let route_id = self.config(
+                artifact,
+                &key,
+                ConfigNodeKind::Route,
+                &format!("{method} {path}"),
+                function.evidence.clone(),
+            );
+            self.relate_with_provenance(
+                artifact_node.clone(),
+                route_id,
+                RelationKind::Contains,
+                Confidence::High,
+                vec![function.evidence.clone()],
+                Some(artifact_provenance(
+                    artifact,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
+            );
+        }
     }
 
     fn process_python_reference(
@@ -653,12 +785,17 @@ impl BuilderState {
         match reference.kind {
             PythonReferenceKind::Call => {
                 if let Some(target) = symbol_ids.get(&reference.value).cloned() {
-                    self.relate(
+                    self.relate_with_provenance(
                         artifact_node.clone(),
                         target,
                         RelationKind::Calls,
                         reference.confidence,
                         vec![reference.evidence.clone()],
+                        Some(artifact_provenance(
+                            artifact,
+                            RelationResolution::HybridResolved,
+                            reference.confidence,
+                        )),
                     );
                 }
             }
@@ -694,34 +831,100 @@ impl BuilderState {
             }
             PythonReferenceKind::DynamicImport => {
                 let target = self.unresolved(&reference.value);
-                self.relate(
+                self.relate_with_provenance(
                     artifact_node.clone(),
                     target,
                     RelationKind::Imports,
                     reference.confidence,
                     vec![reference.evidence.clone()],
+                    Some(artifact_provenance(
+                        artifact,
+                        RelationResolution::Fallback,
+                        reference.confidence,
+                    )),
                 );
             }
             PythonReferenceKind::Ctypes => {
                 let target = self.unresolved(&reference.value);
-                self.relate(
+                self.relate_with_provenance(
                     artifact_node.clone(),
                     target,
                     RelationKind::References,
                     reference.confidence,
                     vec![reference.evidence.clone()],
+                    Some(artifact_provenance(
+                        artifact,
+                        RelationResolution::Fallback,
+                        reference.confidence,
+                    )),
                 );
             }
             PythonReferenceKind::ConfigPath => {
                 let (target, path_confidence) = self.reference_target(&reference.value);
                 let confidence = reference.confidence.min(path_confidence);
-                self.relate(
+                self.relate_with_provenance(
                     artifact_node.clone(),
                     target,
                     RelationKind::References,
                     confidence,
                     vec![reference.evidence.clone()],
+                    Some(artifact_provenance(
+                        artifact,
+                        RelationResolution::HybridResolved,
+                        confidence,
+                    )),
                 );
+            }
+            PythonReferenceKind::HttpCall => {
+                let target = self.unresolved(&reference.value);
+                self.relate_with_provenance(
+                    artifact_node.clone(),
+                    target,
+                    RelationKind::References,
+                    reference.confidence,
+                    vec![reference.evidence.clone()],
+                    Some(artifact_provenance(
+                        artifact,
+                        RelationResolution::SyntaxOnly,
+                        reference.confidence,
+                    )),
+                );
+            }
+            PythonReferenceKind::Emits | PythonReferenceKind::ListensOn => {
+                let kind = if reference.kind == PythonReferenceKind::Emits {
+                    RelationKind::Emits
+                } else {
+                    RelationKind::ListensOn
+                };
+                let target = self.unresolved(&reference.value);
+                self.relate_with_provenance(
+                    artifact_node.clone(),
+                    target,
+                    kind,
+                    reference.confidence,
+                    vec![reference.evidence.clone()],
+                    Some(artifact_provenance(
+                        artifact,
+                        RelationResolution::SyntaxOnly,
+                        reference.confidence,
+                    )),
+                );
+            }
+            PythonReferenceKind::DataFlows => {
+                if let Some(target) = symbol_ids.get(&reference.value).cloned() {
+                    self.relate_with_provenance(
+                        artifact_node.clone(),
+                        target,
+                        RelationKind::DataFlows,
+                        reference.confidence,
+                        vec![reference.evidence.clone()],
+                        Some(artifact_provenance(
+                            artifact,
+                            RelationResolution::HybridResolved,
+                            reference.confidence,
+                        )),
+                    );
+                }
             }
         }
     }
@@ -847,12 +1050,17 @@ impl BuilderState {
                     Some(crate_name) => self.package(crate_name, true),
                     None => self.unresolved(&use_.path),
                 });
-            self.relate(
+            self.relate_with_provenance(
                 artifact_node.clone(),
                 target,
                 RelationKind::Imports,
                 Confidence::High,
                 vec![use_.evidence.clone()],
+                Some(artifact_provenance(
+                    artifact,
+                    RelationResolution::HybridResolved,
+                    Confidence::High,
+                )),
             );
         }
 
@@ -896,6 +1104,21 @@ impl BuilderState {
                     RelationKind::RunsCommand,
                     reference.confidence,
                     vec![reference.evidence.clone()],
+                );
+            }
+            RustReferenceKind::Ffi => {
+                let target = self.unresolved(&reference.value);
+                self.relate_with_provenance(
+                    artifact_node.clone(),
+                    target,
+                    RelationKind::Ffi,
+                    reference.confidence,
+                    vec![reference.evidence.clone()],
+                    Some(format_provenance(
+                        "rust",
+                        RelationResolution::SyntaxOnly,
+                        reference.confidence,
+                    )),
                 );
             }
         }
@@ -1112,27 +1335,146 @@ impl BuilderState {
         }
     }
 
+    /// Resolves a generic tree-sitter [`TreeSitterAdapterOutput`] (LIT-22.2.3)
+    /// into a `Module` node, one `Symbol` node per definition fact, and an
+    /// `Imports` relation per import fact. Unlike Python/Rust's specialized
+    /// processing, this never resolves an import target to a known module or
+    /// package -- it always lands on an `Unresolved` node with
+    /// `RelationResolution::SyntaxOnly` provenance, since cross-file
+    /// resolution for these languages is LIT-22.3's hybrid resolver, not
+    /// this syntax-only pass (AC3: never overclaim `HybridResolved`).
+    fn process_syntax_indexed(
+        &mut self,
+        artifact: &Artifact,
+        language: SyntaxIndexedLanguage,
+        output: TreeSitterAdapterOutput,
+        artifact_node: &GraphNodeId,
+    ) {
+        let module_id = self.module(
+            artifact.path.as_str(),
+            ModuleLanguage::SyntaxIndexed(language),
+            file_evidence(artifact),
+        );
+        self.relate(
+            artifact_node.clone(),
+            module_id,
+            RelationKind::BelongsToModule,
+            Confidence::High,
+            vec![file_evidence(artifact)],
+        );
+
+        let registry_id = language.registry_id();
+
+        for definition in &output.definitions {
+            let evidence = syntax_fact_evidence(artifact, definition.span.clone());
+            let qualified = format!(
+                "{}::{}@L{}",
+                artifact.path, definition.kind, definition.span.start_line
+            );
+            let symbol_id = self.insert(GraphNode::Symbol(SymbolNode {
+                id: GraphNodeId::new(format!("symbol:{qualified}")),
+                kind: SymbolKind::Definition,
+                qualified_name: qualified,
+                doc: None,
+                evidence: evidence.clone(),
+            }));
+            self.relate_with_provenance(
+                artifact_node.clone(),
+                symbol_id,
+                RelationKind::Contains,
+                Confidence::High,
+                vec![evidence],
+                Some(format_provenance(
+                    registry_id,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
+            );
+        }
+
+        for import in &output.imports {
+            let evidence = syntax_fact_evidence(artifact, import.span.clone());
+            let target = self.unresolved(&import.text);
+            self.relate_with_provenance(
+                artifact_node.clone(),
+                target,
+                RelationKind::Imports,
+                Confidence::Low,
+                vec![evidence],
+                Some(format_provenance(
+                    registry_id,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::Low,
+                )),
+            );
+        }
+
+        // Type references and general use-site references (LIT-22.3.3):
+        // one relation per distinct identifier text per file, deduplicated
+        // (a single-file syntax pass has no scoping/symbol-table context to
+        // tell which occurrence is meaningful, so keeping every occurrence
+        // would just be noise) and targeting `Unresolved` -- this file's
+        // syntax alone can't tell whether `Widget` is a locally-defined
+        // type, an imported one, or a typo, so resolving it correctly is a
+        // hybrid-resolver's job (AC3: never fabricate a match here).
+        let mut seen_symbols: BTreeSet<&str> = BTreeSet::new();
+        for symbol in &output.symbols {
+            if !seen_symbols.insert(symbol.text.as_str()) {
+                continue;
+            }
+            let kind = if symbol.kind == "type_identifier" {
+                RelationKind::TypeRefs
+            } else {
+                RelationKind::Usages
+            };
+            let evidence = syntax_fact_evidence(artifact, symbol.span.clone());
+            let target = self.unresolved(&symbol.text);
+            self.relate_with_provenance(
+                artifact_node.clone(),
+                target,
+                kind,
+                Confidence::Low,
+                vec![evidence],
+                Some(format_provenance(
+                    registry_id,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::Low,
+                )),
+            );
+        }
+    }
+
     fn process_cargo(&mut self, profile: CargoProfile, artifact_node: &GraphNodeId) {
         let Some(package) = &profile.package else {
             return;
         };
         let Some(name) = &package.name else { return };
         let package_id = self.package(name, false);
-        self.relate(
+        self.relate_with_provenance(
             artifact_node.clone(),
             package_id.clone(),
             RelationKind::BelongsToPackage,
             Confidence::High,
             vec![package.evidence.clone()],
+            Some(format_provenance(
+                "toml",
+                RelationResolution::SyntaxOnly,
+                Confidence::High,
+            )),
         );
         for dependency in &profile.dependencies {
             let dependency_id = self.package(&dependency.name, true);
-            self.relate(
+            self.relate_with_provenance(
                 package_id.clone(),
                 dependency_id,
                 RelationKind::DependsOnPackage,
                 Confidence::High,
                 vec![dependency.evidence.clone()],
+                Some(format_provenance(
+                    "toml",
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
             );
         }
     }
@@ -1143,22 +1485,32 @@ impl BuilderState {
         };
         let Some(name) = &project.name else { return };
         let package_id = self.package(name, false);
-        self.relate(
+        self.relate_with_provenance(
             artifact_node.clone(),
             package_id.clone(),
             RelationKind::BelongsToPackage,
             Confidence::High,
             vec![project.evidence.clone()],
+            Some(format_provenance(
+                "toml",
+                RelationResolution::SyntaxOnly,
+                Confidence::High,
+            )),
         );
         for dependency in &project.dependencies {
             let dependency_name = python_dependency_name(&dependency.requirement);
             let dependency_id = self.package(dependency_name, true);
-            self.relate(
+            self.relate_with_provenance(
                 package_id.clone(),
                 dependency_id,
                 RelationKind::DependsOnPackage,
                 Confidence::High,
                 vec![dependency.evidence.clone()],
+                Some(format_provenance(
+                    "toml",
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
             );
         }
     }
@@ -1166,12 +1518,103 @@ impl BuilderState {
     fn process_requirements(&mut self, profile: RequirementsProfile, artifact_node: &GraphNodeId) {
         for requirement in &profile.requirements {
             let dependency_id = self.package(&requirement.name, true);
-            self.relate(
+            self.relate_with_provenance(
                 artifact_node.clone(),
                 dependency_id,
                 RelationKind::DependsOnPackage,
                 Confidence::High,
                 vec![requirement.evidence.clone()],
+                Some(format_provenance(
+                    "requirements-txt",
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
+            );
+        }
+    }
+
+    /// Resolves a [`PackageManifestAnalysis`] (LIT-22.2.4) into a local
+    /// `Package` node (when the format declares one) and one external
+    /// `Package` node per dependency, mirroring `process_cargo`/
+    /// `process_pyproject`. Dependencies attach to the local package node
+    /// when one exists (so `DependsOnPackage` reads package-to-package, like
+    /// Cargo/pyproject), falling back to the artifact node otherwise (e.g.
+    /// Gradle, which has no in-file local package name).
+    fn process_package_manifest(
+        &mut self,
+        format: PackageManifestFormat,
+        analysis: PackageManifestAnalysis,
+        artifact_node: &GraphNodeId,
+    ) {
+        let format_id = format.format_id();
+        let local_package_id = analysis.local_package.map(|local| {
+            let package_id = self.package(&local.name, false);
+            self.relate_with_provenance(
+                artifact_node.clone(),
+                package_id.clone(),
+                RelationKind::BelongsToPackage,
+                Confidence::High,
+                vec![local.evidence],
+                Some(format_provenance(
+                    format_id,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
+            );
+            package_id
+        });
+
+        for dependency in analysis.dependencies {
+            let dependency_id = self.package(&dependency.name, true);
+            let source = local_package_id
+                .clone()
+                .unwrap_or_else(|| artifact_node.clone());
+            self.relate_with_provenance(
+                source,
+                dependency_id,
+                RelationKind::DependsOnPackage,
+                Confidence::High,
+                vec![dependency.evidence],
+                Some(format_provenance(
+                    format_id,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
+            );
+        }
+    }
+
+    /// Turns gRPC/protobuf `service.rpc` and GraphQL `Query`/`Mutation`
+    /// field declarations (LIT-22.3.4 AC1/AC2) into first-class `Route`
+    /// config nodes, the same node kind Python's route decorators produce
+    /// (see `process_python_route_decorators`), so both surface uniformly
+    /// in `KnowledgeIndex::architecture()`'s service links (AC3).
+    fn process_protocol_routes(
+        &mut self,
+        artifact: &Artifact,
+        routes: &[ProtocolRoute],
+        artifact_node: &GraphNodeId,
+    ) {
+        for (index, route) in routes.iter().enumerate() {
+            let key = format!("route.{index}");
+            let route_id = self.config(
+                artifact,
+                &key,
+                ConfigNodeKind::Route,
+                &route.name,
+                route.evidence.clone(),
+            );
+            self.relate_with_provenance(
+                artifact_node.clone(),
+                route_id,
+                RelationKind::Contains,
+                Confidence::High,
+                vec![route.evidence.clone()],
+                Some(artifact_provenance(
+                    artifact,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
             );
         }
     }
@@ -1329,12 +1772,17 @@ impl BuilderState {
             match finding.kind {
                 TextFindingKind::EnvironmentVariable => {
                     let target = self.env_var(&finding.value);
-                    self.relate(
+                    self.relate_with_provenance(
                         artifact_node.clone(),
                         target,
                         RelationKind::ReadsEnv,
                         Confidence::Low,
                         vec![evidence],
+                        Some(artifact_provenance(
+                            artifact,
+                            RelationResolution::Fallback,
+                            Confidence::Low,
+                        )),
                     );
                 }
                 TextFindingKind::Command => {
@@ -1344,39 +1792,132 @@ impl BuilderState {
                         &finding.value,
                         evidence.clone(),
                     );
-                    self.relate(
+                    self.relate_with_provenance(
                         artifact_node.clone(),
                         target,
                         RelationKind::RunsCommand,
                         Confidence::Low,
                         vec![evidence],
+                        Some(artifact_provenance(
+                            artifact,
+                            RelationResolution::Fallback,
+                            Confidence::Low,
+                        )),
                     );
                 }
                 TextFindingKind::LocalPath => {
                     let target = self
                         .resolve_path(&finding.value)
                         .unwrap_or_else(|| self.unresolved(&finding.value));
-                    self.relate(
+                    self.relate_with_provenance(
                         artifact_node.clone(),
                         target,
                         RelationKind::References,
                         Confidence::Low,
                         vec![evidence],
+                        Some(artifact_provenance(
+                            artifact,
+                            RelationResolution::Fallback,
+                            Confidence::Low,
+                        )),
                     );
                 }
                 TextFindingKind::Url
                 | TextFindingKind::PackageOrImage
                 | TextFindingKind::ImportOrInclude => {
                     let target = self.unresolved(&finding.value);
-                    self.relate(
+                    self.relate_with_provenance(
                         artifact_node.clone(),
                         target,
                         RelationKind::References,
                         Confidence::Low,
                         vec![evidence],
+                        Some(artifact_provenance(
+                            artifact,
+                            RelationResolution::Fallback,
+                            Confidence::Low,
+                        )),
                     );
                 }
                 TextFindingKind::Section => {}
+            }
+        }
+    }
+
+    /// Emits `SimilarTo` relations between near-clone function/method pairs
+    /// (LIT-22.3.6 AC2): deterministic Jaccard similarity over each
+    /// symbol's lowercase word-token bag, read from its own evidence span
+    /// -- never live embeddings or any external ranking service (AC3;
+    /// semantic ranking stays a separate, later search concern).
+    // ponytail: O(n^2) pairwise comparison over every function/method
+    // symbol in the repo. Fine for a "minimum deterministic" baseline at
+    // the scale this tool targets; if a very large repo makes this slow,
+    // bucket candidates by token-count or line-count range first.
+    fn detect_near_clones(&mut self, repo_root: &Path) {
+        const MIN_BODY_LINES: u32 = 3;
+        const SIMILAR_THRESHOLD: f64 = 0.6;
+        const HIGH_CONFIDENCE_THRESHOLD: f64 = 0.85;
+
+        let mut file_cache: BTreeMap<String, Option<String>> = BTreeMap::new();
+        let mut candidates: Vec<(GraphNodeId, EvidenceRef, BTreeSet<String>)> = Vec::new();
+        for node in self.nodes.values() {
+            let GraphNode::Symbol(symbol) = node else {
+                continue;
+            };
+            if !matches!(symbol.kind, SymbolKind::Function | SymbolKind::Method) {
+                continue;
+            }
+            let Some(span) = &symbol.evidence.span else {
+                continue;
+            };
+            if span.end_line.saturating_sub(span.start_line) + 1 < MIN_BODY_LINES {
+                continue;
+            }
+            let path = symbol.evidence.path.as_str().to_owned();
+            let text = file_cache
+                .entry(path.clone())
+                .or_insert_with(|| fs::read_to_string(repo_root.join(&path)).ok());
+            let Some(text) = text else {
+                continue;
+            };
+            let tokens = word_tokens(text, span.start_line, span.end_line);
+            if tokens.is_empty() {
+                continue;
+            }
+            candidates.push((symbol.id.clone(), symbol.evidence.clone(), tokens));
+        }
+
+        for i in 0..candidates.len() {
+            for j in (i + 1)..candidates.len() {
+                let (id_a, evidence_a, tokens_a) = &candidates[i];
+                let (id_b, evidence_b, tokens_b) = &candidates[j];
+                let similarity = jaccard_similarity(tokens_a, tokens_b);
+                if similarity < SIMILAR_THRESHOLD {
+                    continue;
+                }
+                let confidence = if similarity >= HIGH_CONFIDENCE_THRESHOLD {
+                    Confidence::High
+                } else {
+                    Confidence::Low
+                };
+                let (source, target) = if id_a <= id_b {
+                    (id_a.clone(), id_b.clone())
+                } else {
+                    (id_b.clone(), id_a.clone())
+                };
+                self.relate_with_provenance(
+                    source,
+                    target,
+                    RelationKind::SimilarTo,
+                    confidence,
+                    vec![evidence_a.clone(), evidence_b.clone()],
+                    Some(RelationProvenance {
+                        language: None,
+                        resolver_strategy: "lexical-jaccard-similarity".to_owned(),
+                        resolution: RelationResolution::HybridResolved,
+                        confidence,
+                    }),
+                );
             }
         }
     }
@@ -1391,6 +1932,34 @@ impl BuilderState {
             relations: self.relations,
         }
     }
+}
+
+/// Lowercase word-shaped tokens (letters/digits/underscore runs longer
+/// than one character) from `text`'s `start_line..=end_line` (one-based,
+/// inclusive) -- deterministic lexical content for near-clone comparison
+/// (LIT-22.3.6 AC2). Single-character tokens (`x`, `_`) are dropped:
+/// they're common enough to dominate the Jaccard score without indicating
+/// real similarity.
+fn word_tokens(text: &str, start_line: u32, end_line: u32) -> BTreeSet<String> {
+    let start = start_line.saturating_sub(1) as usize;
+    let end = end_line as usize;
+    text.lines()
+        .enumerate()
+        .filter(|(index, _)| *index >= start && *index < end)
+        .flat_map(|(_, line)| line.split(|ch: char| !ch.is_alphanumeric() && ch != '_'))
+        .filter(|token| token.len() > 1)
+        .map(str::to_lowercase)
+        .collect()
+}
+
+/// `|intersection| / |union|`, `0.0` when both sets are empty.
+fn jaccard_similarity(a: &BTreeSet<String>, b: &BTreeSet<String>) -> f64 {
+    let union = a.union(b).count();
+    if union == 0 {
+        return 0.0;
+    }
+    let intersection = a.intersection(b).count();
+    intersection as f64 / union as f64
 }
 
 fn python_relative_target(
@@ -1454,6 +2023,49 @@ fn generic_finding_evidence(artifact: &Artifact, line: u32) -> EvidenceRef {
     }
 }
 
+fn syntax_fact_evidence(artifact: &Artifact, span: crate::domain::SourceSpan) -> EvidenceRef {
+    EvidenceRef::file(ArtifactId::from_path(&artifact.path), artifact.path.clone()).with_span(span)
+}
+
+fn artifact_provenance(
+    artifact: &Artifact,
+    resolution: RelationResolution,
+    confidence: Confidence,
+) -> RelationProvenance {
+    let language = artifact.detected_format.clone();
+    let resolver_strategy = language
+        .as_deref()
+        .and_then(registry_language)
+        .map(|entry| entry.resolver_strategy.to_owned())
+        .unwrap_or_else(|| match resolution {
+            RelationResolution::Fallback => "generic-text-fallback".to_owned(),
+            RelationResolution::SyntaxOnly => "syntax-extraction".to_owned(),
+            RelationResolution::HybridResolved => "hybrid-resolution".to_owned(),
+        });
+    RelationProvenance {
+        language,
+        resolver_strategy,
+        resolution,
+        confidence,
+    }
+}
+
+fn format_provenance(
+    language: &str,
+    resolution: RelationResolution,
+    confidence: Confidence,
+) -> RelationProvenance {
+    let resolver_strategy = registry_language(language)
+        .map(|entry| entry.resolver_strategy.to_owned())
+        .unwrap_or_else(|| "syntax-extraction".to_owned());
+    RelationProvenance {
+        language: Some(language.to_owned()),
+        resolver_strategy,
+        resolution,
+        confidence,
+    }
+}
+
 fn file_name(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
@@ -1462,8 +2074,9 @@ fn file_name(path: &str) -> &str {
 mod tests {
     use super::GraphBuilder;
     use crate::analysis::AnalysisCache;
+    use crate::domain::Confidence;
     use crate::graph::GraphValidator;
-    use crate::graph::{GraphNode, RelationKind};
+    use crate::graph::{GraphNode, Relation, RelationKind, RelationResolution};
     use crate::inventory::{RepositoryWalker, WalkOptions};
     use std::path::Path;
 
@@ -1720,6 +2333,50 @@ mod tests {
     }
 
     #[test]
+    fn relations_store_language_and_resolution_provenance() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let root = fixture_root();
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
+        let graph = GraphBuilder.build(&root, &artifacts);
+
+        let python_import = graph
+            .relations
+            .iter()
+            .find(|relation| {
+                relation.kind == RelationKind::Imports
+                    && relation.source.as_str() == "artifact:src/python_app/__init__.py"
+                    && relation.target.as_str() == "module:src.python_app.service"
+            })
+            .ok_or_else(|| std::io::Error::other("missing python import relation"))?;
+        let provenance = python_import
+            .provenance
+            .as_ref()
+            .ok_or_else(|| std::io::Error::other("missing python import provenance"))?;
+        assert_eq!(provenance.language.as_deref(), Some("python"));
+        assert_eq!(provenance.resolution, RelationResolution::HybridResolved);
+        assert_eq!(provenance.resolver_strategy, "specialized-hybrid");
+        assert_eq!(provenance.confidence, python_import.confidence);
+
+        // App.tsx is now syntax-indexed (LIT-22.2.3): its import is a
+        // syntax-only fact, not a generic-text fallback finding.
+        let tsx_import = graph
+            .relations
+            .iter()
+            .find(|relation| {
+                relation.kind == RelationKind::Imports
+                    && relation.source.as_str() == "artifact:web/src/App.tsx"
+                    && relation.provenance.as_ref().is_some_and(|provenance| {
+                        provenance.language.as_deref() == Some("tsx")
+                            && provenance.resolution == RelationResolution::SyntaxOnly
+                    })
+            })
+            .ok_or_else(|| std::io::Error::other("missing tsx syntax-indexed import relation"))?;
+        assert_eq!(tsx_import.confidence, crate::domain::Confidence::Low);
+
+        Ok(())
+    }
+
+    #[test]
     fn graph_links_dockerfile_and_compose_to_image_nodes() -> Result<(), Box<dyn std::error::Error>>
     {
         let root = fixture_root();
@@ -1908,6 +2565,536 @@ impl Drop for Route {
             }),
             "Implements must not target package nodes"
         );
+
+        Ok(())
+    }
+
+    /// LIT-22.2.4 AC1/AC2/AC4: an isolated repo (not the shared polyglot
+    /// fixture, to avoid golden-snapshot churn across the rest of the test
+    /// suite) exercising every wired package manifest format end to end --
+    /// local vs. external `Package` nodes and `DependsOnPackage` edges.
+    #[test]
+    fn package_manifests_produce_local_and_external_package_nodes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        let root = temp.path();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name": "acme-web", "version": "1.0.0", "dependencies": {"react": "^18.0.0"}}"#,
+        )?;
+        std::fs::write(
+            root.join("go.mod"),
+            "module github.com/acme/svc\n\nrequire github.com/gin-gonic/gin v1.9.1\n",
+        )?;
+        std::fs::write(
+            root.join("composer.json"),
+            r#"{"name": "acme/php-app", "require": {"guzzlehttp/guzzle": "^7.0"}}"#,
+        )?;
+        std::fs::write(
+            root.join("pom.xml"),
+            "<project><groupId>com.acme</groupId><artifactId>svc</artifactId><version>1.0</version>\
+             <dependencies><dependency><groupId>org.apache.commons</groupId>\
+             <artifactId>commons-lang3</artifactId><version>3.14.0</version></dependency>\
+             </dependencies></project>",
+        )?;
+        std::fs::write(
+            root.join("build.gradle"),
+            "dependencies {\n    implementation(\"com.squareup.okhttp3:okhttp:4.12.0\")\n}\n",
+        )?;
+        std::fs::create_dir_all(root.join("dotnet"))?;
+        std::fs::write(
+            root.join("dotnet/App.csproj"),
+            r#"<Project Sdk="Microsoft.NET.Sdk"><ItemGroup>
+                <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+            </ItemGroup></Project>"#,
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(root)?;
+        let graph = GraphBuilder.build(root, &artifacts);
+
+        let expectations = [
+            ("acme-web", false, "react", true),
+            (
+                "github.com/acme/svc",
+                false,
+                "github.com/gin-gonic/gin",
+                true,
+            ),
+            ("acme/php-app", false, "guzzlehttp/guzzle", true),
+            (
+                "com.acme:svc",
+                false,
+                "org.apache.commons:commons-lang3",
+                true,
+            ),
+            ("com.squareup.okhttp3:okhttp", true, "", false),
+            ("App", false, "Newtonsoft.Json", true),
+        ];
+        for (local_name, local_is_external, dependency_name, has_dependency) in expectations {
+            let local = graph
+                .nodes
+                .iter()
+                .find_map(|node| match node {
+                    GraphNode::Package(package) if package.name == local_name => Some(package),
+                    _ => None,
+                })
+                .ok_or_else(|| std::io::Error::other(format!("missing package {local_name}")))?;
+            assert_eq!(
+                local.is_external, local_is_external,
+                "{local_name} is_external mismatch"
+            );
+
+            if !has_dependency {
+                continue;
+            }
+            let dependency = graph
+                .nodes
+                .iter()
+                .find_map(|node| match node {
+                    GraphNode::Package(package) if package.name == dependency_name => Some(package),
+                    _ => None,
+                })
+                .ok_or_else(|| {
+                    std::io::Error::other(format!("missing dependency {dependency_name}"))
+                })?;
+            assert!(dependency.is_external, "{dependency_name} must be external");
+            assert!(
+                graph.relations.iter().any(|relation| {
+                    relation.kind == RelationKind::DependsOnPackage
+                        && relation.target == dependency.id
+                        && relation
+                            .provenance
+                            .as_ref()
+                            .is_some_and(|p| p.resolution == RelationResolution::SyntaxOnly)
+                }),
+                "missing DependsOnPackage relation to {dependency_name}"
+            );
+        }
+
+        Ok(())
+    }
+
+    /// LIT-22.3.3 AC1/AC3: a same-file base class resolves to the base
+    /// class's own `Symbol` node; a base class defined elsewhere (no
+    /// same-file evidence) stays `Unresolved` rather than being guessed.
+    #[test]
+    fn python_base_classes_produce_inherits_relations() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("models.py"),
+            "class Base:\n    pass\n\n\nclass Derived(Base):\n    pass\n\n\nclass External(SomeImportedBase):\n    pass\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let inherits: Vec<&Relation> = graph
+            .relations
+            .iter()
+            .filter(|relation| relation.kind == RelationKind::Inherits)
+            .collect();
+        assert_eq!(inherits.len(), 2);
+        let base_symbol_id = graph
+            .nodes
+            .iter()
+            .find_map(|node| match node {
+                GraphNode::Symbol(symbol) if symbol.qualified_name.ends_with("::Base") => {
+                    Some(node.id())
+                }
+                _ => None,
+            })
+            .ok_or("missing Base symbol node")?;
+        assert!(
+            inherits
+                .iter()
+                .any(|relation| &relation.target == base_symbol_id)
+        );
+        assert!(inherits.iter().any(|relation| {
+            graph
+                .nodes
+                .iter()
+                .any(|node| node.id() == &relation.target
+                    && matches!(node, GraphNode::Unresolved(unresolved) if unresolved.value == "SomeImportedBase"))
+        }));
+
+        Ok(())
+    }
+
+    /// LIT-22.3.3 AC1: `extern "C" { ... }` declarations produce `Ffi`
+    /// relations to `Unresolved` nodes (the C symbol they name has no
+    /// corresponding Rust graph node).
+    #[test]
+    fn rust_extern_block_produces_ffi_relations() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(
+            temp.path().join("src/lib.rs"),
+            "extern \"C\" {\n    fn c_add(a: i32, b: i32) -> i32;\n    static VERSION: i32;\n}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let ffi: Vec<&Relation> = graph
+            .relations
+            .iter()
+            .filter(|relation| relation.kind == RelationKind::Ffi)
+            .collect();
+        assert_eq!(ffi.len(), 2);
+        for relation in &ffi {
+            assert_eq!(relation.confidence, Confidence::High);
+            assert!(matches!(
+                graph
+                    .nodes
+                    .iter()
+                    .find(|node| node.id() == &relation.target),
+                Some(GraphNode::Unresolved(_))
+            ));
+        }
+        assert!(ffi.iter().any(|relation| {
+            graph.nodes.iter().any(|node| {
+                node.id() == &relation.target
+                    && matches!(node, GraphNode::Unresolved(u) if u.value == "c_add")
+            })
+        }));
+
+        Ok(())
+    }
+
+    /// LIT-22.3.3 AC1/AC2: syntax-indexed languages (LIT-22.2.3) produce
+    /// `TypeRefs` for `type_identifier` facts and `Usages` for other
+    /// identifier facts, deduplicated per file.
+    #[test]
+    fn syntax_indexed_symbols_produce_type_refs_and_usages()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("widget.ts"),
+            "class Widget {\n    hello(): void {\n        console.log(this);\n    }\n}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::TypeRefs)
+        );
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::Usages)
+        );
+        for relation in graph.relations.iter().filter(|relation| {
+            matches!(relation.kind, RelationKind::TypeRefs | RelationKind::Usages)
+        }) {
+            assert_eq!(relation.confidence, Confidence::Low);
+            assert_eq!(
+                relation
+                    .provenance
+                    .as_ref()
+                    .ok_or("missing provenance")?
+                    .resolution,
+                RelationResolution::SyntaxOnly
+            );
+        }
+
+        Ok(())
+    }
+
+    /// LIT-22.3.4 AC1/AC4: a route-decorated handler produces a `Route`
+    /// config node; a literal HTTP client call produces a high-confidence
+    /// reference; a *dynamic* call target (an f-string, not a literal)
+    /// stays low-confidence rather than being reported as if resolved.
+    #[test]
+    fn python_http_routes_and_calls_are_first_class_graph_facts()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("service.py"),
+            "import requests\n\n\n@app.get(\"/users/{id}\")\ndef get_user(id, dynamic_url):\n    requests.get(\"https://auth.example.test/verify\")\n    requests.get(dynamic_url)\n    return None\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let route = graph
+            .nodes
+            .iter()
+            .find_map(|node| match node {
+                GraphNode::Config(config) if config.name == "GET /users/{id}" => Some(config),
+                _ => None,
+            })
+            .ok_or("missing route config node")?;
+        assert_eq!(route.kind, crate::graph::model::ConfigNodeKind::Route);
+        assert!(graph.relations.iter().any(|relation| {
+            relation.kind == RelationKind::Contains && relation.target == route.id
+        }));
+
+        let literal_call = graph
+            .relations
+            .iter()
+            .find(|relation| {
+                relation.kind == RelationKind::References
+                    && graph.nodes.iter().any(|node| {
+                        node.id() == &relation.target
+                            && matches!(node, GraphNode::Unresolved(u) if u.value == "https://auth.example.test/verify")
+                    })
+            })
+            .ok_or("missing literal HTTP call relation")?;
+        assert_eq!(literal_call.confidence, Confidence::High);
+
+        let dynamic_call = graph
+            .relations
+            .iter()
+            .find(|relation| {
+                relation.kind == RelationKind::References && graph.nodes.iter().any(|node| {
+                    node.id() == &relation.target
+                        && matches!(node, GraphNode::Unresolved(u) if u.value.contains("dynamic"))
+                })
+            })
+            .ok_or("missing dynamic HTTP call relation")?;
+        assert_eq!(dynamic_call.confidence, Confidence::Low);
+
+        Ok(())
+    }
+
+    /// LIT-22.3.4 AC2: `.proto` and `.graphql` schema facts produce `Route`
+    /// config nodes.
+    #[test]
+    fn proto_and_graphql_schemas_produce_route_config_nodes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("api.proto"),
+            "service Greeter {\n  rpc SayHello (HelloRequest) returns (HelloReply) {}\n}\n",
+        )?;
+        std::fs::write(
+            temp.path().join("schema.graphql"),
+            "type Query {\n  user(id: ID!): User\n}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let route_names: Vec<&str> = graph
+            .nodes
+            .iter()
+            .filter_map(|node| match node {
+                GraphNode::Config(config)
+                    if config.kind == crate::graph::model::ConfigNodeKind::Route =>
+                {
+                    Some(config.name.as_str())
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(route_names.contains(&"Greeter.SayHello"));
+        assert!(route_names.contains(&"Query.user"));
+
+        Ok(())
+    }
+
+    /// LIT-22.2.5 AC1: files with common syntax errors (unclosed braces,
+    /// unterminated strings, malformed JSON) never panic the walker or
+    /// graph builder; each broken file still gets an artifact node, and
+    /// any symbols a tolerant parser did manage to extract before the
+    /// error are Low confidence, never fabricated as fully resolved.
+    #[test]
+    fn syntax_error_fixture_degrades_gracefully_without_panicking()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/syntax_errors");
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
+        let graph = GraphBuilder.build(&root, &artifacts);
+
+        assert_eq!(artifacts.len(), 3);
+        let artifact_paths: Vec<&str> = artifacts
+            .iter()
+            .map(|artifact| artifact.path.as_str())
+            .collect();
+        assert!(artifact_paths.contains(&"broken.py"));
+        assert!(artifact_paths.contains(&"broken.json"));
+        assert!(artifact_paths.contains(&"broken.rs"));
+
+        // Every broken artifact still got an Artifact graph node: a parse
+        // failure degrades what can be extracted from a file, it never
+        // drops the file from the graph entirely.
+        for path in ["broken.py", "broken.json", "broken.rs"] {
+            assert!(
+                graph.nodes.iter().any(
+                    |node| matches!(node, GraphNode::Artifact(artifact) if artifact.path == path)
+                ),
+                "missing artifact node for {path}"
+            );
+        }
+
+        Ok(())
+    }
+
+    /// LIT-22.3.5 AC1/AC4: producer (`emit`) and consumer (`on`) calls
+    /// become `Emits`/`ListensOn` relations to a shared Unresolved node
+    /// per channel name, carrying evidence and confidence.
+    #[test]
+    fn emit_and_on_calls_produce_emits_and_listens_on_relations()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("realtime.py"),
+            "def notify(socket):\n    socket.emit(\"user.updated\", payload)\n\n\ndef handler(socket):\n    socket.on(\"user.updated\", on_update)\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let emits = graph
+            .relations
+            .iter()
+            .find(|relation| relation.kind == RelationKind::Emits)
+            .ok_or("expected an Emits relation")?;
+        let listens = graph
+            .relations
+            .iter()
+            .find(|relation| relation.kind == RelationKind::ListensOn)
+            .ok_or("expected a ListensOn relation")?;
+        assert_eq!(emits.confidence, crate::domain::Confidence::High);
+        assert_eq!(listens.confidence, crate::domain::Confidence::High);
+        // Both call sites cite the same literal channel name, so they
+        // converge on one shared target node rather than two.
+        assert_eq!(emits.target, listens.target);
+        assert!(graph.nodes.iter().any(
+            |node| matches!(node, GraphNode::Unresolved(node) if node.value == "user.updated")
+        ));
+
+        Ok(())
+    }
+
+    /// LIT-22.3.6 AC1/AC4: a call that passes an argument to a
+    /// locally-defined function produces a `DataFlows` relation to that
+    /// function's symbol, distinct from the always-present `Calls` relation.
+    #[test]
+    fn call_with_argument_produces_a_dataflows_relation() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("service.py"),
+            "def build(x):\n    return x\n\n\ndef run(value):\n    return build(value)\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let data_flows = graph
+            .relations
+            .iter()
+            .find(|relation| relation.kind == RelationKind::DataFlows)
+            .ok_or("expected a DataFlows relation")?;
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::Calls
+                    && relation.target == data_flows.target)
+        );
+
+        Ok(())
+    }
+
+    /// LIT-22.3.6 AC2/AC4: two near-identical functions (same shape,
+    /// trivially renamed) produce a `SimilarTo` relation via deterministic
+    /// lexical similarity; a clearly different function does not pair
+    /// with either.
+    #[test]
+    fn near_identical_functions_produce_a_similar_to_relation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("clones.py"),
+            "\
+def calculate_total(items):
+    total = 0
+    for item in items:
+        total += item.price
+    return total
+
+
+def calculate_total_v2(items):
+    total = 0
+    for item in items:
+        total += item.price * 2
+    return total
+
+
+def render_report(data):
+    output = []
+    for section in data.sections:
+        output.append(section.title)
+    return \"\\n\".join(output)
+",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let symbol_id = |name: &str| -> Option<&crate::graph::model::GraphNodeId> {
+            graph.nodes.iter().find_map(|node| match node {
+                GraphNode::Symbol(symbol) if symbol.qualified_name.ends_with(name) => {
+                    Some(&symbol.id)
+                }
+                _ => None,
+            })
+        };
+        let total_id = symbol_id("calculate_total").ok_or("missing calculate_total symbol")?;
+        let total_v2_id =
+            symbol_id("calculate_total_v2").ok_or("missing calculate_total_v2 symbol")?;
+        let report_id = symbol_id("render_report").ok_or("missing render_report symbol")?;
+
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::SimilarTo
+                    && ((&relation.source == total_id && &relation.target == total_v2_id)
+                        || (&relation.source == total_v2_id && &relation.target == total_id)))
+        );
+        assert!(!graph.relations.iter().any(|relation| {
+            relation.kind == RelationKind::SimilarTo
+                && (&relation.source == report_id || &relation.target == report_id)
+        }));
+
+        Ok(())
+    }
+
+    /// LIT-22.3.6 AC2/AC4: near-clone scoring is a pure deterministic
+    /// function of source text -- building the same repository twice
+    /// yields byte-identical `SimilarTo` relations, never live/varying
+    /// embedding-based scores.
+    #[test]
+    fn near_clone_detection_is_deterministic_across_repeated_builds()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("clones.py"),
+            "def calculate_total(items):\n    total = 0\n    for item in items:\n        total += item.price\n    return total\n\n\ndef calculate_total_v2(items):\n    total = 0\n    for item in items:\n        total += item.price * 2\n    return total\n",
+        )?;
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+
+        let first = GraphBuilder.build(temp.path(), &artifacts);
+        let second = GraphBuilder.build(temp.path(), &artifacts);
+
+        let similar_relations = |graph: &crate::graph::model::Graph| {
+            graph
+                .relations
+                .iter()
+                .filter(|relation| relation.kind == RelationKind::SimilarTo)
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(similar_relations(&first), similar_relations(&second));
+        assert!(!similar_relations(&first).is_empty());
 
         Ok(())
     }
