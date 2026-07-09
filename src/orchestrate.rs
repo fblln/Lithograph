@@ -49,6 +49,16 @@ pub(crate) fn scan_exclude_globs() -> Vec<String> {
     vec!["docs/lithograph/**".to_owned(), ".lithograph/**".to_owned()]
 }
 
+/// Excludes only Lithograph's internal cache/graph/manifest state, keeping
+/// `docs/lithograph/**` walkable. Used by callers that must actually read
+/// the generated documentation prose (drift detection compares it against
+/// current repository facts) but must never re-ingest cached analysis JSON
+/// as if it were repository source -- unlike [`scan_exclude_globs`], which
+/// is for callers that would otherwise document their own output.
+pub(crate) fn cache_exclude_globs() -> Vec<String> {
+    vec![".lithograph/**".to_owned()]
+}
+
 /// Runs the shared scan -> graph -> validate -> plan pipeline used by both
 /// `init` and `update`. `cache` lets an artifact whose content hash was seen
 /// on an earlier run (by either command) skip a fresh read+parse.

@@ -206,8 +206,11 @@ impl WikiMcpServer {
                 )?)
             }
             "search_code" => {
-                let artifacts =
-                    RepositoryWalker::new(WalkOptions::default()).walk(&self.repo_root)?;
+                let walk_options = WalkOptions {
+                    exclude_globs: crate::orchestrate::scan_exclude_globs(),
+                    ..WalkOptions::default()
+                };
+                let artifacts = RepositoryWalker::new(walk_options).walk(&self.repo_root)?;
                 let graph = self.load_graph()?;
                 let modules = ModulePlanner.plan(&graph, &artifacts);
                 let params = code_search_params(&request.params);
@@ -297,8 +300,11 @@ impl WikiMcpServer {
             "detect_changes" => Ok(serde_json::to_value(self.detect_changes()?)?),
             "get_run_metrics" => Ok(serde_json::to_value(self.get_run_metrics()?)?),
             "detect_drift" => {
-                let artifacts =
-                    RepositoryWalker::new(WalkOptions::default()).walk(&self.repo_root)?;
+                let walk_options = WalkOptions {
+                    exclude_globs: crate::orchestrate::cache_exclude_globs(),
+                    ..WalkOptions::default()
+                };
+                let artifacts = RepositoryWalker::new(walk_options).walk(&self.repo_root)?;
                 let graph = self.load_graph()?;
                 Ok(serde_json::to_value(crate::drift::DriftDetector.scan(
                     &artifacts,
@@ -876,6 +882,64 @@ mod tests {
             params: json!({}),
         });
         assert_eq!(empty_query.result, Some(json!([])));
+
+        Ok(())
+    }
+
+    /// Regression test: `search_code` and `detect_drift` used to walk with a
+    /// bare `WalkOptions::default()`, so on an already-`init`ed repository
+    /// they re-ingested `.lithograph/cache/analysis/*.json` as if it were
+    /// repository source (see the matching `commands.rs` regression test for
+    /// the full story, including the live LIT-22 comparison against
+    /// codebase-memory-mcp on `ridgeline` that surfaced this).
+    #[test]
+    fn search_code_and_detect_drift_never_rescan_lithographs_own_output()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        assert!(
+            std::fs::read_dir(temp.path().join(".lithograph/cache/analysis"))?
+                .next()
+                .is_some(),
+            "expected init to have populated the analysis cache"
+        );
+        let server = WikiMcpServer::new(temp.path());
+
+        let search = server.handle(McpRequest {
+            id: json!(1),
+            tool: "search_code".to_owned(),
+            params: json!({ "query": "e" }),
+        });
+        let results = search
+            .result
+            .as_ref()
+            .and_then(Value::as_array)
+            .ok_or("expected an array of results")?;
+        assert!(!results.is_empty());
+        assert!(results.iter().all(|result| {
+            result
+                .get("artifact_path")
+                .and_then(Value::as_str)
+                .is_some_and(|path| !path.starts_with(".lithograph/"))
+        }));
+
+        let drift = server.handle(McpRequest {
+            id: json!(2),
+            tool: "detect_drift".to_owned(),
+            params: json!({}),
+        });
+        assert!(
+            !drift
+                .result
+                .map(|value| value.to_string())
+                .unwrap_or_default()
+                .contains(".lithograph/")
+        );
+        assert!(drift.error.is_none());
 
         Ok(())
     }

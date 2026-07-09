@@ -398,7 +398,11 @@ fn execute_drift<W>(args: DriftArgs, writer: &mut W) -> Result<(), Box<dyn std::
 where
     W: Write,
 {
-    let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&args.path)?;
+    let walk_options = WalkOptions {
+        exclude_globs: crate::orchestrate::cache_exclude_globs(),
+        ..WalkOptions::default()
+    };
+    let artifacts = RepositoryWalker::new(walk_options).walk(&args.path)?;
     let graph = GraphBuilder.build(&args.path, &artifacts);
     let report = DriftDetector.scan(&artifacts, &graph, &args.path);
 
@@ -805,7 +809,11 @@ fn execute_inspect_modules<W>(
 where
     W: Write,
 {
-    let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&args.path)?;
+    let walk_options = WalkOptions {
+        exclude_globs: crate::orchestrate::scan_exclude_globs(),
+        ..WalkOptions::default()
+    };
+    let artifacts = RepositoryWalker::new(walk_options).walk(&args.path)?;
     let graph = GraphBuilder.build(&args.path, &artifacts);
     let modules = if args.semantic_grouping {
         ModulePlanner.plan_with_semantic_grouping(&graph, &artifacts)
@@ -872,7 +880,11 @@ fn execute_inspect_graph<W>(
 where
     W: Write,
 {
-    let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&args.path)?;
+    let walk_options = WalkOptions {
+        exclude_globs: crate::orchestrate::scan_exclude_globs(),
+        ..WalkOptions::default()
+    };
+    let artifacts = RepositoryWalker::new(walk_options).walk(&args.path)?;
     let graph = GraphBuilder.build(&args.path, &artifacts);
     let issues = GraphValidator.validate(&graph, &artifacts);
     if !issues.is_empty() {
@@ -933,7 +945,11 @@ fn execute_inspect_artifacts<W>(
 where
     W: Write,
 {
-    let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&args.path)?;
+    let walk_options = WalkOptions {
+        exclude_globs: crate::orchestrate::scan_exclude_globs(),
+        ..WalkOptions::default()
+    };
+    let artifacts = RepositoryWalker::new(walk_options).walk(&args.path)?;
     let output = match args.format {
         OutputFormat::Table => render_artifacts_table(&artifacts),
         OutputFormat::Json => render_artifacts_json(&artifacts)?,
@@ -1740,6 +1756,112 @@ mod tests {
 
         assert!(output.contains("\"BrokenLink\""));
         assert!(output.contains("does-not-exist.md"));
+
+        Ok(())
+    }
+
+    /// Regression test: `drift`/`inspect artifacts`/`inspect graph`/
+    /// `inspect modules` each used to walk with a bare `WalkOptions::default()`
+    /// -- unlike `init`/`update`'s `scan_and_plan`, which already excludes
+    /// `.lithograph/**` and `docs/lithograph/**` via `scan_exclude_globs()`.
+    /// On a repository that had already been `init`ed, this meant every one
+    /// of these commands re-ingested `.lithograph/cache/analysis/*.json`
+    /// (Lithograph's own cached analysis output) as if it were repository
+    /// source, generating thousands of spurious graph nodes from JSON that
+    /// happened to look like config/image/port values. Proven live against
+    /// an external repository via the LIT-22 comparison against
+    /// codebase-memory-mcp on `ridgeline`, where this single bug accounted
+    /// for the overwhelming majority of a 79,301-vs-2,697 node-count gap.
+    #[test]
+    fn drift_and_inspect_commands_never_rescan_lithographs_own_output()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        execute(
+            Cli {
+                command: Some(Command::Init(InitArgs {
+                    path: temp.path().to_path_buf(),
+                    prompt_version: "v1".to_owned(),
+                    semantic_grouping: false,
+                })),
+            },
+            &mut Vec::new(),
+        )?;
+        assert!(
+            std::fs::read_dir(temp.path().join(".lithograph/cache/analysis"))?
+                .next()
+                .is_some(),
+            "expected init to have populated the analysis cache"
+        );
+
+        let mut artifacts_output = Vec::new();
+        execute(
+            Cli {
+                command: Some(Command::Inspect(InspectCommand {
+                    target: InspectTarget::Artifacts(InspectArtifactsArgs {
+                        path: temp.path().to_path_buf(),
+                        format: OutputFormat::Json,
+                    }),
+                })),
+            },
+            &mut artifacts_output,
+        )?;
+        let artifacts_output = String::from_utf8(artifacts_output)?;
+        assert!(!artifacts_output.contains(".lithograph/"));
+        assert!(!artifacts_output.contains("docs/lithograph/"));
+
+        let mut graph_output = Vec::new();
+        execute(
+            Cli {
+                command: Some(Command::Inspect(InspectCommand {
+                    target: InspectTarget::Graph(InspectGraphArgs {
+                        path: temp.path().to_path_buf(),
+                        format: OutputFormat::Json,
+                    }),
+                })),
+            },
+            &mut graph_output,
+        )?;
+        let graph_output = String::from_utf8(graph_output)?;
+        assert!(!graph_output.contains(".lithograph/"));
+        assert!(!graph_output.contains("docs/lithograph/"));
+
+        let mut modules_output = Vec::new();
+        execute(
+            Cli {
+                command: Some(Command::Inspect(InspectCommand {
+                    target: InspectTarget::Modules(InspectModulesArgs {
+                        path: temp.path().to_path_buf(),
+                        semantic_grouping: false,
+                        format: OutputFormat::Json,
+                    }),
+                })),
+            },
+            &mut modules_output,
+        )?;
+        let modules_output = String::from_utf8(modules_output)?;
+        assert!(!modules_output.contains(".lithograph/"));
+        assert!(!modules_output.contains("docs/lithograph/"));
+
+        // `drift` must still see docs/lithograph/*.md (its entire purpose is
+        // comparing generated docs against current repository facts), while
+        // never treating .lithograph/cache/**/*.json as a Makefile,
+        // package.json, or graph-building input.
+        let mut drift_output = Vec::new();
+        execute(
+            Cli {
+                command: Some(Command::Drift(DriftArgs {
+                    path: temp.path().to_path_buf(),
+                    format: OutputFormat::Json,
+                })),
+            },
+            &mut drift_output,
+        )?;
+        assert!(!String::from_utf8(drift_output)?.contains(".lithograph/"));
+        assert!(temp.path().join("docs/lithograph/quickstart.md").exists());
 
         Ok(())
     }
