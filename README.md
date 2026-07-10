@@ -31,20 +31,22 @@ second run does not document its own output.
 ## Requirements
 
 - Rust toolchain managed by `rustup`.
-- `make` for the documented development commands.
+- `just` for the documented development commands.
 - Optional: Node.js only when using `validate-mermaid --node-validator`.
 - Optional: `cargo-llvm-cov` only for coverage reports.
+- Optional: `sccache` for local Rust compiler caching.
 
-This repo pins its Rust toolchain in `rust-toolchain.toml`. The Makefile
+This repo pins its Rust toolchain in `rust-toolchain.toml`. The justfile
 prefers the `cargo` resolved through `~/.cargo/bin/rustup` so the pinned
-toolchain is used even when another Rust installation is present.
+toolchain is used even when another Rust installation is present. A Makefile
+remains temporarily for compatibility with existing workflows.
 
 ## Quickstart
 
 From this directory:
 
 ```sh
-make toolchain
+just toolchain
 cargo run -- --help
 cargo run -- init fixtures/polyglot
 cargo run -- inspect modules fixtures/polyglot
@@ -199,7 +201,7 @@ diagram on stdin and should exit nonzero on parser/render errors:
 cargo run -- validate-mermaid /path/to/repo --node-validator scripts/validate-mermaid.mjs
 ```
 
-Normal tests and `make check-all` do not require Node or network access.
+Normal tests and `just check-all` do not require Node or network access.
 
 ## Model Configuration
 
@@ -248,28 +250,28 @@ cargo run -- integrate-agents /path/to/repo
 Use these commands from this directory:
 
 ```sh
-make toolchain
-make fmt
-make fmt-check
-make lint
-make test
-make unit-test
-make integration-test
-make check-all
+just toolchain
+just fmt
+just fmt-check
+just lint
+just test
+just unit-test
+just integration-test
+just check-all
 ```
 
-`make check-all` is the default pre-handoff validation path. It runs formatting
+`just check-all` is the default pre-handoff validation path. It runs formatting
 checks, clippy with warnings denied, and the complete test suite:
 
 ```sh
-make check-all
+just check-all
 ```
 
 Coverage is intentionally separate because it requires `cargo-llvm-cov`:
 
 ```sh
 cargo install cargo-llvm-cov
-make coverage
+just coverage
 ```
 
 ## Repository Layout
@@ -295,6 +297,6 @@ make coverage
 
 Lithograph is an early local CLI. The generated wiki, graph, manifest,
 incremental update path, quality checks, MCP-style access, and viewer are
-implemented, but the project is still evolving quickly. Prefer `make check-all`
+implemented, but the project is still evolving quickly. Prefer `just check-all`
 before handoff and keep generated output changes reviewable with `golden`,
 `quality`, and `validate-mermaid`.
