@@ -12,6 +12,7 @@ default = []
 local-embeddings = []
 
 [dependencies]
+axum = "0.8"
 blake3 = "1.8.2"
 camino = { version = "1.2.1", features = ["serde1"] }
 cargo_metadata = "0.23.1"
@@ -25,7 +26,9 @@ roxmltree = "0.20"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 serde_yaml = "0.9.34"
-tokio = { version = "1", features = ["rt"] }
+tokio = { version = "1", features = ["rt", "net", "signal", "io-util", "time"] }
+tower = { version = "0.5", features = ["util", "timeout"] }
+tower-http = { version = "0.6", features = ["fs"] }
 toml = "0.9.8"
 tree-sitter = "0.26.10"
 tree-sitter-c = "0.24"

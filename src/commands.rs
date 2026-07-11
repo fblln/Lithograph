@@ -8,8 +8,8 @@ use crate::cli::{
     AskArgs, Cli, Command, DriftArgs, GoldenArgs, GraphCommand, GraphExportArgs, GraphImportArgs,
     GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectDsmArgs, InspectEnvArgs,
     InspectGraphArgs, InspectMetricsArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs,
-    IntegrateMcpArgs, McpExportArgs, McpServerArgs, OutputFormat, QualityArgs, ValidateMermaidArgs,
-    ViewerArgs, WatchArgs,
+    IntegrateMcpArgs, McpExportArgs, McpServerArgs, OutputFormat, QualityArgs, ServeArgs,
+    ValidateMermaidArgs, ViewerArgs, WatchArgs,
 };
 use crate::domain::Artifact;
 use crate::drift::{DriftDetector, DriftReport};
@@ -63,6 +63,7 @@ where
         Some(Command::ValidateMermaid(args)) => execute_validate_mermaid(args, writer),
         Some(Command::McpServer(args)) => execute_mcp_server(args, writer),
         Some(Command::Viewer(args)) => execute_viewer(args, writer),
+        Some(Command::Serve(args)) => execute_serve(args, writer),
         Some(Command::Graph(args)) => execute_graph(args, writer),
         Some(Command::Adr(command)) => execute_adr(command, writer),
         Some(Command::Watch(args)) => execute_watch(args, writer),
@@ -332,6 +333,22 @@ where
     };
     let report = generate_viewer(&args.path, &output_dir)?;
     writer.write_all(render_viewer_report(&report).as_bytes())?;
+    Ok(())
+}
+
+fn execute_serve<W>(args: ServeArgs, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    let assets = if args.assets.is_absolute() {
+        args.assets
+    } else {
+        args.path.join(args.assets)
+    };
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    runtime.block_on(crate::serve::run(&args.path, &assets, args.port, writer))?;
     Ok(())
 }
 
