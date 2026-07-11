@@ -7,6 +7,7 @@ use crate::graph::{
 };
 use crate::inventory::{RepositoryWalker, WalkOptions};
 use crate::plan::ModulePlanner;
+use crate::resolve::explain_environment;
 use crate::run::{RepositorySnapshot, RunMetadata};
 use crate::search::{CodeSearch, CodeSearchParams};
 use crate::storage::JsonStore;
@@ -99,6 +100,10 @@ pub const MCP_TOOLS: &[McpToolInfo] = &[
     McpToolInfo {
         name: "search_graph",
         description: "Searches graph nodes. Params: label?, query?, limit?.",
+    },
+    McpToolInfo {
+        name: "explain_env",
+        description: "Explains environment-variable config links and code users. Params: variable?.",
     },
     McpToolInfo {
         name: "search_code",
@@ -393,6 +398,11 @@ impl WikiMcpServer {
                 Ok(serde_json::to_value(
                     KnowledgeIndex::new(&graph).search(&params),
                 )?)
+            }
+            "explain_env" => {
+                let graph = self.load_graph()?;
+                let variable = request.params.get("variable").and_then(Value::as_str);
+                Ok(serde_json::to_value(explain_environment(&graph, variable))?)
             }
             "search_code" => {
                 let walk_options = WalkOptions {
@@ -896,6 +906,56 @@ mod tests {
         assert!(answer.result.is_some());
         assert!(answer.error.is_none());
 
+        Ok(())
+    }
+
+    #[test]
+    fn explain_env_is_deterministic_and_handles_missing_variables()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        std::fs::write(
+            temp.path().join("application.properties"),
+            "RIDGELINE_WORKER=/usr/local/bin/worker\n",
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let server = WikiMcpServer::new(temp.path());
+
+        let request = || McpRequest {
+            id: json!(1),
+            tool: "explain_env".to_owned(),
+            params: json!({ "variable": "RIDGELINE_WORKER" }),
+        };
+        let first = server.handle(request());
+        let second = server.handle(request());
+        assert_eq!(first, second);
+        let variables = first
+            .result
+            .as_ref()
+            .and_then(|value| value.get("variables"))
+            .and_then(Value::as_array)
+            .ok_or("explain_env should return variables")?;
+        assert_eq!(variables.len(), 1);
+        assert!(variables[0].get("code_users").is_some());
+        assert!(variables[0].get("resolved").is_some());
+
+        let missing = server.handle(McpRequest {
+            id: json!(2),
+            tool: "explain_env".to_owned(),
+            params: json!({ "variable": "DOES_NOT_EXIST" }),
+        });
+        assert_eq!(
+            missing
+                .result
+                .as_ref()
+                .and_then(|value| value.get("variables"))
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            Some(0)
+        );
         Ok(())
     }
 

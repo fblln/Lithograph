@@ -136,6 +136,8 @@ pub enum ConfigNodeKind {
     Job,
     /// Network port.
     Port,
+    /// Canonical environment/configuration property key.
+    Key,
     /// An HTTP route, gRPC/protobuf RPC, or GraphQL Query/Mutation field
     /// (LIT-22.3.4). `ConfigNode::name` is `"METHOD path"` for HTTP (e.g.
     /// `"GET /users/{id}"`), `"service.rpc"` for gRPC, or the GraphQL field
@@ -264,6 +266,8 @@ pub enum RelationKind {
     Calls,
     /// An environment variable read.
     ReadsEnv,
+    /// A deployment or configuration source defines/supplies an environment variable.
+    DefinesEnv,
     /// A command invocation.
     RunsCommand,
     /// A container image is used as a base or runtime image.
@@ -306,6 +310,8 @@ pub enum RelationKind {
     HandlesRoute,
     /// A source binds or supplies a configuration value.
     BindsConfig,
+    /// A source references a canonical configuration key.
+    ReferencesConfig,
     /// A source reads an operational resource or configuration value.
     Reads,
     /// A source writes an operational resource or configuration value.

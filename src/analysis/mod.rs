@@ -2,6 +2,7 @@
 
 pub mod cache;
 pub mod dockerfile;
+pub mod environment;
 pub mod external_symbols;
 pub mod generic_text;
 pub mod ir;
@@ -22,6 +23,7 @@ pub use dockerfile::{
     DockerInstructionKind, DockerPort, DockerSingleValue, DockerStage, DockerfileAnalysis,
     DockerfileAnalyzer,
 };
+pub use environment::{EnvironmentFacts, UnresolvedEnvironmentFact};
 pub use external_symbols::{is_python_stdlib_module, is_rust_prelude_type, rust_std_crate};
 pub use generic_text::{FindingConfidence, GenericTextExtractor, TextFinding, TextFindingKind};
 pub use ir::{
@@ -67,6 +69,6 @@ pub use tree_sitter_adapter::{
     parse_with_optional_adapter,
 };
 pub use typescript::{
-    TypeScriptAnalysis, TypeScriptAnalyzer, TypeScriptCall, TypeScriptClass, TypeScriptFunction,
-    TypeScriptLanguage,
+    TypeScriptAnalysis, TypeScriptAnalyzer, TypeScriptCall, TypeScriptClass, TypeScriptEnvRead,
+    TypeScriptFunction, TypeScriptLanguage,
 };

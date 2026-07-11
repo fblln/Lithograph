@@ -4,7 +4,7 @@ use crate::graph::Graph;
 use serde::{Deserialize, Serialize};
 
 /// Bump when graph-pass ordering or semantics change.
-pub const GRAPH_BUILD_PIPELINE_VERSION: u32 = 1;
+pub const GRAPH_BUILD_PIPELINE_VERSION: u32 = 2;
 
 /// A deterministic phase in graph construction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -895,8 +895,9 @@ mod tests {
         Ok(())
     }
 
-    /// LIT-24's typed extraction adds one generated-file fact and three
-    /// Python symbols to this fixture. The `vendor` module remains at one:
+    /// Environment/configuration fact materialization adds canonical key
+    /// nodes to this fixture. LIT-24's typed extraction also adds one
+    /// generated-file fact and three Python symbols. The `vendor` module remains at one:
     /// `vendor/example/lib.rs` is opaque, so only its Artifact node is
     /// reachable and it contributes no source-derived symbols.
     #[test]
@@ -924,7 +925,7 @@ mod tests {
         assert_eq!(
             snapshot,
             "\
-module-plan:configuration:configuration|Configuration|Configuration|23|295
+module-plan:configuration:configuration|Configuration|Configuration|46|295
 module-plan:directory:assets|Directory|assets|2|64
 module-plan:directory:data|Directory|data|1|9
 module-plan:directory:generated|Directory|generated|4|37

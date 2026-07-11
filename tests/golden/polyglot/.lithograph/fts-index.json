@@ -235,6 +235,144 @@
       "text": "[worker_path, \"--route\", str(route_file)]"
     },
     {
+      "id": "config-key:paths",
+      "kind": "Fact",
+      "reference": "paths",
+      "text": "Key paths"
+    },
+    {
+      "id": "config-key:paths.schema",
+      "kind": "Fact",
+      "reference": "paths.schema",
+      "text": "Key paths.schema"
+    },
+    {
+      "id": "config-key:paths.static.assets",
+      "kind": "Fact",
+      "reference": "paths.static.assets",
+      "text": "Key paths.static.assets"
+    },
+    {
+      "id": "config-key:properties",
+      "kind": "Fact",
+      "reference": "properties",
+      "text": "Key properties"
+    },
+    {
+      "id": "config-key:properties.route.file",
+      "kind": "Fact",
+      "reference": "properties.route.file",
+      "text": "Key properties.route.file"
+    },
+    {
+      "id": "config-key:properties.route.file.description",
+      "kind": "Fact",
+      "reference": "properties.route.file.description",
+      "text": "Key properties.route.file.description"
+    },
+    {
+      "id": "config-key:properties.route.file.type",
+      "kind": "Fact",
+      "reference": "properties.route.file.type",
+      "text": "Key properties.route.file.type"
+    },
+    {
+      "id": "config-key:properties.worker.image",
+      "kind": "Fact",
+      "reference": "properties.worker.image",
+      "text": "Key properties.worker.image"
+    },
+    {
+      "id": "config-key:properties.worker.image.default",
+      "kind": "Fact",
+      "reference": "properties.worker.image.default",
+      "text": "Key properties.worker.image.default"
+    },
+    {
+      "id": "config-key:properties.worker.image.type",
+      "kind": "Fact",
+      "reference": "properties.worker.image.type",
+      "text": "Key properties.worker.image.type"
+    },
+    {
+      "id": "config-key:required",
+      "kind": "Fact",
+      "reference": "required",
+      "text": "Key required"
+    },
+    {
+      "id": "config-key:required.0",
+      "kind": "Fact",
+      "reference": "required.0",
+      "text": "Key required.0"
+    },
+    {
+      "id": "config-key:schema",
+      "kind": "Fact",
+      "reference": "schema",
+      "text": "Key schema"
+    },
+    {
+      "id": "config-key:service",
+      "kind": "Fact",
+      "reference": "service",
+      "text": "Key service"
+    },
+    {
+      "id": "config-key:service.command",
+      "kind": "Fact",
+      "reference": "service.command",
+      "text": "Key service.command"
+    },
+    {
+      "id": "config-key:service.env",
+      "kind": "Fact",
+      "reference": "service.env",
+      "text": "Key service.env"
+    },
+    {
+      "id": "config-key:service.env.ridgeline.cache.dir",
+      "kind": "Fact",
+      "reference": "service.env.ridgeline.cache.dir",
+      "text": "Key service.env.ridgeline.cache.dir"
+    },
+    {
+      "id": "config-key:service.env.ridgeline.worker",
+      "kind": "Fact",
+      "reference": "service.env.ridgeline.worker",
+      "text": "Key service.env.ridgeline.worker"
+    },
+    {
+      "id": "config-key:service.image",
+      "kind": "Fact",
+      "reference": "service.image",
+      "text": "Key service.image"
+    },
+    {
+      "id": "config-key:service.name",
+      "kind": "Fact",
+      "reference": "service.name",
+      "text": "Key service.name"
+    },
+    {
+      "id": "config-key:service.port",
+      "kind": "Fact",
+      "reference": "service.port",
+      "text": "Key service.port"
+    },
+    {
+      "id": "config-key:title",
+      "kind": "Fact",
+      "reference": "title",
+      "text": "Key title"
+    },
+    {
+      "id": "config-key:type",
+      "kind": "Fact",
+      "reference": "type",
+      "text": "Key type"
+    },
+    {
       "id": "config:.github/workflows/ci.yml#jobs.checks",
       "kind": "Fact",
       "reference": "checks",

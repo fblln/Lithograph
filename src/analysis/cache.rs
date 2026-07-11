@@ -6,11 +6,11 @@
 //! miss just costs a fresh parse, exactly like today's uncached behavior).
 
 use crate::analysis::{
-    ActionsProfile, CargoProfile, ComposeProfile, DockerfileAnalysis, MarkdownAnalysis,
-    PackageManifestAnalysis, PackageManifestFormat, ProtocolFormat, ProtocolRoute,
-    PyProjectProfile, PythonAnalysis, RequirementsProfile, RustAnalysis, RustWorkspaceAnalysis,
-    StructuredAnalysis, StructuredFormat, SyntaxIndexedLanguage, TextFinding,
-    TreeSitterAdapterOutput, TypeScriptAnalysis, TypeScriptLanguage,
+    ActionsProfile, CargoProfile, ComposeProfile, DockerfileAnalysis, EnvironmentFacts,
+    MarkdownAnalysis, PackageManifestAnalysis, PackageManifestFormat, ProtocolFormat,
+    ProtocolRoute, PyProjectProfile, PythonAnalysis, RequirementsProfile, RustAnalysis,
+    RustWorkspaceAnalysis, StructuredAnalysis, StructuredFormat, SyntaxIndexedLanguage,
+    TextFinding, TreeSitterAdapterOutput, TypeScriptAnalysis, TypeScriptLanguage,
 };
 use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ use std::path::PathBuf;
 
 /// Bump when analyzer output semantics or serialization change in a way that
 /// should force fresh analyzer output instead of reusing old cache entries.
-pub const ANALYSIS_CACHE_VERSION: u32 = 5;
+pub const ANALYSIS_CACHE_VERSION: u32 = 7;
 
 /// Tags which analyzer produced an [`AnalyzerOutput`], so a cache lookup can
 /// reject a stale entry whose artifact has since been reclassified to a
@@ -59,6 +59,9 @@ pub enum AnalyzerKind {
     Protocol(ProtocolFormat),
     /// `GenericTextExtractor`.
     GenericText,
+    /// Shared environment/configuration fact extraction for `.env` and
+    /// property-style files.
+    Environment,
 }
 
 /// One artifact's cached analyzer output, self-describing so a lookup can
@@ -109,6 +112,8 @@ pub enum AnalyzerOutput {
     Protocol(ProtocolFormat, Vec<ProtocolRoute>),
     /// [`GenericTextExtractor`](crate::analysis::GenericTextExtractor) output.
     GenericText(Vec<TextFinding>),
+    /// Shared environment/configuration facts for line-oriented files.
+    Environment(EnvironmentFacts),
 }
 
 impl AnalyzerOutput {
@@ -131,6 +136,7 @@ impl AnalyzerOutput {
             Self::PackageManifest(format, _) => AnalyzerKind::PackageManifest(*format),
             Self::Protocol(format, _) => AnalyzerKind::Protocol(*format),
             Self::GenericText(_) => AnalyzerKind::GenericText,
+            Self::Environment(_) => AnalyzerKind::Environment,
         }
     }
 }

@@ -14,6 +14,7 @@
 //! Per-language import resolvers (LIT-22.3.2) plug into this framework by
 //! implementing [`Resolver`]; this module only owns the shared plumbing.
 
+pub mod environment;
 pub mod imports;
 pub mod symbols;
 pub mod type_aware;
@@ -24,6 +25,13 @@ use crate::graph::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+pub use environment::{
+    ConfigFact, ENVIRONMENT_FACT_VERSION, EnvFact, EnvironmentCandidate,
+    EnvironmentCandidateFeatures, EnvironmentCodeUser, EnvironmentExplanation,
+    EnvironmentResolveReport, EnvironmentResolvedLink, EnvironmentVariableExplanation, FactRole,
+    FactSourceKind, NameAlias, NameAliasKind, NameNormalizationError, NormalizedName,
+    SafeFactValue, explain_environment, is_secret_like, resolve_environment_links,
+};
 use imports::extract_typescript_import_bindings;
 pub use imports::{LanguageImportResolver, extract_import_reference};
 pub use symbols::{ImportLookup, ImportMap, ProjectSymbol, ProjectSymbolRegistry};

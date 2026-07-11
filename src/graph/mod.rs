@@ -22,8 +22,9 @@ pub mod validate;
 pub use analytics::{MetricSnapshot, MetricSnapshotStore, NodeMetric};
 pub use builder::GraphBuilder;
 pub use communities::{
-    CommunityScope, CommunitySnapshot, CommunitySnapshotStore, CommunitySummary,
-    LEIDEN_ALGORITHM_VERSION, leiden_communities,
+    CommunityScope, CommunitySnapshot, CommunitySnapshotStore, CommunitySummary, CommunityTopic,
+    LEIDEN_ALGORITHM_VERSION, TOPIC_ALGORITHM_VERSION, TopicSnapshot, TopicSnapshotStore,
+    environment_aware_scope, label_topic_snapshot, leiden_communities,
 };
 pub use enrichment::{ENRICHMENT_ALGORITHM_VERSION, EnrichmentOverlay, derive_enrichment};
 pub use health::{HealthFinding, HealthRule, HealthSeverity, HealthThresholds, detect_health};

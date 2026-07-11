@@ -376,6 +376,8 @@ pub enum InspectTarget {
     Artifacts(InspectArtifactsArgs),
     /// Print the semantic graph.
     Graph(InspectGraphArgs),
+    /// Explain environment-variable reads, definitions, and config links.
+    Env(InspectEnvArgs),
     /// Print the deterministic module plan.
     Modules(InspectModulesArgs),
     /// Print the module dependency matrix and cycles.
@@ -424,6 +426,19 @@ pub struct InspectArtifactsArgs {
 pub struct InspectGraphArgs {
     /// Repository path to inspect.
     pub path: PathBuf,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Arguments for `inspect env`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct InspectEnvArgs {
+    /// Repository path to inspect.
+    pub path: PathBuf,
+    /// Optional environment variable name or stable node id to inspect.
+    #[arg(long)]
+    pub variable: Option<String>,
     /// Output format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
     pub format: OutputFormat,
@@ -488,8 +503,8 @@ mod tests {
         AdrCommand, AdrCreateArgs, AdrListArgs, AdrStatusArg, AdrTarget, AdrUpdateArgs, AskArgs,
         Cli, Command, DriftArgs, GoldenArgs, GraphCommand, GraphExportArgs, GraphImportArgs,
         GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectDsmArgs,
-        InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs,
-        McpServerArgs, OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
+        InspectEnvArgs, InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs,
+        McpExportArgs, McpServerArgs, OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
     };
     use std::path::PathBuf;
 
@@ -572,6 +587,31 @@ mod tests {
                 }),
             }))
         ));
+    }
+
+    #[test]
+    fn parses_inspect_env_filter_and_json_format() {
+        let cli = Cli::parse_from_args([
+            "lithograph",
+            "inspect",
+            "env",
+            "fixtures/polyglot",
+            "--variable",
+            "DATABASE_URL",
+            "--format",
+            "json",
+        ]);
+
+        assert_eq!(
+            cli.command,
+            Some(Command::Inspect(InspectCommand {
+                target: InspectTarget::Env(InspectEnvArgs {
+                    path: PathBuf::from("fixtures/polyglot"),
+                    variable: Some("DATABASE_URL".to_owned()),
+                    format: OutputFormat::Json,
+                }),
+            }))
+        );
     }
 
     #[test]
