@@ -77,7 +77,7 @@ three ever run unless the corresponding command or flag is invoked directly.
 
 ## Tests Stay Offline and Deterministic
 
-`make test` / `make check-all` (`cargo test --all-targets --all-features`,
+`just test` / `just check-all` (`cargo test --all-targets --all-features`,
 without `--ignored`) never makes a real network call:
 
 - Model-selection tests exercise `MockModel` directly, or point the
@@ -91,7 +91,7 @@ without `--ignored`) never makes a real network call:
   machine running it -- filesystem only, no network) and the golden-snapshot
   regeneration test (deterministic `MockModel` output, gated so a normal
   test run never silently rewrites the committed snapshots). Neither runs
-  under `make test`/`make check-all`, and neither touches the network.
+  under `just test`/`just check-all`, and neither touches the network.
 
 This is a structural guarantee, not a policy: nothing in the default test
 path constructs a real model client with a real API key, because

@@ -107,7 +107,9 @@ fn exact_filename_rule(path: &str) -> Option<Classification> {
             "dockerfile",
         )),
         "Makefile" => Some(generic(ArtifactCategory::BuildDefinition, Some("makefile"))),
-        "Justfile" => Some(generic(ArtifactCategory::BuildDefinition, Some("justfile"))),
+        "Justfile" | "justfile" => {
+            Some(generic(ArtifactCategory::BuildDefinition, Some("justfile")))
+        }
         "Jenkinsfile" => Some(generic(
             ArtifactCategory::ContinuousIntegration,
             Some("jenkinsfile"),
@@ -419,6 +421,11 @@ mod tests {
             ),
             (
                 "Justfile",
+                ArtifactCategory::BuildDefinition,
+                Some("justfile"),
+            ),
+            (
+                "justfile",
                 ArtifactCategory::BuildDefinition,
                 Some("justfile"),
             ),

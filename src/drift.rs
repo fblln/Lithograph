@@ -20,7 +20,7 @@ pub enum DriftKind {
     BrokenLink,
     /// A path-like reference in Markdown prose/code does not exist.
     MissingPath,
-    /// A documented command references a `make`/`npm` target or script
+    /// A documented command references a `just`/`make`/`npm` target or script
     /// this repository does not actually define.
     StaleCommand,
     /// An inline-code token shaped like a container image is not among the
@@ -78,6 +78,7 @@ impl DriftDetector {
     /// Scans every safe Markdown artifact for drift.
     pub fn scan(&self, artifacts: &[Artifact], graph: &Graph, repo_root: &Path) -> DriftReport {
         let known_make_targets = make_targets(artifacts, repo_root);
+        let known_just_targets = just_targets(artifacts, repo_root);
         let known_npm_scripts = npm_scripts(artifacts, repo_root);
         let known_images: BTreeSet<&str> = graph
             .nodes
@@ -126,9 +127,12 @@ impl DriftDetector {
             markdown_corpus.push_str(&text);
             markdown_corpus.push('\n');
             for command in &analysis.commands {
-                if let Some(detail) =
-                    stale_command(&command.command, &known_make_targets, &known_npm_scripts)
-                {
+                if let Some(detail) = stale_command(
+                    &command.command,
+                    &known_just_targets,
+                    &known_make_targets,
+                    &known_npm_scripts,
+                ) {
                     findings.push(DriftFinding {
                         kind: DriftKind::StaleCommand,
                         artifact_path: artifact.path.as_str().to_owned(),
@@ -260,18 +264,26 @@ fn from_markdown_drift(artifact_path: &str, drift: &MarkdownDrift) -> DriftFindi
     }
 }
 
-// ponytail: only `make <target>` and `npm|pnpm|yarn run <script>` are
+// ponytail: only `just|make <target>` and `npm|pnpm|yarn run <script>` are
 // checked exactly, matching AC2's "when exact matching is practical" --
 // commands like `cargo test` or `python -m pytest` can't be verified
 // without executing them, so they are intentionally left unchecked.
 fn stale_command(
     command: &str,
+    just_targets: &BTreeSet<String>,
     make_targets: &BTreeSet<String>,
     npm_scripts: &BTreeSet<String>,
 ) -> Option<String> {
     let mut tokens = command.split_whitespace();
     let program = tokens.next()?;
-    if program == "make" {
+    if program == "just" {
+        let target = tokens.next()?;
+        if !just_targets.contains(target) {
+            return Some(format!(
+                "just recipe `{target}` not found in a known justfile"
+            ));
+        }
+    } else if program == "make" {
         let target = tokens.next()?;
         if !make_targets.contains(target) {
             return Some(format!(
@@ -305,6 +317,37 @@ fn make_targets(artifacts: &[Artifact], repo_root: &Path) -> BTreeSet<String> {
             if let Some((name, _)) = line.split_once(':') {
                 let name = name.trim();
                 if !name.is_empty() && !name.contains(char::is_whitespace) {
+                    targets.insert(name.to_owned());
+                }
+            }
+        }
+    }
+    targets
+}
+
+/// Extracts simple, non-parameterized recipe names from repository justfiles.
+/// Recipe declarations are unindented `name:` lines; assignments and recipe
+/// bodies are intentionally ignored so documentation checks remain local and
+/// deterministic.
+fn just_targets(artifacts: &[Artifact], repo_root: &Path) -> BTreeSet<String> {
+    let mut targets = BTreeSet::new();
+    for artifact in artifacts {
+        if artifact.detected_format.as_deref() != Some("justfile") {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(repo_root.join(artifact.path.as_str())) else {
+            continue;
+        };
+        for line in text.lines() {
+            if line.starts_with(char::is_whitespace)
+                || line.starts_with('#')
+                || line.starts_with("set ")
+            {
+                continue;
+            }
+            if let Some((name, _)) = line.split_once(':') {
+                let name = name.trim();
+                if !name.is_empty() && !name.contains(char::is_whitespace) && !name.ends_with('=') {
                     targets.insert(name.to_owned());
                 }
             }
@@ -443,6 +486,7 @@ mod tests {
     {
         let temp = tempfile::TempDir::new()?;
         copy_dir(&fixture_root(), temp.path())?;
+        std::fs::write(temp.path().join("justfile"), "test:\n    @true\n")?;
         std::fs::write(
             temp.path().join("docs/broken.md"),
             "\
@@ -455,6 +499,8 @@ Referenced path: `src/does_not_exist.py`.
 ```sh
 make totally-not-a-real-target
 make test
+just totally-not-a-real-target
+just test
 ```
 
 Image: `ghcr.io/example/does-not-exist:latest`.
