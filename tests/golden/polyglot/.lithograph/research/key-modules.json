@@ -1,15 +1,15 @@
 {
   "modules": [
     "web (Directory) score 66",
+    "python_app (PythonPackage) score 53",
     "Configuration (Configuration) score 50",
     "Documentation (Documentation) score 44",
     "Infrastructure (Infrastructure) score 42",
-    "python_app (PythonPackage) score 38",
     "fixture-worker (RustCrate) score 32",
     "root (Directory) score 14",
-    "generated (Directory) score 6",
-    "vendor (Directory) score 6",
-    "assets (Directory) score 5"
+    "generated (Directory) score 11",
+    "assets (Directory) score 5",
+    "data (Directory) score 2"
   ],
   "evidence": [
     {

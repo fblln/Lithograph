@@ -345,14 +345,20 @@ impl TreeSitterParserAdapter {
         }
     }
 
-    /// Adapter for CSS syntax facts.
+    /// Adapter for CSS syntax facts. `symbol_kinds` is deliberately empty
+    /// (LIT-23.2): class/id selectors are what a rule_set *is*, not a
+    /// reference to something else the way an identifier use-site in code
+    /// is, so routing them through the generic Usages/TypeRefs
+    /// reference-extraction pass (`process_syntax_indexed` in
+    /// src/graph/builder.rs) produced one spurious `Usages` relation per
+    /// selector -- a category error, not a resolvable fact.
     pub fn css() -> Self {
         Self {
             language_id: "css",
             language: tree_sitter_css::LANGUAGE.into(),
             definition_kinds: &["rule_set", "at_rule"],
             import_kinds: &["import_statement"],
-            symbol_kinds: &["class_selector", "id_selector"],
+            symbol_kinds: &[],
             comment_kinds: &["comment"],
         }
     }

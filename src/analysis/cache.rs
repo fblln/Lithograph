@@ -10,7 +10,7 @@ use crate::analysis::{
     PackageManifestAnalysis, PackageManifestFormat, ProtocolFormat, ProtocolRoute,
     PyProjectProfile, PythonAnalysis, RequirementsProfile, RustAnalysis, RustWorkspaceAnalysis,
     StructuredAnalysis, StructuredFormat, SyntaxIndexedLanguage, TextFinding,
-    TreeSitterAdapterOutput,
+    TreeSitterAdapterOutput, TypeScriptAnalysis, TypeScriptLanguage,
 };
 use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ use std::path::PathBuf;
 
 /// Bump when analyzer output semantics or serialization change in a way that
 /// should force fresh analyzer output instead of reusing old cache entries.
-pub const ANALYSIS_CACHE_VERSION: u32 = 4;
+pub const ANALYSIS_CACHE_VERSION: u32 = 5;
 
 /// Tags which analyzer produced an [`AnalyzerOutput`], so a cache lookup can
 /// reject a stale entry whose artifact has since been reclassified to a
@@ -31,6 +31,8 @@ pub enum AnalyzerKind {
     Python,
     /// `RustAnalyzer`.
     Rust,
+    /// `TypeScriptAnalyzer`, for the selected TypeScript grammar.
+    TypeScript(TypeScriptLanguage),
     /// `RequirementsAnalyzer`.
     Requirements,
     /// `DockerfileAnalyzer`.
@@ -71,6 +73,8 @@ pub enum AnalyzerOutput {
     Python(PythonAnalysis),
     /// [`RustAnalyzer`](crate::analysis::RustAnalyzer) output.
     Rust(RustAnalysis),
+    /// [`TypeScriptAnalyzer`](crate::analysis::TypeScriptAnalyzer) output.
+    TypeScript(TypeScriptAnalysis),
     /// [`RequirementsAnalyzer`](crate::analysis::RequirementsAnalyzer) output.
     Requirements(RequirementsProfile),
     /// [`DockerfileAnalyzer`](crate::analysis::DockerfileAnalyzer) output.
@@ -113,6 +117,7 @@ impl AnalyzerOutput {
         match self {
             Self::Python(_) => AnalyzerKind::Python,
             Self::Rust(_) => AnalyzerKind::Rust,
+            Self::TypeScript(analysis) => AnalyzerKind::TypeScript(analysis.language),
             Self::Requirements(_) => AnalyzerKind::Requirements,
             Self::Dockerfile(_) => AnalyzerKind::Dockerfile,
             Self::Markdown(_) => AnalyzerKind::Markdown,

@@ -2,14 +2,18 @@
 
 use crate::ask::WikiSearch;
 use crate::graph::{
-    ArchitectureAspect, Graph, GraphStore, KnowledgeIndex, SearchParams, TraceDirection,
-    TraceParams,
+    ArchitectureAspect, Graph, GraphStore, KnowledgeIndex, SearchParams, TagIndex, TraceDirection,
+    TraceParams, derive_tags, resolve_expression,
 };
 use crate::inventory::{RepositoryWalker, WalkOptions};
 use crate::plan::ModulePlanner;
 use crate::run::{RepositorySnapshot, RunMetadata};
 use crate::search::{CodeSearch, CodeSearchParams};
 use crate::storage::JsonStore;
+use crate::subsystem_docs::{
+    SubsystemDocumentStore, generate_subsystem_doc, generate_subsystem_doc_for_nodes,
+    list_subsystems,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -47,6 +51,46 @@ pub const MCP_TOOLS: &[McpToolInfo] = &[
     McpToolInfo {
         name: "read_research_memory",
         description: "Returns the versioned research AgentMemory index.",
+    },
+    McpToolInfo {
+        name: "list_documentable_subsystems",
+        description: "Lists graph-backed subsystem identifiers suitable for documentation.",
+    },
+    McpToolInfo {
+        name: "generate_subsystem_document",
+        description: "Generates deterministic graph-backed subsystem documentation. Params: subsystem, instruction?.",
+    },
+    McpToolInfo {
+        name: "get_subsystem_graph_context",
+        description: "Returns graph-derived subsystem documentation context. Params: subsystem.",
+    },
+    McpToolInfo {
+        name: "refine_subsystem_document",
+        description: "Refines graph-backed subsystem documentation. Params: subsystem, instruction.",
+    },
+    McpToolInfo {
+        name: "validate_subsystem_document",
+        description: "Validates cited subsystem-document graph evidence. Params: subsystem.",
+    },
+    McpToolInfo {
+        name: "resolve_tag_expression",
+        description: "Resolves a tag expression. Params: expression.",
+    },
+    McpToolInfo {
+        name: "get_tag_facets",
+        description: "Returns deterministic tag facet counts.",
+    },
+    McpToolInfo {
+        name: "list_tags",
+        description: "Lists all graph tags.",
+    },
+    McpToolInfo {
+        name: "search_tag_prefix",
+        description: "Searches tags by prefix. Params: prefix.",
+    },
+    McpToolInfo {
+        name: "get_tagged_subgraph",
+        description: "Returns nodes and relations selected by a tag expression. Params: expression.",
     },
     McpToolInfo {
         name: "get_graph_schema",
@@ -193,6 +237,151 @@ impl WikiMcpServer {
                     .join(".lithograph/research/agent-memory.json");
                 let value: Value = serde_json::from_str(&std::fs::read_to_string(path)?)?;
                 Ok(value)
+            }
+            "list_documentable_subsystems" => {
+                let graph = self.load_graph()?;
+                Ok(serde_json::to_value(list_subsystems(&graph))?)
+            }
+            "resolve_tag_expression" => {
+                let graph = self.load_graph()?;
+                let expression = request
+                    .params
+                    .get("expression")
+                    .and_then(Value::as_str)
+                    .ok_or("missing expression")?;
+                let index = TagIndex::new(derive_tags(&graph, "current"));
+                Ok(serde_json::to_value(
+                    resolve_expression(&index, expression).map_err(std::io::Error::other)?,
+                )?)
+            }
+            "get_tag_facets" => {
+                let graph = self.load_graph()?;
+                Ok(serde_json::to_value(
+                    TagIndex::new(derive_tags(&graph, "current")).facets(),
+                )?)
+            }
+            "list_tags" => {
+                let graph = self.load_graph()?;
+                Ok(serde_json::to_value(
+                    TagIndex::new(derive_tags(&graph, "current")).all(),
+                )?)
+            }
+            "search_tag_prefix" => {
+                let graph = self.load_graph()?;
+                let prefix = request
+                    .params
+                    .get("prefix")
+                    .and_then(Value::as_str)
+                    .ok_or("missing prefix")?;
+                Ok(serde_json::to_value(
+                    TagIndex::new(derive_tags(&graph, "current")).search_prefix(prefix),
+                )?)
+            }
+            "get_tagged_subgraph" => {
+                let graph = self.load_graph()?;
+                let expression = request
+                    .params
+                    .get("expression")
+                    .and_then(Value::as_str)
+                    .ok_or("missing expression")?;
+                let selected =
+                    resolve_expression(&TagIndex::new(derive_tags(&graph, "current")), expression)
+                        .map_err(std::io::Error::other)?;
+                let nodes: Vec<_> = graph
+                    .nodes
+                    .iter()
+                    .filter(|node| selected.iter().any(|id| id == node.id().as_str()))
+                    .collect();
+                let relations: Vec<_> = graph
+                    .relations
+                    .iter()
+                    .filter(|edge| {
+                        selected
+                            .iter()
+                            .any(|id| id == edge.source.as_str() || id == edge.target.as_str())
+                    })
+                    .collect();
+                Ok(json!({"nodes": nodes, "relations": relations, "expression": expression}))
+            }
+            "generate_subsystem_document" => {
+                let graph = self.load_graph()?;
+                let subsystem = request
+                    .params
+                    .get("subsystem")
+                    .and_then(Value::as_str)
+                    .ok_or("missing subsystem")?;
+                let instruction = request.params.get("instruction").and_then(Value::as_str);
+                let tag_expression = request.params.get("tag_expression").and_then(Value::as_str);
+                let mut document = if let Some(expression) = tag_expression {
+                    let selected = resolve_expression(
+                        &TagIndex::new(derive_tags(&graph, "current")),
+                        expression,
+                    )
+                    .map_err(std::io::Error::other)?;
+                    let selected = selected
+                        .into_iter()
+                        .map(crate::graph::GraphNodeId::new)
+                        .collect::<Vec<_>>();
+                    generate_subsystem_doc_for_nodes(
+                        &graph,
+                        subsystem,
+                        "current",
+                        &[],
+                        instruction,
+                        &selected,
+                    )
+                } else {
+                    generate_subsystem_doc(&graph, subsystem, "current", &[], instruction)
+                };
+                document.tag_expression = tag_expression.map(str::to_owned);
+                SubsystemDocumentStore::new(self.repo_root.join(".lithograph/subsystem-docs"))
+                    .save(&document)?;
+                Ok(serde_json::to_value(document)?)
+            }
+            "get_subsystem_graph_context"
+            | "refine_subsystem_document"
+            | "validate_subsystem_document" => {
+                let graph = self.load_graph()?;
+                let subsystem = request
+                    .params
+                    .get("subsystem")
+                    .and_then(Value::as_str)
+                    .ok_or("missing subsystem")?;
+                let instruction = request.params.get("instruction").and_then(Value::as_str);
+                let tag_expression = request.params.get("tag_expression").and_then(Value::as_str);
+                let mut document = if let Some(expression) = tag_expression {
+                    let selected = resolve_expression(
+                        &TagIndex::new(derive_tags(&graph, "current")),
+                        expression,
+                    )
+                    .map_err(std::io::Error::other)?;
+                    let selected = selected
+                        .into_iter()
+                        .map(crate::graph::GraphNodeId::new)
+                        .collect::<Vec<_>>();
+                    generate_subsystem_doc_for_nodes(
+                        &graph,
+                        subsystem,
+                        "current",
+                        &[],
+                        instruction,
+                        &selected,
+                    )
+                } else {
+                    generate_subsystem_doc(&graph, subsystem, "current", &[], instruction)
+                };
+                document.tag_expression = tag_expression.map(str::to_owned);
+                if request.tool == "validate_subsystem_document" {
+                    let valid = document
+                        .cited_nodes
+                        .iter()
+                        .all(|id| graph.nodes.iter().any(|node| node.id() == id));
+                    Ok(
+                        json!({"valid": valid, "fresh": true, "graph_snapshot_id": document.graph_snapshot_id}),
+                    )
+                } else {
+                    Ok(serde_json::to_value(document)?)
+                }
             }
             "get_schema" | "get_graph_schema" => {
                 let graph = self.load_graph()?;

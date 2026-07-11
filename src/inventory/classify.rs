@@ -126,6 +126,19 @@ fn exact_filename_rule(path: &str) -> Option<Classification> {
             structured(ArtifactCategory::ContainerDefinition, "docker-compose"),
         ),
         "package.json" => Some(package_manifest("npm")),
+        // LIT-23.3: npm's lockfiles keep a `.json` extension (unlike
+        // Cargo.lock/yarn.lock/poetry.lock/Gemfile.lock, whose literal
+        // `.lock` extension already routes them to the same "lockfile"
+        // format below, which no analyzer handles -- see analyzer_kind in
+        // src/graph/builder.rs). Without this, package-lock.json fell
+        // through to plain JSON, and its every internal dependency-tree
+        // field (bin/*, resolved URLs, integrity hashes) got run through
+        // generic scalar-reference extraction meant for hand-written
+        // config, producing hundreds of spurious relations from one file.
+        "package-lock.json" | "npm-shrinkwrap.json" => Some(
+            structured(ArtifactCategory::DependencyLockfile, "lockfile")
+                .with_model_policy(ModelExposurePolicy::ExcerptOnly),
+        ),
         "go.mod" => Some(package_manifest("go-mod")),
         "composer.json" => Some(package_manifest("composer")),
         "pom.xml" => Some(package_manifest("maven")),
@@ -214,7 +227,12 @@ fn apply_origin_scores(path: &str, classification: Classification) -> Classifica
             ..classification
         };
     }
-    if has_component(path, "vendor") {
+    // LIT-23.4: "third_party"/"third-party" are as established a vendored-
+    // dependency directory convention as "vendor" itself.
+    if has_component(path, "vendor")
+        || has_component(path, "third_party")
+        || has_component(path, "third-party")
+    {
         return Classification {
             vendored_score: 100,
             ..classification
@@ -481,6 +499,11 @@ mod tests {
             AnalyzerSelection::Specialized("rust".to_owned())
         );
         assert_eq!(typescript.detected_format.as_deref(), Some("typescript"));
+        assert_eq!(typescript.support_tier, SupportTier::DeepLanguage);
+        assert_eq!(
+            typescript.analyzer,
+            AnalyzerSelection::Specialized("typescript".to_owned())
+        );
         assert_eq!(javascript.detected_format.as_deref(), Some("javascript"));
         assert_eq!(toml.category, ArtifactCategory::Configuration);
         assert_eq!(script.category, ArtifactCategory::Script);
@@ -500,12 +523,6 @@ mod tests {
         // from the display name for c_sharp) rather than a generic-text
         // fallback.
         let cases = [
-            (
-                "web/src/app.tsx",
-                "tsx",
-                "tsx",
-                ArtifactCategory::SourceCode,
-            ),
             (
                 "web/src/component.jsx",
                 "javascript",
@@ -551,6 +568,15 @@ mod tests {
             ),
         ];
 
+        let tsx = classify("web/src/app.tsx", TextStatus::Text, Some(""))?;
+        assert_eq!(tsx.detected_format.as_deref(), Some("tsx"));
+        assert_eq!(tsx.category, ArtifactCategory::SourceCode);
+        assert_eq!(tsx.support_tier, SupportTier::DeepLanguage);
+        assert_eq!(
+            tsx.analyzer,
+            AnalyzerSelection::Specialized("tsx".to_owned())
+        );
+
         for (path, format, registry_id, category) in cases {
             let classification = classify(path, TextStatus::Text, Some(""))?;
             assert_eq!(classification.detected_format.as_deref(), Some(format));
@@ -583,6 +609,29 @@ mod tests {
         assert_eq!(image.model_policy, ModelExposurePolicy::Never);
         assert_eq!(fixture_binary.category, ArtifactCategory::BinaryAsset);
         assert_eq!(opaque_binary.category, ArtifactCategory::UnknownBinary);
+
+        Ok(())
+    }
+
+    /// LIT-23.3: `package-lock.json` (and `npm-shrinkwrap.json`) keep a
+    /// `.json` extension, unlike Cargo.lock/yarn.lock/poetry.lock, whose
+    /// literal `.lock` extension already routes them the same way -- both
+    /// must classify identically as "lockfile" format, which no analyzer
+    /// handles (`analyzer_kind` in src/graph/builder.rs), so the generic
+    /// scalar-reference extraction meant for hand-written JSON config never
+    /// runs over a lockfile's internal dependency-tree fields.
+    #[test]
+    fn npm_lockfiles_classify_the_same_as_dot_lock_lockfiles()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dot_lock = classify("Cargo.lock", TextStatus::Text, Some("[[package]]\n"))?;
+        for path in ["package-lock.json", "npm-shrinkwrap.json"] {
+            let npm_lockfile = classify(path, TextStatus::Text, Some("{}"))?;
+            assert_eq!(npm_lockfile.category, ArtifactCategory::DependencyLockfile);
+            assert_eq!(npm_lockfile.detected_format, dot_lock.detected_format);
+            assert_eq!(npm_lockfile.support_tier, dot_lock.support_tier);
+            assert_eq!(npm_lockfile.analyzer, dot_lock.analyzer);
+            assert_eq!(npm_lockfile.model_policy, ModelExposurePolicy::ExcerptOnly);
+        }
 
         Ok(())
     }

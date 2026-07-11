@@ -4,6 +4,7 @@ use crate::domain::{Artifact, ContentHash, RepoPath, TextStatus};
 use crate::inventory::classify::{ArtifactClassifier, ClassificationInput};
 use crate::inventory::limits::SizePolicy;
 use crate::inventory::safety::SafetyPolicy;
+use crate::inventory::vendor::VendorPolicy;
 use camino::Utf8PathBuf;
 use globset::{Glob, GlobMatcher};
 use ignore::WalkBuilder;
@@ -158,6 +159,9 @@ fn read_artifact(path: &Path, relative_path: RepoPath) -> Result<Artifact, WalkE
     let classification = safety_policy.apply(classification, safety_decision);
     let size_policy = SizePolicy;
     let classification = size_policy.apply(classification, size_policy.decide(metadata.len()));
+    let vendor_policy = VendorPolicy;
+    let vendor_decision = vendor_policy.decide(classification.vendored_score);
+    let classification = vendor_policy.apply(classification, vendor_decision);
     let mut artifact = Artifact::new(
         relative_path,
         classification.category,
@@ -733,6 +737,65 @@ mod tests {
 
         assert_ne!(artifact.support_tier, SupportTier::Opaque);
         assert_ne!(artifact.analyzer, AnalyzerSelection::Opaque);
+
+        Ok(())
+    }
+
+    /// LIT-23.4: a file under a directory literally named `vendor` must
+    /// classify as opaque -- third-party source shouldn't be analyzed as if
+    /// it were the repository's own code -- while an identical file outside
+    /// such a directory keeps its normal classification (AC3).
+    #[test]
+    fn vendor_directory_files_classify_as_opaque_and_skip_content_analysis()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("tools/asset-baker-rs/vendor/gdal-sys"))?;
+        let vendored_path = temp
+            .path()
+            .join("tools/asset-baker-rs/vendor/gdal-sys/wrapper.h");
+        fs::write(
+            &vendored_path,
+            "#include \"gdal.h\"\n#include \"cpl_port.h\"\n",
+        )?;
+        let first_party_path = temp.path().join("src/wrapper.h");
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        fs::write(
+            &first_party_path,
+            "#include \"gdal.h\"\n#include \"cpl_port.h\"\n",
+        )?;
+
+        let vendored = read_artifact(
+            &vendored_path,
+            RepoPath::new("tools/asset-baker-rs/vendor/gdal-sys/wrapper.h")?,
+        )?;
+        let first_party = read_artifact(&first_party_path, RepoPath::new("src/wrapper.h")?)?;
+
+        assert_eq!(vendored.vendored_score, 100);
+        assert_eq!(vendored.support_tier, SupportTier::Opaque);
+        assert_eq!(vendored.analyzer, AnalyzerSelection::Opaque);
+        assert_eq!(vendored.model_policy, ModelExposurePolicy::ExcerptOnly);
+
+        assert_eq!(first_party.vendored_score, 0);
+        assert_ne!(first_party.support_tier, SupportTier::Opaque);
+        assert_ne!(first_party.analyzer, AnalyzerSelection::Opaque);
+
+        Ok(())
+    }
+
+    /// `third_party`/`third-party` are as established a vendored-dependency
+    /// directory convention as `vendor` itself (AC2).
+    #[test]
+    fn third_party_directory_files_also_classify_as_opaque()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("third_party/zlib"))?;
+        let path = temp.path().join("third_party/zlib/zlib.c");
+        fs::write(&path, "int main() { return 0; }\n")?;
+
+        let artifact = read_artifact(&path, RepoPath::new("third_party/zlib/zlib.c")?)?;
+
+        assert_eq!(artifact.vendored_score, 100);
+        assert_eq!(artifact.support_tier, SupportTier::Opaque);
 
         Ok(())
     }

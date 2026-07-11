@@ -2,6 +2,7 @@
 name = "lithograph"
 version = "0.1.0"
 edition = "2024"
+build = "build.rs"
 description = "Repository knowledge compiler that builds evidence-backed documentation from semantic analysis."
 license = "MIT"
 repository = "https://github.com/fblln/Lithograph"
@@ -14,6 +15,7 @@ clap = { version = "4.5.50", features = ["derive"] }
 flate2 = "1.1.5"
 globset = "0.4.18"
 ignore = "0.4.25"
+lbug = "0.18.0"
 rig-core = "0.39.0"
 roxmltree = "0.20"
 serde = { version = "1.0.228", features = ["derive"] }

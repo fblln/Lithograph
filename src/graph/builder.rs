@@ -11,7 +11,8 @@ use crate::analysis::{
     RequirementsProfile, RustAnalysis, RustAnalyzer, RustReferenceKind, RustWorkspaceAnalysis,
     RustWorkspaceAnalyzer, StructuredAnalysis, StructuredAnalyzer, StructuredFormat,
     SyntaxIndexedLanguage, TextFinding, TextFindingKind, TreeSitterAdapterOutput,
-    is_python_stdlib_module, python, rust_source, rust_std_crate,
+    TypeScriptAnalysis, TypeScriptAnalyzer, TypeScriptLanguage, is_python_stdlib_module, python,
+    rust_source, rust_std_crate,
 };
 use crate::domain::{
     AnalyzerSelection, Artifact, ArtifactId, Confidence, EvidenceRef, ModelExposurePolicy,
@@ -22,6 +23,7 @@ use crate::graph::model::{
     EnvVarNode, Graph, GraphNode, GraphNodeId, ModuleLanguage, ModuleNode, PackageNode, Relation,
     RelationKind, RelationProvenance, RelationResolution, SymbolKind, SymbolNode, UnresolvedNode,
 };
+use crate::graph::{GRAPH_BUILD_PIPELINE_VERSION, GraphBuildOutput, GraphBuildPass};
 use crate::inventory::language::by_name as registry_language;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -39,7 +41,7 @@ impl GraphBuilder {
     /// so unsupported artifacts remain visible in the graph. Equivalent to
     /// [`Self::build_with_cache`] with no cache, i.e. always parses fresh.
     pub fn build(&self, repo_root: &Path, artifacts: &[Artifact]) -> Graph {
-        self.build_with_cache(repo_root, artifacts, None)
+        self.build_with_report(repo_root, artifacts, None).graph
     }
 
     /// Builds the graph exactly like [`Self::build`], except each artifact's
@@ -54,6 +56,18 @@ impl GraphBuilder {
         artifacts: &[Artifact],
         cache: Option<&AnalysisCache>,
     ) -> Graph {
+        self.build_with_report(repo_root, artifacts, cache).graph
+    }
+
+    /// Builds a graph and reports the deterministic pass outputs used to
+    /// create it. This is the production entry point for callers needing
+    /// invalidation and observability data.
+    pub fn build_with_report(
+        &self,
+        repo_root: &Path,
+        artifacts: &[Artifact],
+        cache: Option<&AnalysisCache>,
+    ) -> GraphBuildOutput {
         let mut state = BuilderState::new(artifacts);
 
         // Resolve every Cargo manifest's real crate/target layout before
@@ -95,6 +109,17 @@ impl GraphBuilder {
             state.index_module(artifact);
         }
 
+        let mut output = GraphBuildOutput {
+            graph: Graph {
+                nodes: Vec::new(),
+                relations: Vec::new(),
+            },
+            pipeline_version: GRAPH_BUILD_PIPELINE_VERSION,
+            passes: Vec::new(),
+        };
+        output.graph = state.snapshot();
+        output.record(GraphBuildPass::Structure);
+
         for artifact in artifacts {
             if artifact.text_status != TextStatus::Text
                 || artifact.model_policy == ModelExposurePolicy::Never
@@ -128,9 +153,49 @@ impl GraphBuilder {
             state.apply_output(artifact, output);
         }
 
+        output.graph = state.snapshot();
+        output.record(GraphBuildPass::DefinitionsAndImports);
+
         state.detect_near_clones(repo_root);
-        state.finish()
+        let mut graph = state.finish();
+        output.graph = graph.clone();
+        output.record(GraphBuildPass::Enrichment);
+        // LIT-23.1: applies to every caller (init/update, inspect, MCP
+        // tools, tests) uniformly, the same way detect_near_clones already
+        // does -- a post-processing pass belongs here, not bolted onto one
+        // caller, or callers would see inconsistently-resolved graphs.
+        crate::resolve::HybridResolverPipeline::default_pipeline().resolve(&mut graph);
+        prune_orphaned_unresolved_nodes(&mut graph);
+        output.graph = graph;
+        output.record(GraphBuildPass::Resolution);
+        // Analytics and persistence have explicit contracts now. Their
+        // topology-preserving implementations are added by their dedicated
+        // graph-analytics/store tasks; recording them here keeps pass order
+        // and invalidation stable for all callers in the interim.
+        output.record(GraphBuildPass::Analytics);
+        output.record(GraphBuildPass::Persistence);
+        output.record(GraphBuildPass::Finalize);
+        output
     }
+}
+
+/// Removes `Unresolved` nodes no relation references anymore after hybrid
+/// resolution (LIT-23.1): when every relation that targeted a raw
+/// syntax-only fact gets upgraded to a real node, the placeholder is dead
+/// weight -- leaving it in the graph would still surface the very raw-text
+/// noise resolution was meant to eliminate, just disconnected from every
+/// relation. A node created and immediately shared by several relations
+/// (the common case, since `BuilderState::unresolved` deduplicates by id)
+/// survives as long as at least one relation still targets it.
+fn prune_orphaned_unresolved_nodes(graph: &mut Graph) {
+    let referenced: BTreeSet<&GraphNodeId> = graph
+        .relations
+        .iter()
+        .flat_map(|relation| [&relation.source, &relation.target])
+        .collect();
+    graph
+        .nodes
+        .retain(|node| !matches!(node, GraphNode::Unresolved(_)) || referenced.contains(node.id()));
 }
 
 /// Returns the analyzer that would handle `artifact`, or `None` when no
@@ -144,6 +209,12 @@ fn analyzer_kind(artifact: &Artifact) -> Option<AnalyzerKind> {
             Some(AnalyzerKind::Python)
         }
         (AnalyzerSelection::Specialized(format), _) if format == "rust" => Some(AnalyzerKind::Rust),
+        (AnalyzerSelection::Specialized(format), _) if format == "typescript" => {
+            Some(AnalyzerKind::TypeScript(TypeScriptLanguage::TypeScript))
+        }
+        (AnalyzerSelection::Specialized(format), _) if format == "tsx" => {
+            Some(AnalyzerKind::TypeScript(TypeScriptLanguage::Tsx))
+        }
         (AnalyzerSelection::Specialized(format), _) if format == "requirements-txt" => {
             Some(AnalyzerKind::Requirements)
         }
@@ -178,7 +249,12 @@ fn analyzer_kind(artifact: &Artifact) -> Option<AnalyzerKind> {
             Some(AnalyzerKind::Structured(structured_format(format)))
         }
         (AnalyzerSelection::SyntaxIndexed(id), _) => {
-            SyntaxIndexedLanguage::from_registry_id(id).map(AnalyzerKind::SyntaxIndexed)
+            // Registry entries can outlive a parser binding. Keep such files
+            // indexable through the generic extractor rather than silently
+            // dropping extraction or aborting the repository build.
+            SyntaxIndexedLanguage::from_registry_id(id)
+                .map(AnalyzerKind::SyntaxIndexed)
+                .or(Some(AnalyzerKind::GenericText))
         }
         (AnalyzerSelection::GenericText, _) => Some(AnalyzerKind::GenericText),
         _ => None,
@@ -204,6 +280,13 @@ fn compute_fresh(
     match kind {
         AnalyzerKind::Python => AnalyzerOutput::Python(PythonAnalyzer.analyze(artifact, text)),
         AnalyzerKind::Rust => AnalyzerOutput::Rust(RustAnalyzer.analyze(artifact, text)),
+        AnalyzerKind::TypeScript(language) => {
+            let analyzer = match language {
+                TypeScriptLanguage::TypeScript => TypeScriptAnalyzer::typescript(),
+                TypeScriptLanguage::Tsx => TypeScriptAnalyzer::tsx(),
+            };
+            AnalyzerOutput::TypeScript(analyzer.analyze(artifact, text))
+        }
         AnalyzerKind::Requirements => {
             AnalyzerOutput::Requirements(RequirementsAnalyzer.analyze(artifact, text))
         }
@@ -506,6 +589,9 @@ impl BuilderState {
         match output {
             AnalyzerOutput::Python(analysis) => self.process_python(artifact, analysis, &node),
             AnalyzerOutput::Rust(analysis) => self.process_rust(artifact, analysis, &node),
+            AnalyzerOutput::TypeScript(analysis) => {
+                self.process_typescript(artifact, analysis, &node)
+            }
             AnalyzerOutput::Requirements(profile) => {
                 self.process_requirements(profile, &node);
             }
@@ -562,6 +648,7 @@ impl BuilderState {
         );
 
         let mut symbol_ids: BTreeMap<String, GraphNodeId> = BTreeMap::new();
+        let mut callable_ids: BTreeMap<String, Vec<GraphNodeId>> = BTreeMap::new();
 
         for class in &analysis.classes {
             let qualified = format!("{}::{}", analysis.module_path, class.name);
@@ -580,6 +667,25 @@ impl BuilderState {
                 vec![class.evidence.clone()],
             );
             symbol_ids.insert(class.name.clone(), id.clone());
+            callable_ids
+                .entry(class.name.clone())
+                .or_default()
+                .push(id.clone());
+            for decorator in &class.decorators {
+                let target = self.unresolved(decorator);
+                self.relate_with_provenance(
+                    id.clone(),
+                    target,
+                    RelationKind::Decorates,
+                    Confidence::Low,
+                    vec![class.evidence.clone()],
+                    Some(format_provenance(
+                        "python",
+                        RelationResolution::SyntaxOnly,
+                        Confidence::Low,
+                    )),
+                );
+            }
 
             for method in &class.methods {
                 let method_qualified =
@@ -593,11 +699,54 @@ impl BuilderState {
                 }));
                 self.relate(
                     id.clone(),
-                    method_id,
+                    method_id.clone(),
                     RelationKind::Contains,
                     Confidence::High,
                     vec![method.evidence.clone()],
                 );
+                self.relate_with_provenance(
+                    id.clone(),
+                    method_id.clone(),
+                    RelationKind::HasMethod,
+                    Confidence::High,
+                    vec![method.evidence.clone()],
+                    Some(format_provenance(
+                        "python",
+                        RelationResolution::SyntaxOnly,
+                        Confidence::High,
+                    )),
+                );
+                self.relate_with_provenance(
+                    method_id.clone(),
+                    id.clone(),
+                    RelationKind::MemberOf,
+                    Confidence::High,
+                    vec![method.evidence.clone()],
+                    Some(format_provenance(
+                        "python",
+                        RelationResolution::SyntaxOnly,
+                        Confidence::High,
+                    )),
+                );
+                if let Some(return_type) = &method.return_type {
+                    let target = self.unresolved(return_type);
+                    self.relate_with_provenance(
+                        method_id.clone(),
+                        target,
+                        RelationKind::UsesType,
+                        Confidence::Low,
+                        vec![method.evidence.clone()],
+                        Some(format_provenance(
+                            "python",
+                            RelationResolution::SyntaxOnly,
+                            Confidence::Low,
+                        )),
+                    );
+                }
+                callable_ids
+                    .entry(method.name.clone())
+                    .or_default()
+                    .push(method_id);
             }
         }
 
@@ -617,8 +766,42 @@ impl BuilderState {
                 Confidence::High,
                 vec![function.evidence.clone()],
             );
-            self.process_python_route_decorators(artifact, artifact_node, function);
-            symbol_ids.insert(function.name.clone(), id);
+            self.process_python_route_decorators(artifact, artifact_node, function, &id);
+            for decorator in &function.decorators {
+                let target = self.unresolved(decorator);
+                self.relate_with_provenance(
+                    id.clone(),
+                    target,
+                    RelationKind::Decorates,
+                    Confidence::Low,
+                    vec![function.evidence.clone()],
+                    Some(format_provenance(
+                        "python",
+                        RelationResolution::SyntaxOnly,
+                        Confidence::Low,
+                    )),
+                );
+            }
+            if let Some(return_type) = &function.return_type {
+                let target = self.unresolved(return_type);
+                self.relate_with_provenance(
+                    id.clone(),
+                    target,
+                    RelationKind::UsesType,
+                    Confidence::Low,
+                    vec![function.evidence.clone()],
+                    Some(format_provenance(
+                        "python",
+                        RelationResolution::SyntaxOnly,
+                        Confidence::Low,
+                    )),
+                );
+            }
+            symbol_ids.insert(function.name.clone(), id.clone());
+            callable_ids
+                .entry(function.name.clone())
+                .or_default()
+                .push(id);
         }
 
         for import in &analysis.imports {
@@ -632,7 +815,13 @@ impl BuilderState {
         }
 
         for reference in &analysis.references {
-            self.process_python_reference(artifact, artifact_node, reference, &symbol_ids);
+            self.process_python_reference(
+                artifact,
+                artifact_node,
+                reference,
+                &symbol_ids,
+                &callable_ids,
+            );
         }
 
         // Base classes (LIT-22.3.3): only resolves to a same-file class by
@@ -747,6 +936,7 @@ impl BuilderState {
         artifact: &Artifact,
         artifact_node: &GraphNodeId,
         function: &crate::analysis::PythonFunction,
+        handler: &GraphNodeId,
     ) {
         for (index, decorator) in function.decorators.iter().enumerate() {
             let Some((method, path)) = python::parse_route_decorator(decorator) else {
@@ -762,13 +952,25 @@ impl BuilderState {
             );
             self.relate_with_provenance(
                 artifact_node.clone(),
-                route_id,
+                route_id.clone(),
                 RelationKind::Contains,
                 Confidence::High,
                 vec![function.evidence.clone()],
                 Some(artifact_provenance(
                     artifact,
                     RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
+            );
+            self.relate_with_provenance(
+                route_id,
+                handler.clone(),
+                RelationKind::HandlesRoute,
+                Confidence::High,
+                vec![function.evidence.clone()],
+                Some(format_provenance(
+                    "python",
+                    RelationResolution::HybridResolved,
                     Confidence::High,
                 )),
             );
@@ -781,10 +983,30 @@ impl BuilderState {
         artifact_node: &GraphNodeId,
         reference: &crate::analysis::PythonReference,
         symbol_ids: &BTreeMap<String, GraphNodeId>,
+        callable_ids: &BTreeMap<String, Vec<GraphNodeId>>,
     ) {
         match reference.kind {
             PythonReferenceKind::Call => {
-                if let Some(target) = symbol_ids.get(&reference.value).cloned() {
+                let simple = reference
+                    .value
+                    .rsplit('.')
+                    .next()
+                    .unwrap_or(&reference.value);
+                if let Some([target]) = callable_ids.get(simple).map(Vec::as_slice) {
+                    self.relate_with_provenance(
+                        artifact_node.clone(),
+                        target.clone(),
+                        RelationKind::Calls,
+                        reference.confidence,
+                        vec![reference.evidence.clone()],
+                        Some(artifact_provenance(
+                            artifact,
+                            RelationResolution::HybridResolved,
+                            reference.confidence,
+                        )),
+                    );
+                } else {
+                    let target = self.unresolved(&reference.value);
                     self.relate_with_provenance(
                         artifact_node.clone(),
                         target,
@@ -793,7 +1015,7 @@ impl BuilderState {
                         vec![reference.evidence.clone()],
                         Some(artifact_provenance(
                             artifact,
-                            RelationResolution::HybridResolved,
+                            RelationResolution::SyntaxOnly,
                             reference.confidence,
                         )),
                     );
@@ -1363,9 +1585,26 @@ impl BuilderState {
             vec![file_evidence(artifact)],
         );
 
+        self.process_syntax_indexed_facts(artifact, language, output, artifact_node, &[]);
+    }
+
+    /// Applies syntax-level facts after a language-specific declaration pass.
+    /// `typed_definition_kinds` suppresses generic `Definition` symbols for
+    /// declarations the specialized pass already represented precisely.
+    fn process_syntax_indexed_facts(
+        &mut self,
+        artifact: &Artifact,
+        language: SyntaxIndexedLanguage,
+        output: TreeSitterAdapterOutput,
+        artifact_node: &GraphNodeId,
+        typed_definition_kinds: &[&str],
+    ) {
         let registry_id = language.registry_id();
 
         for definition in &output.definitions {
+            if typed_definition_kinds.contains(&definition.kind.as_str()) {
+                continue;
+            }
             let evidence = syntax_fact_evidence(artifact, definition.span.clone());
             let qualified = format!(
                 "{}::{}@L{}",
@@ -1442,6 +1681,160 @@ impl BuilderState {
                 )),
             );
         }
+    }
+
+    /// Adds TypeScript/TSX's typed declaration symbols, then reuses the
+    /// syntax-indexed fact pass for imports, type references, identifier
+    /// usages, and definitions that do not yet have a richer symbol kind
+    /// (such as type aliases and enums).
+    fn process_typescript(
+        &mut self,
+        artifact: &Artifact,
+        analysis: TypeScriptAnalysis,
+        artifact_node: &GraphNodeId,
+    ) {
+        let module_id = self.module(
+            artifact.path.as_str(),
+            ModuleLanguage::TypeScript(analysis.language),
+            file_evidence(artifact),
+        );
+        self.relate(
+            artifact_node.clone(),
+            module_id,
+            RelationKind::BelongsToModule,
+            Confidence::High,
+            vec![file_evidence(artifact)],
+        );
+
+        let language_id = analysis.language.registry_id();
+        // A name can legitimately identify several methods in different
+        // classes. Keeping every candidate lets us resolve only singleton
+        // same-file names and leave ambiguous calls for the conservative
+        // post-build resolver instead of choosing a plausible-but-wrong one.
+        let mut callable_ids: BTreeMap<String, Vec<GraphNodeId>> = BTreeMap::new();
+        for class in &analysis.classes {
+            let qualified = format!("{}::{}", artifact.path, class.name);
+            let class_id = self.insert(GraphNode::Symbol(SymbolNode {
+                id: GraphNodeId::new(format!("symbol:{}#{qualified}", artifact.path)),
+                kind: SymbolKind::Class,
+                qualified_name: qualified,
+                doc: None,
+                evidence: class.evidence.clone(),
+            }));
+            self.relate_with_provenance(
+                artifact_node.clone(),
+                class_id.clone(),
+                RelationKind::Contains,
+                Confidence::High,
+                vec![class.evidence.clone()],
+                Some(format_provenance(
+                    language_id,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
+            );
+            for method in &class.methods {
+                let qualified = format!("{}::{}::{}", artifact.path, class.name, method.name);
+                let method_id = self.insert(GraphNode::Symbol(SymbolNode {
+                    id: GraphNodeId::new(format!("symbol:{}#{qualified}", artifact.path)),
+                    kind: SymbolKind::Method,
+                    qualified_name: qualified,
+                    doc: None,
+                    evidence: method.evidence.clone(),
+                }));
+                self.relate_with_provenance(
+                    class_id.clone(),
+                    method_id.clone(),
+                    RelationKind::Contains,
+                    Confidence::High,
+                    vec![method.evidence.clone()],
+                    Some(format_provenance(
+                        language_id,
+                        RelationResolution::SyntaxOnly,
+                        Confidence::High,
+                    )),
+                );
+                callable_ids
+                    .entry(method.name.clone())
+                    .or_default()
+                    .push(method_id);
+            }
+        }
+
+        for function in &analysis.functions {
+            let qualified = format!("{}::{}", artifact.path, function.name);
+            let function_id = self.insert(GraphNode::Symbol(SymbolNode {
+                id: GraphNodeId::new(format!("symbol:{}#{qualified}", artifact.path)),
+                kind: SymbolKind::Function,
+                qualified_name: qualified,
+                doc: None,
+                evidence: function.evidence.clone(),
+            }));
+            self.relate_with_provenance(
+                artifact_node.clone(),
+                function_id.clone(),
+                RelationKind::Contains,
+                Confidence::High,
+                vec![function.evidence.clone()],
+                Some(format_provenance(
+                    language_id,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
+            );
+            callable_ids
+                .entry(function.name.clone())
+                .or_default()
+                .push(function_id);
+        }
+
+        for call in &analysis.calls {
+            if let Some([target]) = callable_ids.get(call.name.as_str()).map(Vec::as_slice) {
+                self.relate_with_provenance(
+                    artifact_node.clone(),
+                    target.clone(),
+                    RelationKind::Calls,
+                    Confidence::High,
+                    vec![call.evidence.clone()],
+                    Some(format_provenance(
+                        language_id,
+                        RelationResolution::HybridResolved,
+                        Confidence::High,
+                    )),
+                );
+            } else {
+                let target = self.unresolved(&call.name);
+                self.relate_with_provenance(
+                    artifact_node.clone(),
+                    target,
+                    RelationKind::Calls,
+                    Confidence::Low,
+                    vec![call.evidence.clone()],
+                    Some(format_provenance(
+                        language_id,
+                        RelationResolution::SyntaxOnly,
+                        Confidence::Low,
+                    )),
+                );
+            }
+        }
+
+        self.process_syntax_indexed_facts(
+            artifact,
+            match analysis.language {
+                TypeScriptLanguage::TypeScript => SyntaxIndexedLanguage::TypeScript,
+                TypeScriptLanguage::Tsx => SyntaxIndexedLanguage::Tsx,
+            },
+            analysis.syntax,
+            artifact_node,
+            &[
+                "class_declaration",
+                "abstract_class_declaration",
+                "function_declaration",
+                "generator_function_declaration",
+                "method_definition",
+            ],
+        );
     }
 
     fn process_cargo(&mut self, profile: CargoProfile, artifact_node: &GraphNodeId) {
@@ -1922,15 +2315,18 @@ impl BuilderState {
         }
     }
 
-    fn finish(mut self) -> Graph {
-        let mut nodes: Vec<GraphNode> = self.nodes.into_values().collect();
+    /// Produces a deterministic read-only checkpoint without consuming state.
+    fn snapshot(&self) -> Graph {
+        let mut nodes: Vec<GraphNode> = self.nodes.values().cloned().collect();
         nodes.sort_by(|a, b| a.id().cmp(b.id()));
-        self.relations
+        let mut relations = self.relations.clone();
+        relations
             .sort_by(|a, b| (&a.source, a.kind, &a.target).cmp(&(&b.source, b.kind, &b.target)));
-        Graph {
-            nodes,
-            relations: self.relations,
-        }
+        Graph { nodes, relations }
+    }
+
+    fn finish(self) -> Graph {
+        self.snapshot()
     }
 }
 
@@ -2076,7 +2472,10 @@ mod tests {
     use crate::analysis::AnalysisCache;
     use crate::domain::Confidence;
     use crate::graph::GraphValidator;
-    use crate::graph::{GraphNode, Relation, RelationKind, RelationResolution};
+    use crate::graph::{
+        GRAPH_BUILD_PASS_ORDER, GRAPH_BUILD_PIPELINE_VERSION, GraphNode, Relation, RelationKind,
+        RelationResolution, SymbolKind,
+    };
     use crate::inventory::{RepositoryWalker, WalkOptions};
     use std::path::Path;
 
@@ -2123,6 +2522,55 @@ mod tests {
 
         assert_eq!(via_build, via_build_with_cache);
 
+        Ok(())
+    }
+
+    #[test]
+    fn build_report_exposes_deterministic_typed_passes() -> Result<(), Box<dyn std::error::Error>> {
+        let root = fixture_root();
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
+        let first = GraphBuilder.build_with_report(&root, &artifacts, None);
+        let second = GraphBuilder.build_with_report(&root, &artifacts, None);
+
+        assert_eq!(first.pipeline_version, GRAPH_BUILD_PIPELINE_VERSION);
+        assert_eq!(
+            first
+                .passes
+                .iter()
+                .map(|pass| pass.pass)
+                .collect::<Vec<_>>(),
+            GRAPH_BUILD_PASS_ORDER
+        );
+        assert_eq!(first, second);
+        assert_eq!(first.graph, GraphBuilder.build(&root, &artifacts));
+        Ok(())
+    }
+
+    #[test]
+    fn python_cross_file_calls_resolve_to_symbols() -> Result<(), Box<dyn std::error::Error>> {
+        let repo = tempfile::TempDir::new()?;
+        std::fs::write(
+            repo.path().join("worker.py"),
+            "def exported():\n    return 1\n",
+        )?;
+        std::fs::write(
+            repo.path().join("app.py"),
+            "from worker import exported\n\ndef start():\n    return exported()\n",
+        )?;
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(repo.path())?;
+        let graph = GraphBuilder.build(repo.path(), &artifacts);
+
+        let target = "symbol:worker.py#worker::exported";
+        assert!(
+            graph.relations.iter().any(|relation| {
+                relation.kind == RelationKind::Calls
+                    && relation.target.as_str() == target
+                    && relation.provenance.as_ref().is_some_and(|provenance| {
+                        provenance.resolution == RelationResolution::HybridResolved
+                    })
+            }),
+            "missing resolved call target {target}"
+        );
         Ok(())
     }
 
@@ -2805,6 +3253,183 @@ impl Drop for Route {
         Ok(())
     }
 
+    /// LIT-23.5: TypeScript's specialized analyzer emits named typed
+    /// symbols while its tree-sitter imports, type references, and generic
+    /// usages remain part of the graph.
+    #[test]
+    fn typescript_deep_analysis_keeps_syntax_facts_and_typed_symbols()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("service.ts"),
+            "import type { Config } from \"./types\";\nexport class Service {\n  run(config: Config): void {}\n}\nexport const start = (config: Config) => new Service().run(config);\n",
+        )?;
+        std::fs::write(temp.path().join("types.ts"), "export type Config = {};\n")?;
+        std::fs::write(
+            temp.path().join("App.tsx"),
+            "export function App() { return <main />; }\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let typed_symbols: Vec<(&str, SymbolKind)> = graph
+            .nodes
+            .iter()
+            .filter_map(|node| match node {
+                GraphNode::Symbol(symbol)
+                    if matches!(
+                        symbol.qualified_name.as_str(),
+                        "service.ts::Service"
+                            | "service.ts::Service::run"
+                            | "service.ts::start"
+                            | "App.tsx::App"
+                    ) =>
+                {
+                    Some((symbol.qualified_name.as_str(), symbol.kind))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            typed_symbols,
+            vec![
+                ("App.tsx::App", SymbolKind::Function),
+                ("service.ts::Service", SymbolKind::Class),
+                ("service.ts::Service::run", SymbolKind::Method),
+                ("service.ts::start", SymbolKind::Function),
+            ]
+        );
+        assert!(graph.relations.iter().any(|relation| {
+            relation.kind == RelationKind::Imports
+                && relation.source.as_str() == "artifact:service.ts"
+        }));
+        assert!(graph.relations.iter().any(|relation| {
+            relation.kind == RelationKind::TypeRefs
+                && relation.source.as_str() == "artifact:service.ts"
+        }));
+        assert!(graph.relations.iter().any(|relation| {
+            relation.kind == RelationKind::Usages
+                && relation.source.as_str() == "artifact:service.ts"
+        }));
+
+        Ok(())
+    }
+
+    /// LIT-23.6: direct TypeScript calls resolve only to a unique local
+    /// callable symbol. Missing and ambiguous names remain low-confidence
+    /// unresolved calls rather than being assigned a plausible target.
+    #[test]
+    fn typescript_same_file_calls_resolve_conservatively() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("service.ts"),
+            "function helper() {}\nclass First { run() {} }\nclass Second { run() {} }\nhelper();\nrun();\nmissing();\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let resolved = graph
+            .relations
+            .iter()
+            .find(|relation| {
+                relation.kind == RelationKind::Calls
+                    && relation.target.as_str() == "symbol:service.ts#service.ts::helper"
+            })
+            .ok_or("missing resolved same-file call")?;
+        assert_eq!(resolved.confidence, Confidence::High);
+        assert_eq!(
+            resolved
+                .provenance
+                .as_ref()
+                .ok_or("missing call provenance")?
+                .resolution,
+            RelationResolution::HybridResolved
+        );
+
+        for name in ["run", "missing"] {
+            let relation = graph
+                .relations
+                .iter()
+                .find(|relation| {
+                    relation.kind == RelationKind::Calls
+                        && matches!(
+                            graph.nodes.iter().find(|node| node.id() == &relation.target),
+                            Some(GraphNode::Unresolved(unresolved)) if unresolved.value == name
+                        )
+                })
+                .ok_or("missing unresolved conservative call")?;
+            assert_eq!(relation.confidence, Confidence::Low);
+            assert_eq!(
+                relation
+                    .provenance
+                    .as_ref()
+                    .ok_or("missing unresolved call provenance")?
+                    .resolution,
+                RelationResolution::SyntaxOnly
+            );
+        }
+
+        Ok(())
+    }
+
+    /// LIT-23.6: a named binding from a relative local TypeScript import
+    /// resolves after all artifacts have contributed their typed symbols.
+    #[test]
+    fn typescript_imported_call_resolves_to_local_export() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("lib.ts"),
+            "export function greet(): void {}\n",
+        )?;
+        std::fs::write(
+            temp.path().join("app.ts"),
+            "import { greet as say } from \"./lib\";\nsay();\nunknown();\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let relation = graph
+            .relations
+            .iter()
+            .find(|relation| {
+                relation.kind == RelationKind::Calls
+                    && relation.source.as_str() == "artifact:app.ts"
+                    && relation.target.as_str() == "symbol:lib.ts#lib.ts::greet"
+            })
+            .ok_or("missing imported TypeScript call")?;
+        assert_eq!(relation.confidence, Confidence::High);
+        let provenance = relation
+            .provenance
+            .as_ref()
+            .ok_or("missing call provenance")?;
+        assert_eq!(provenance.resolution, RelationResolution::HybridResolved);
+        assert_eq!(
+            provenance.resolver_strategy,
+            "typescript-import-binding-call"
+        );
+
+        let unknown = graph
+            .relations
+            .iter()
+            .find(|relation| {
+                relation.kind == RelationKind::Calls
+                    && relation.source.as_str() == "artifact:app.ts"
+                    && matches!(
+                        graph.nodes.iter().find(|node| node.id() == &relation.target),
+                        Some(GraphNode::Unresolved(unresolved)) if unresolved.value == "unknown"
+                    )
+            })
+            .ok_or("missing unresolved imported-file call")?;
+        assert_eq!(unknown.confidence, Confidence::Low);
+
+        Ok(())
+    }
+
     /// LIT-22.3.4 AC1/AC4: a route-decorated handler produces a `Route`
     /// config node; a literal HTTP client call produces a high-confidence
     /// reference; a *dynamic* call target (an f-string, not a literal)
@@ -2832,6 +3457,18 @@ impl Drop for Route {
         assert_eq!(route.kind, crate::graph::model::ConfigNodeKind::Route);
         assert!(graph.relations.iter().any(|relation| {
             relation.kind == RelationKind::Contains && relation.target == route.id
+        }));
+        assert!(graph.relations.iter().any(|relation| {
+            relation.kind == RelationKind::HandlesRoute
+                && relation.source == route.id
+                && matches!(
+                    graph.nodes.iter().find(|node| node.id() == &relation.target),
+                    Some(GraphNode::Symbol(symbol)) if symbol.qualified_name == "service::get_user"
+                )
+                && relation.provenance.as_ref().is_some_and(|provenance| {
+                    provenance.resolution == RelationResolution::HybridResolved
+                        && provenance.language.as_deref() == Some("python")
+                })
         }));
 
         let literal_call = graph
@@ -3095,6 +3732,177 @@ def render_report(data):
         };
         assert_eq!(similar_relations(&first), similar_relations(&second));
         assert!(!similar_relations(&first).is_empty());
+
+        Ok(())
+    }
+
+    /// LIT-23.1: a multi-line, type-only TypeScript import resolves through
+    /// the hybrid resolver pipeline (wired into `build`/`build_with_cache`)
+    /// to a real Artifact target, and the now-orphaned raw-multi-line-text
+    /// `Unresolved` node it originally targeted is pruned from the graph
+    /// entirely -- reproducing and closing the exact bug found on an
+    /// external repository, where such nodes previously lingered with a
+    /// value containing the whole raw statement, newlines included.
+    #[test]
+    fn resolved_multi_line_import_prunes_its_orphaned_unresolved_node()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(
+            temp.path().join("src/types.ts"),
+            "export type CameraRig = { fov: number };\nexport type RouteSummary = { name: string };\n",
+        )?;
+        std::fs::write(
+            temp.path().join("src/app.ts"),
+            "import type {\n  CameraRig,\n  RouteSummary,\n} from \"./types\";\nexport function noop(): CameraRig | RouteSummary | null {\n  return null;\n}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        assert!(
+            graph.nodes.iter().all(|node| match node {
+                GraphNode::Unresolved(unresolved) => !unresolved.value.contains('\n'),
+                _ => true,
+            }),
+            "no Unresolved node should retain a raw multi-line import statement as its value"
+        );
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::Imports
+                    && relation.target.as_str() == "artifact:src/types.ts"),
+            "the import should still resolve to the real local artifact"
+        );
+
+        Ok(())
+    }
+
+    /// A relation that stays genuinely unresolved keeps its `Unresolved`
+    /// node in the graph -- pruning only removes nodes no relation targets
+    /// anymore, never a node a caller might still want to inspect.
+    #[test]
+    fn unresolved_nodes_still_targeted_by_a_relation_are_not_pruned()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src/main/java"))?;
+        std::fs::write(
+            temp.path().join("src/main/java/App.java"),
+            "import com.example.totally.unknown.Widget;\nclass App {}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let relation = graph
+            .relations
+            .iter()
+            .find(|relation| {
+                relation.kind == RelationKind::Imports
+                    && relation.source.as_str() == "artifact:src/main/java/App.java"
+            })
+            .ok_or("missing import relation")?;
+        assert!(
+            graph
+                .nodes
+                .iter()
+                .any(|node| node.id() == &relation.target
+                    && matches!(node, GraphNode::Unresolved(_))),
+            "an unresolvable import's Unresolved node must still be present, not pruned"
+        );
+
+        Ok(())
+    }
+
+    /// LIT-23.2: CSS class/id selectors are declaration syntax (what a
+    /// rule_set is), not references to something else, so they must never
+    /// produce `Usages`/`TypeRefs` relations the way a code identifier
+    /// use-site does. Confirmed live: a single real-world stylesheet
+    /// produced 105 spurious `Usages` relations before this fix.
+    #[test]
+    fn css_selectors_produce_no_usages_relations() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("styles.css"),
+            "#root {\n  height: 100%;\n}\n\n.app-shell {\n  display: flex;\n}\n\n.brand-mark {\n  color: #fff;\n}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        assert!(
+            graph.nodes.iter().any(
+                |node| matches!(node, GraphNode::Artifact(artifact) if artifact.path == "styles.css")
+            ),
+            "a bare Artifact node must still exist for the CSS file"
+        );
+        assert!(
+            !graph.relations.iter().any(|relation| matches!(
+                relation.kind,
+                RelationKind::Usages | RelationKind::TypeRefs
+            ) && relation.source.as_str()
+                == "artifact:styles.css"),
+            "CSS selectors must not produce Usages/TypeRefs relations"
+        );
+        // The rule_set/at_rule structural facts (LIT-22.2.3) are unaffected:
+        // each selector's rule still contributes a Symbol via Contains.
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::Contains
+                    && relation.source.as_str() == "artifact:styles.css"),
+            "CSS rule_set definitions should still produce Contains relations"
+        );
+
+        Ok(())
+    }
+
+    /// LIT-23.3: `package-lock.json`'s internal dependency-tree fields
+    /// (`resolved` URLs, `bin` entries, integrity hashes) must not produce
+    /// spurious reference/config relations the way hand-written JSON
+    /// config would. Confirmed live: a single real-world lockfile produced
+    /// 504 spurious relations before this fix.
+    #[test]
+    fn package_lock_json_produces_no_spurious_reference_relations()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("package-lock.json"),
+            r#"{
+  "name": "app",
+  "lockfileVersion": 3,
+  "packages": {
+    "": { "dependencies": { "esbuild": "^0.21.0" } },
+    "node_modules/esbuild": {
+      "version": "0.21.5",
+      "resolved": "https://registry.npmjs.org/esbuild/-/esbuild-0.21.5.tgz",
+      "integrity": "sha512-abc123==",
+      "bin": { "esbuild": "bin/esbuild" },
+      "engines": { "node": ">=12" }
+    }
+  }
+}
+"#,
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        assert!(
+            graph.nodes.iter().any(
+                |node| matches!(node, GraphNode::Artifact(artifact) if artifact.path == "package-lock.json")
+            ),
+            "a bare Artifact node must still exist for the lockfile"
+        );
+        assert!(
+            !graph
+                .relations
+                .iter()
+                .any(|relation| relation.source.as_str() == "artifact:package-lock.json"),
+            "a lockfile must produce no relations at all from its content"
+        );
 
         Ok(())
     }

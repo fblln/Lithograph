@@ -18,11 +18,13 @@
     "unresolved reference: /usr/local/bin/worker",
     "unresolved reference: /var/cache/ridgeline",
     "unresolved reference: App",
+    "unresolved reference: None",
     "unresolved reference: React",
     "unresolved reference: RouteSummary",
     "unresolved reference: assets/",
     "unresolved reference: body",
     "unresolved reference: charset",
+    "unresolved reference: dict[str, object]",
     "unresolved reference: div",
     "unresolved reference: fixture_worker::bake_route",
     "unresolved reference: ghcr.io/example/route-api:dev",
@@ -37,9 +39,7 @@
     "unresolved reference: meta",
     "unresolved reference: p",
     "unresolved reference: route",
-    "unresolved reference: rust/",
-    "unresolved reference: script",
-    "unresolved reference: src"
+    "unresolved reference: rust/"
   ],
   "evidence": [
     {

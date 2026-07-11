@@ -6,7 +6,7 @@ use crate::ask::{McpExport, WikiSearch, render_ask_table};
 use crate::cli::{
     AdrCommand, AdrCreateArgs, AdrDeleteArgs, AdrGetArgs, AdrListArgs, AdrTarget, AdrUpdateArgs,
     AskArgs, Cli, Command, DriftArgs, GoldenArgs, GraphCommand, GraphExportArgs, GraphImportArgs,
-    GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectGraphArgs,
+    GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectDsmArgs, InspectGraphArgs,
     InspectMetricsArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, IntegrateMcpArgs,
     McpExportArgs, McpServerArgs, OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
     WatchArgs,
@@ -18,7 +18,8 @@ use crate::generation::{
 };
 use crate::golden::{check_or_update, render_report as render_golden_report};
 use crate::graph::{
-    Graph, GraphArtifactReport, GraphBuilder, GraphIssue, GraphNode, GraphStore, GraphValidator,
+    DependencyMatrix, Graph, GraphArtifactReport, GraphBuilder, GraphIssue, GraphNode, GraphStore,
+    GraphValidator, KnowledgeIndex,
 };
 use crate::inventory::{RepositoryWalker, WalkOptions};
 use crate::mcp::WikiMcpServer;
@@ -695,6 +696,7 @@ where
         InspectTarget::Artifacts(args) => execute_inspect_artifacts(args, writer),
         InspectTarget::Graph(args) => execute_inspect_graph(args, writer),
         InspectTarget::Modules(args) => execute_inspect_modules(args, writer),
+        InspectTarget::Dsm(args) => execute_inspect_dsm(args, writer),
         InspectTarget::Metrics(args) => execute_inspect_metrics(args, writer),
     }
 }
@@ -897,6 +899,70 @@ where
     };
     writer.write_all(output.as_bytes())?;
     Ok(())
+}
+
+fn execute_inspect_dsm<W>(
+    args: InspectDsmArgs,
+    writer: &mut W,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    let walk_options = WalkOptions {
+        exclude_globs: crate::orchestrate::scan_exclude_globs(),
+        ..WalkOptions::default()
+    };
+    let artifacts = RepositoryWalker::new(walk_options).walk(&args.path)?;
+    let graph = GraphBuilder.build(&args.path, &artifacts);
+    let issues = GraphValidator.validate(&graph, &artifacts);
+    if !issues.is_empty() {
+        return Err(render_graph_diagnostics(&issues).into());
+    }
+    let matrix = KnowledgeIndex::new(&graph).dependency_matrix();
+    let output = match args.format {
+        OutputFormat::Table => render_dsm_table(&matrix),
+        OutputFormat::Json => serde_json::to_string_pretty(&matrix)? + "\n",
+    };
+    writer.write_all(output.as_bytes())?;
+    Ok(())
+}
+
+/// Renders a bounded human-readable DSM. JSON remains complete for automation.
+pub fn render_dsm_table(matrix: &DependencyMatrix) -> String {
+    const TABLE_CAP: usize = 40;
+    let shown = matrix.modules.len().min(TABLE_CAP);
+    let mut output = format!(
+        "modules: {}\ncycles: {}\n",
+        matrix.modules.len(),
+        matrix.cycles.len()
+    );
+    if matrix.modules.len() > TABLE_CAP {
+        output.push_str(&format!(
+            "showing first {TABLE_CAP} modules; use --format json for the complete matrix\n"
+        ));
+    }
+    output.push_str("module\t");
+    output.push_str(
+        &matrix.modules[..shown]
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\t"),
+    );
+    output.push('\n');
+    for (row, module) in matrix.modules.iter().take(shown).enumerate() {
+        output.push_str(module.as_str());
+        output.push('\t');
+        output.push_str(
+            &matrix.cells[row][..shown]
+                .iter()
+                .map(usize::to_string)
+                .collect::<Vec<_>>()
+                .join("\t"),
+        );
+        output.push('\n');
+    }
+    output
 }
 
 /// Renders graph validation issues as an actionable diagnostic message.

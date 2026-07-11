@@ -109,7 +109,7 @@
       "language": "tsx",
       "tier": "SyntaxIndexed",
       "target_tier": "HybridResolved",
-      "resolver_strategy": "syntax-indexed-treesitter",
+      "resolver_strategy": "typescript-deep-syntax",
       "artifact_count": 1
     },
     {
@@ -261,7 +261,7 @@
     }
   ],
   "architecture_facts": [
-    "knowledge graph schema: 130 node(s), 142 relation(s)",
+    "knowledge graph schema: 132 node(s), 152 relation(s)",
     "container/component candidate: Configuration (Configuration)",
     "container/component candidate: assets (Directory)",
     "container/component candidate: data (Directory)",
@@ -275,15 +275,15 @@
   ],
   "hotspots": [
     "web (Directory) score 66",
+    "python_app (PythonPackage) score 53",
     "Configuration (Configuration) score 50",
     "Documentation (Documentation) score 44",
     "Infrastructure (Infrastructure) score 42",
-    "python_app (PythonPackage) score 38",
     "fixture-worker (RustCrate) score 32",
     "root (Directory) score 14",
-    "generated (Directory) score 6",
-    "vendor (Directory) score 6",
-    "assets (Directory) score 5"
+    "generated (Directory) score 11",
+    "assets (Directory) score 5",
+    "data (Directory) score 2"
   ],
   "decisions_and_docs": [
     "existing architecture knowledge: docs/architecture.md"

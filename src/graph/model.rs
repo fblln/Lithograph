@@ -207,6 +207,8 @@ pub enum ModuleLanguage {
     Python,
     /// Rust module.
     Rust,
+    /// TypeScript or TSX module with specialized declaration analysis.
+    TypeScript(crate::analysis::TypeScriptLanguage),
     /// A generic syntax-indexed language (see LIT-22.2.3), backed by a
     /// tree-sitter adapter but not yet a specialized deep analyzer.
     SyntaxIndexed(crate::analysis::SyntaxIndexedLanguage),
@@ -274,6 +276,14 @@ pub enum RelationKind {
     Implements,
     /// A class/type inherits from (extends) a base class/type.
     Inherits,
+    /// A declaration is annotated or wrapped by a decorator/attribute.
+    Decorates,
+    /// A class, trait, or implementation owns a method declaration.
+    HasMethod,
+    /// A declaration is a member of its enclosing type or module.
+    MemberOf,
+    /// A declaration uses a named type in an annotation or signature.
+    UsesType,
     /// A definition references another type by name (field type, parameter
     /// type, return type, generic argument).
     TypeRefs,
@@ -292,6 +302,22 @@ pub enum RelationKind {
     /// Data flows from the source symbol into the target symbol via a call
     /// argument or a `self.field` assignment (LIT-22.3.6 AC1).
     DataFlows,
+    /// A route/config endpoint is handled by a code symbol.
+    HandlesRoute,
+    /// A source binds or supplies a configuration value.
+    BindsConfig,
+    /// A source reads an operational resource or configuration value.
+    Reads,
+    /// A source writes an operational resource or configuration value.
+    Writes,
+    /// A relation crosses an identified service boundary.
+    CrossesServiceBoundary,
+    /// A test artifact exercises a source artifact or symbol.
+    Tests,
+    /// Two files are coupled by a deterministic co-change input.
+    FileChangesWith,
+    /// Documentation directly describes or links a source artifact.
+    DocumentsSource,
     /// Two symbols are near-clones by deterministic lexical/structural
     /// similarity (LIT-22.3.6 AC2) -- never live embeddings.
     SimilarTo,

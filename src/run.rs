@@ -3,7 +3,9 @@
 
 use crate::analysis::ANALYSIS_CACHE_VERSION;
 use crate::domain::Artifact;
-use crate::graph::{GRAPH_MODEL_VERSION, GRAPH_STORE_SCHEMA_VERSION, Graph};
+use crate::graph::{
+    GRAPH_BUILD_PIPELINE_VERSION, GRAPH_MODEL_VERSION, GRAPH_STORE_SCHEMA_VERSION, Graph,
+};
 use crate::inventory::LANGUAGE_REGISTRY_VERSION;
 use crate::manifest::PageManifest;
 use serde::{Deserialize, Serialize};
@@ -33,6 +35,8 @@ pub struct PipelineInvalidationMetadata {
     pub graph_schema_version: u32,
     /// Graph model shape version.
     pub graph_model_version: u32,
+    /// Ordered graph-construction pass semantics version.
+    pub graph_pipeline_version: u32,
     /// Prompt/context version requested for this run.
     pub prompt_version: String,
     /// Semantic grouping setting used for planning.
@@ -46,6 +50,7 @@ impl Default for PipelineInvalidationMetadata {
             language_registry_version: LANGUAGE_REGISTRY_VERSION,
             graph_schema_version: GRAPH_STORE_SCHEMA_VERSION,
             graph_model_version: GRAPH_MODEL_VERSION,
+            graph_pipeline_version: GRAPH_BUILD_PIPELINE_VERSION,
             prompt_version: String::new(),
             semantic_grouping: false,
         }
@@ -113,11 +118,12 @@ impl RepositorySnapshot {
             .map(|(path, hash)| format!("{path}:{hash}"))
             .collect();
         pairs.push(format!(
-            "pipeline:analyzer={}:language_registry={}:graph_schema={}:graph_model={}:prompt={}:semantic_grouping={}",
+            "pipeline:analyzer={}:language_registry={}:graph_schema={}:graph_model={}:graph_pipeline={}:prompt={}:semantic_grouping={}",
             self.pipeline.analyzer_version,
             self.pipeline.language_registry_version,
             self.pipeline.graph_schema_version,
             self.pipeline.graph_model_version,
+            self.pipeline.graph_pipeline_version,
             self.pipeline.prompt_version,
             self.pipeline.semantic_grouping,
         ));
@@ -489,6 +495,8 @@ mod tests {
         analyzer_version_changed.analyzer_version += 1;
         let mut registry_version_changed = pipeline();
         registry_version_changed.language_registry_version += 1;
+        let mut graph_pipeline_version_changed = pipeline();
+        graph_pipeline_version_changed.graph_pipeline_version += 1;
         let mut prompt_version_changed = pipeline();
         prompt_version_changed.prompt_version = "v2".to_owned();
         let mut config_changed = pipeline();
@@ -497,6 +505,7 @@ mod tests {
         for changed_pipeline in [
             analyzer_version_changed,
             registry_version_changed,
+            graph_pipeline_version_changed,
             prompt_version_changed,
             config_changed,
         ] {

@@ -27,6 +27,45 @@ pub fn extract_import_reference(language: &str, raw_text: &str) -> Option<String
     }
 }
 
+/// Extracts named TypeScript import bindings as `(exported, local)` pairs.
+/// Namespace and default imports deliberately stay out of this small parser:
+/// resolving those requires member/constructor semantics rather than the
+/// direct named-call contract this resolver can prove safely.
+pub(crate) fn extract_typescript_import_bindings(raw_text: &str) -> Vec<(String, String)> {
+    let Some(after_import) = raw_text.trim().strip_prefix("import") else {
+        return Vec::new();
+    };
+    let clause = after_import
+        .split_once(" from ")
+        .map_or(after_import, |(clause, _)| clause)
+        .trim();
+    let clause = clause.strip_prefix("type ").unwrap_or(clause);
+    let Some(open) = clause.find('{') else {
+        return Vec::new();
+    };
+    let Some(close) = clause[open + 1..].find('}') else {
+        return Vec::new();
+    };
+    clause[open + 1..open + 1 + close]
+        .split(',')
+        .filter_map(|binding| {
+            let binding = binding
+                .trim()
+                .strip_prefix("type ")
+                .unwrap_or(binding.trim());
+            let mut parts = binding.split_whitespace();
+            let exported = parts.next()?;
+            let local = match (parts.next(), parts.next()) {
+                (Some("as"), Some(local)) => local,
+                (None, None) => exported,
+                _ => return None,
+            };
+            (!exported.is_empty() && !local.is_empty())
+                .then(|| (exported.to_owned(), local.to_owned()))
+        })
+        .collect()
+}
+
 /// File extensions worth appending to a relative-import candidate path for
 /// `language`, in preference order. Only languages whose import syntax is
 /// itself extension-less (JS/TS's `from "./util"`) need this; the rest
@@ -177,7 +216,22 @@ impl Resolver for LanguageImportResolver {
 
 #[cfg(test)]
 mod tests {
-    use super::extract_import_reference;
+    use super::{extract_import_reference, extract_typescript_import_bindings};
+
+    #[test]
+    fn extracts_named_typescript_import_bindings_without_guessing_defaults() {
+        assert_eq!(
+            extract_typescript_import_bindings(
+                "import type { Service, start as run, type Config } from \"./service\";"
+            ),
+            vec![
+                ("Service".to_owned(), "Service".to_owned()),
+                ("start".to_owned(), "run".to_owned()),
+                ("Config".to_owned(), "Config".to_owned()),
+            ]
+        );
+        assert!(extract_typescript_import_bindings("import App from \"./App\";").is_empty());
+    }
 
     #[test]
     fn extracts_typescript_javascript_and_go_quoted_specifiers() {
@@ -243,6 +297,30 @@ mod tests {
         );
     }
 
+    /// LIT-23.1: a multi-line `import type { ... } from "module"` must
+    /// extract the module specifier, not the raw multi-line statement text
+    /// verbatim -- found live on an external repository's TypeScript files,
+    /// where this produced thousands of Unresolved nodes whose "value" was
+    /// an entire raw import statement (embedded newlines and all) instead
+    /// of a package or module name.
+    #[test]
+    fn extracts_specifier_from_multi_line_and_type_only_imports() {
+        assert_eq!(
+            extract_import_reference(
+                "typescript",
+                "import type {\n  CameraRig,\n  RouteSummary,\n} from \"./types\";"
+            ),
+            Some("./types".to_owned())
+        );
+        assert_eq!(
+            extract_import_reference(
+                "typescript",
+                "import {\n  useEffect,\n  useState,\n} from \"react\";"
+            ),
+            Some("react".to_owned())
+        );
+    }
+
     #[test]
     fn unknown_language_and_unrecognizable_text_extract_nothing() {
         assert_eq!(extract_import_reference("ruby", "require 'set'"), None);
@@ -253,16 +331,21 @@ mod tests {
     }
 }
 
-/// End-to-end coverage (LIT-22.3.2 AC2/AC3/AC4): builds a real graph from
-/// an isolated repo per language family (not the shared polyglot fixture,
-/// to avoid golden-snapshot churn) and runs the default resolver pipeline
-/// over it, the same way a real `init`/`update` would.
+/// End-to-end coverage (LIT-22.3.2 AC2/AC3/AC4; wired into `GraphBuilder`
+/// itself by LIT-23.1): builds a real graph from an isolated repo per
+/// language family (not the shared polyglot fixture, to avoid
+/// golden-snapshot churn). `GraphBuilder::build`/`build_with_cache` already
+/// run the default resolver pipeline internally as their last step (the
+/// same way `detect_near_clones` does), so these assert directly against
+/// its output rather than calling the pipeline a second time -- a relation
+/// resolved during `build()` is already `HybridResolved` by the time a
+/// caller sees the graph, so a second `resolve()` call would always be a
+/// no-op.
 #[cfg(test)]
 mod pipeline_tests {
     use crate::domain::Confidence;
     use crate::graph::{GraphBuilder, GraphNode, RelationKind, RelationResolution};
     use crate::inventory::{RepositoryWalker, WalkOptions};
-    use crate::resolve::HybridResolverPipeline;
 
     fn resolved_target<'a>(
         graph: &'a crate::graph::Graph,
@@ -289,13 +372,46 @@ mod pipeline_tests {
         )?;
 
         let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
-        let mut graph = GraphBuilder.build(temp.path(), &artifacts);
-        let report = HybridResolverPipeline::default_pipeline().resolve(&mut graph);
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
 
-        assert_eq!(report.resolved, 1);
         let relation = resolved_target(&graph, "src/app.ts").ok_or("missing import relation")?;
         assert_eq!(relation.target.as_str(), "artifact:src/util.ts");
         assert_eq!(relation.confidence, Confidence::High);
+        assert_eq!(
+            relation
+                .provenance
+                .as_ref()
+                .ok_or("missing provenance")?
+                .resolution,
+            RelationResolution::HybridResolved
+        );
+
+        Ok(())
+    }
+
+    /// LIT-23.1 end-to-end: a real multi-line, type-only import resolves to
+    /// the local artifact its relative specifier names, through the full
+    /// `GraphBuilder` pipeline -- reproducing the exact scenario found on an
+    /// external repository's TypeScript files.
+    #[test]
+    fn multi_line_type_only_import_resolves_to_local_artifact()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(
+            temp.path().join("src/types.ts"),
+            "export type CameraRig = { fov: number };\nexport type RouteSummary = { name: string };\n",
+        )?;
+        std::fs::write(
+            temp.path().join("src/app.ts"),
+            "import type {\n  CameraRig,\n  RouteSummary,\n} from \"./types\";\nexport function noop(): CameraRig | RouteSummary | null {\n  return null;\n}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let relation = resolved_target(&graph, "src/app.ts").ok_or("missing import relation")?;
+        assert_eq!(relation.target.as_str(), "artifact:src/types.ts");
         assert_eq!(
             relation
                 .provenance
@@ -322,10 +438,8 @@ mod pipeline_tests {
         )?;
 
         let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
-        let mut graph = GraphBuilder.build(temp.path(), &artifacts);
-        let report = HybridResolverPipeline::default_pipeline().resolve(&mut graph);
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
 
-        assert_eq!(report.resolved, 2);
         let external = graph
             .relations
             .iter()
@@ -360,14 +474,8 @@ mod pipeline_tests {
         )?;
 
         let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
-        let mut graph = GraphBuilder.build(temp.path(), &artifacts);
-        let report = HybridResolverPipeline::default_pipeline().resolve(&mut graph);
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
 
-        assert_eq!(report.resolved, 0);
-        // The file also produces `Usages`/`TypeRefs` relations for its own
-        // identifiers (LIT-22.3.3), which stay unresolved too -- this test
-        // only asserts the `Imports` relation specifically isn't fabricated.
-        assert!(report.still_unresolved >= 1);
         let relation =
             resolved_target(&graph, "src/main/java/App.java").ok_or("missing import relation")?;
         assert!(matches!(
@@ -394,12 +502,10 @@ mod pipeline_tests {
     -> Result<(), Box<dyn std::error::Error>> {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot");
         let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
-        let mut graph = GraphBuilder.build(&root, &artifacts);
-        let before = graph.relations.clone();
+        let graph = GraphBuilder.build(&root, &artifacts);
 
-        let report = HybridResolverPipeline::default_pipeline().resolve(&mut graph);
-
-        let specialized_hybrid_count = before
+        let specialized_hybrid_count = graph
+            .relations
             .iter()
             .filter(|relation| {
                 relation
@@ -410,13 +516,9 @@ mod pipeline_tests {
             .count();
         assert!(
             specialized_hybrid_count > 0,
-            "fixture must contain already-HybridResolved python/rust relations"
+            "fixture must contain HybridResolved python/rust relations from their own \
+             specialized analyzers, untouched by the generic import resolver pipeline"
         );
-        assert_eq!(
-            graph.relations, before,
-            "the resolver pipeline must never touch relations that are already HybridResolved"
-        );
-        assert_eq!(report.resolved, 0);
 
         Ok(())
     }

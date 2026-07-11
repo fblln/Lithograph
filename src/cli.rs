@@ -378,6 +378,8 @@ pub enum InspectTarget {
     Graph(InspectGraphArgs),
     /// Print the deterministic module plan.
     Modules(InspectModulesArgs),
+    /// Print the module dependency matrix and cycles.
+    Dsm(InspectDsmArgs),
     /// Print the last recorded run's metrics: index/generation time, graph
     /// size, cache hit rate, and token estimate. Optionally checks them
     /// against explicit budget thresholds.
@@ -392,6 +394,16 @@ pub struct InspectModulesArgs {
     /// Use deterministic semantic grouping when planning modules.
     #[arg(long)]
     pub semantic_grouping: bool,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Arguments for `inspect dsm`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct InspectDsmArgs {
+    /// Repository path to inspect.
+    pub path: PathBuf,
     /// Output format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
     pub format: OutputFormat,
@@ -475,9 +487,9 @@ mod tests {
     use super::{
         AdrCommand, AdrCreateArgs, AdrListArgs, AdrStatusArg, AdrTarget, AdrUpdateArgs, AskArgs,
         Cli, Command, DriftArgs, GoldenArgs, GraphCommand, GraphExportArgs, GraphImportArgs,
-        GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectGraphArgs,
-        InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs, McpServerArgs,
-        OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
+        GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectDsmArgs,
+        InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, McpExportArgs,
+        McpServerArgs, OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
     };
     use std::path::PathBuf;
 
@@ -558,6 +570,27 @@ mod tests {
                     format: OutputFormat::Json,
                     ..
                 }),
+            }))
+        ));
+    }
+
+    #[test]
+    fn parses_inspect_dsm_json_format() {
+        let cli = Cli::parse_from_args([
+            "lithograph",
+            "inspect",
+            "dsm",
+            "fixtures/polyglot",
+            "--format",
+            "json",
+        ]);
+        assert!(matches!(
+            cli.command,
+            Some(Command::Inspect(InspectCommand {
+                target: InspectTarget::Dsm(InspectDsmArgs {
+                    format: OutputFormat::Json,
+                    ..
+                })
             }))
         ));
     }
