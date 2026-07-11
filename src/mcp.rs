@@ -2,8 +2,9 @@
 
 use crate::ask::WikiSearch;
 use crate::graph::{
-    ArchitectureAspect, Graph, GraphStore, KnowledgeIndex, SearchParams, TagIndex, TraceDirection,
-    TraceParams, derive_tags, resolve_expression,
+    ArchitectureAspect, Graph, GraphStore, KnowledgeIndex, LayoutRequest, LayoutSnapshotStore,
+    RelationKind, SearchParams, TagIndex, TraceDirection, TraceParams, compute_layout_cached,
+    derive_tags, resolve_expression,
 };
 use crate::inventory::{RepositoryWalker, WalkOptions};
 use crate::plan::ModulePlanner;
@@ -92,6 +93,10 @@ pub const MCP_TOOLS: &[McpToolInfo] = &[
     McpToolInfo {
         name: "get_tagged_subgraph",
         description: "Returns nodes and relations selected by a tag expression. Params: expression.",
+    },
+    McpToolInfo {
+        name: "get_graph_layout",
+        description: "Returns a budgeted, positioned graph slice: overview (no center_node) or a focused neighborhood. Params: center_node?, radius?, max_nodes?, max_edges?, node_labels?, edge_types?.",
     },
     McpToolInfo {
         name: "get_graph_schema",
@@ -387,6 +392,14 @@ impl WikiMcpServer {
                 } else {
                     Ok(serde_json::to_value(document)?)
                 }
+            }
+            "get_graph_layout" => {
+                let graph = self.load_graph()?;
+                let request = layout_params(&request.params)?;
+                let store = LayoutSnapshotStore::new(self.repo_root.join(".lithograph/layout"));
+                let result = compute_layout_cached(&graph, &request, &store)
+                    .map_err(std::io::Error::other)?;
+                Ok(serde_json::to_value(result)?)
             }
             "get_schema" | "get_graph_schema" => {
                 let graph = self.load_graph()?;
@@ -751,6 +764,67 @@ fn trace_params(params: &Value) -> Result<TraceParams, Box<dyn std::error::Error
     })
 }
 
+/// Parses `get_graph_layout` params: `center_node?`, `radius?`, `max_nodes?`,
+/// `max_edges?`, `node_labels?` (array of label strings), `edge_types?`
+/// (array of `RelationKind` names). An invalid `edge_types` entry is a
+/// validation error, not a silently-ignored one, matching `architecture_aspects`.
+fn layout_params(params: &Value) -> Result<LayoutRequest, Box<dyn std::error::Error>> {
+    let center_node = params
+        .get("center_node")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    let radius = params
+        .get("radius")
+        .and_then(Value::as_u64)
+        .and_then(|value| usize::try_from(value).ok())
+        .unwrap_or_default();
+    let max_nodes = params
+        .get("max_nodes")
+        .and_then(Value::as_u64)
+        .and_then(|value| usize::try_from(value).ok())
+        .unwrap_or_default();
+    let max_edges = params
+        .get("max_edges")
+        .and_then(Value::as_u64)
+        .and_then(|value| usize::try_from(value).ok())
+        .unwrap_or_default();
+    let node_labels = match params.get("node_labels") {
+        None | Some(Value::Null) => BTreeSet::new(),
+        Some(value) => value
+            .as_array()
+            .ok_or("params.node_labels must be an array of label strings")?
+            .iter()
+            .map(|entry| {
+                entry
+                    .as_str()
+                    .map(str::to_owned)
+                    .ok_or_else(|| "params.node_labels entries must be strings".into())
+            })
+            .collect::<Result<BTreeSet<String>, Box<dyn std::error::Error>>>()?,
+    };
+    let edge_types = match params.get("edge_types") {
+        None | Some(Value::Null) => BTreeSet::new(),
+        Some(value) => value
+            .as_array()
+            .ok_or("params.edge_types must be an array of relation kind names")?
+            .iter()
+            .map(|name| {
+                serde_json::from_value::<RelationKind>(name.clone()).map_err(|error| {
+                    format!("invalid params.edge_types entry {name}: {error}").into()
+                })
+            })
+            .collect::<Result<BTreeSet<RelationKind>, Box<dyn std::error::Error>>>()?,
+    };
+    Ok(LayoutRequest {
+        center_node,
+        radius,
+        max_nodes,
+        max_edges,
+        node_labels,
+        edge_types,
+    })
+}
+
 /// Parses `params.aspects` (an array of section names, e.g.
 /// `["packages", "layers"]`) into the typed filter `get_architecture`
 /// passes to [`KnowledgeIndex::architecture`] (LIT-22.4.6 AC2). Absent or
@@ -905,6 +979,81 @@ mod tests {
         );
         assert!(answer.result.is_some());
         assert!(answer.error.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn get_graph_layout_supports_overview_and_detail_and_caches_results()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let server = WikiMcpServer::new(temp.path());
+
+        let overview = server.handle(McpRequest {
+            id: json!(1),
+            tool: "get_graph_layout".to_owned(),
+            params: json!({ "max_nodes": 5 }),
+        });
+        assert!(overview.error.is_none(), "{:?}", overview.error);
+        let overview_result = overview.result.as_ref().ok_or("missing overview result")?;
+        assert!(
+            overview_result
+                .get("center_node")
+                .is_some_and(Value::is_null)
+        );
+        let nodes = overview_result
+            .get("nodes")
+            .and_then(Value::as_array)
+            .ok_or("expected nodes array")?;
+        assert_eq!(nodes.len(), 5);
+        assert!(
+            overview_result
+                .get("budget")
+                .and_then(|budget| budget.get("nodes_truncated"))
+                .is_some_and(|value| value == &json!(true))
+        );
+
+        let center_id = nodes
+            .first()
+            .and_then(|node| node.get("id"))
+            .and_then(Value::as_str)
+            .ok_or("expected a node id")?
+            .to_owned();
+        let detail = server.handle(McpRequest {
+            id: json!(2),
+            tool: "get_graph_layout".to_owned(),
+            params: json!({ "center_node": center_id, "radius": 1 }),
+        });
+        assert!(detail.error.is_none(), "{:?}", detail.error);
+        assert_eq!(
+            detail
+                .result
+                .as_ref()
+                .and_then(|value| value.get("center_node")),
+            Some(&json!(center_id))
+        );
+
+        // A second identical overview request must be a cache hit served
+        // from `.lithograph/layout` rather than a fresh computation.
+        assert!(temp.path().join(".lithograph/layout").is_dir());
+        let overview_again = server.handle(McpRequest {
+            id: json!(3),
+            tool: "get_graph_layout".to_owned(),
+            params: json!({ "max_nodes": 5 }),
+        });
+        assert_eq!(overview_again.result, overview.result);
+
+        let bad_center = server.handle(McpRequest {
+            id: json!(4),
+            tool: "get_graph_layout".to_owned(),
+            params: json!({ "center_node": "does-not-exist" }),
+        });
+        assert!(bad_center.error.is_some());
 
         Ok(())
     }

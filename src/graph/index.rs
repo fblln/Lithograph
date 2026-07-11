@@ -756,7 +756,7 @@ impl<'a> KnowledgeIndex<'a> {
         dependencies
     }
 
-    fn find_root(&self, query: &str) -> Option<&GraphNode> {
+    pub(crate) fn find_root(&self, query: &str) -> Option<&GraphNode> {
         let query_lower = query.to_lowercase();
         self.graph
             .nodes
@@ -776,7 +776,7 @@ impl<'a> KnowledgeIndex<'a> {
             })
     }
 
-    fn node_by_id(&self) -> BTreeMap<&GraphNodeId, &GraphNode> {
+    pub(crate) fn node_by_id(&self) -> BTreeMap<&GraphNodeId, &GraphNode> {
         self.graph
             .nodes
             .iter()
@@ -784,7 +784,7 @@ impl<'a> KnowledgeIndex<'a> {
             .collect()
     }
 
-    fn degree_index(&self) -> BTreeMap<&GraphNodeId, (usize, usize)> {
+    pub(crate) fn degree_index(&self) -> BTreeMap<&GraphNodeId, (usize, usize)> {
         let mut degree = BTreeMap::new();
         for node in &self.graph.nodes {
             degree.insert(node.id(), (0usize, 0usize));

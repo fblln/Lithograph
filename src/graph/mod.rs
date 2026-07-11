@@ -9,6 +9,7 @@ pub mod health;
 pub mod index;
 pub mod ladybug_schema;
 pub mod ladybug_store;
+pub mod layout;
 pub mod model;
 pub mod parity_benchmark;
 pub mod pipeline;
@@ -38,6 +39,10 @@ pub use ladybug_schema::{
     creation_statements as ladybug_creation_statements, migration_id as ladybug_migration_id,
 };
 pub use ladybug_store::LadybugGraphStore;
+pub use layout::{
+    LAYOUT_ALGORITHM_VERSION, LayoutBudget, LayoutEdge, LayoutRequest, LayoutResult,
+    LayoutSnapshot, LayoutSnapshotStore, PositionedNode, compute_layout, compute_layout_cached,
+};
 pub use model::{
     ArtifactNode, CommandNode, ConfigNode, ConfigNodeKind, ContainerImageNode, DocumentationNode,
     EnvVarNode, Graph, GraphNode, GraphNodeId, ModuleLanguage, ModuleNode, PackageNode, Relation,
