@@ -29,7 +29,8 @@
     "checks -[BuildsImage]-> ghcr.io/example/route-api:${{ (High)",
     "api -[ReadsEnv]-> RIDGELINE_WORKER (High)",
     "api -[UsesImage]-> ghcr.io/example/route-api:${VERSION:-dev} (High)",
-    "web -[UsesImage]-> node:24-alpine (High)"
+    "web -[UsesImage]-> node:24-alpine (High)",
+    "src.python_app.service::RouteService::__init__ -[ReadsEnv]-> RIDGELINE_WORKER (High)"
   ],
   "evidence": [
     {
@@ -37,6 +38,9 @@
     },
     {
       "reference": "relation:9"
+    },
+    {
+      "reference": "relation:154"
     },
     {
       "reference": "relation:12"
@@ -64,9 +68,6 @@
     },
     {
       "reference": "relation:14"
-    },
-    {
-      "reference": "relation:15"
     }
   ],
   "confidence": 85

@@ -204,7 +204,8 @@ fn target_kind_allowed(kind: RelationKind, target: NodeKindTag) -> bool {
             NodeKindTag::Module | NodeKindTag::Package | NodeKindTag::Artifact
         ),
         RelationKind::Calls => matches!(target, NodeKindTag::Symbol),
-        RelationKind::ReadsEnv => target == NodeKindTag::EnvVar,
+        RelationKind::ReadsEnv | RelationKind::DefinesEnv => target == NodeKindTag::EnvVar,
+        RelationKind::BindsConfig | RelationKind::ReferencesConfig => target == NodeKindTag::Config,
         RelationKind::RunsCommand => target == NodeKindTag::Command,
         RelationKind::UsesImage | RelationKind::BuildsImage | RelationKind::PublishesImage => {
             target == NodeKindTag::Container
@@ -229,8 +230,7 @@ fn target_kind_allowed(kind: RelationKind, target: NodeKindTag) -> bool {
         RelationKind::Tests | RelationKind::FileChangesWith | RelationKind::DocumentsSource => {
             matches!(target, NodeKindTag::Artifact | NodeKindTag::Symbol)
         }
-        RelationKind::BindsConfig
-        | RelationKind::Reads
+        RelationKind::Reads
         | RelationKind::Writes
         | RelationKind::CrossesServiceBoundary
         | RelationKind::References

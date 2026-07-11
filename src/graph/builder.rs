@@ -4,10 +4,10 @@
 use crate::analysis::{
     ActionsProfile, ActionsProfileAnalyzer, ActionsStepHint, AnalysisCache, AnalyzerKind,
     AnalyzerOutput, CargoProfile, CargoProfileAnalyzer, ComposeProfile, ComposeProfileAnalyzer,
-    ConfigReferenceKind, DockerfileAnalysis, DockerfileAnalyzer, GenericTextExtractor,
-    MarkdownAnalysis, MarkdownAnalyzer, PackageManifestAnalysis, PackageManifestFormat,
-    ProtocolFormat, ProtocolRoute, PyProjectAnalyzer, PyProjectProfile, PythonAnalysis,
-    PythonAnalyzer, PythonImportKind, PythonReferenceKind, RequirementsAnalyzer,
+    ConfigReferenceKind, DockerfileAnalysis, DockerfileAnalyzer, EnvironmentFacts,
+    GenericTextExtractor, MarkdownAnalysis, MarkdownAnalyzer, PackageManifestAnalysis,
+    PackageManifestFormat, ProtocolFormat, ProtocolRoute, PyProjectAnalyzer, PyProjectProfile,
+    PythonAnalysis, PythonAnalyzer, PythonImportKind, PythonReferenceKind, RequirementsAnalyzer,
     RequirementsProfile, RustAnalysis, RustAnalyzer, RustReferenceKind, RustWorkspaceAnalysis,
     RustWorkspaceAnalyzer, StructuredAnalysis, StructuredAnalyzer, StructuredFormat,
     SyntaxIndexedLanguage, TextFinding, TextFindingKind, TreeSitterAdapterOutput,
@@ -25,6 +25,7 @@ use crate::graph::model::{
 };
 use crate::graph::{GRAPH_BUILD_PIPELINE_VERSION, GraphBuildOutput, GraphBuildPass};
 use crate::inventory::language::by_name as registry_language;
+use crate::resolve::{ConfigFact, EnvFact, FactRole, FactSourceKind};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
@@ -157,6 +158,7 @@ impl GraphBuilder {
         output.record(GraphBuildPass::DefinitionsAndImports);
 
         state.detect_near_clones(repo_root);
+        state.materialize_environment_facts();
         let mut graph = state.finish();
         output.graph = graph.clone();
         output.record(GraphBuildPass::Enrichment);
@@ -165,6 +167,7 @@ impl GraphBuilder {
         // does -- a post-processing pass belongs here, not bolted onto one
         // caller, or callers would see inconsistently-resolved graphs.
         crate::resolve::HybridResolverPipeline::default_pipeline().resolve(&mut graph);
+        crate::resolve::resolve_environment_links(&mut graph);
         prune_orphaned_unresolved_nodes(&mut graph);
         output.graph = graph;
         output.record(GraphBuildPass::Resolution);
@@ -204,6 +207,9 @@ fn prune_orphaned_unresolved_nodes(graph: &mut Graph) {
 /// dispatch on directly.
 fn analyzer_kind(artifact: &Artifact) -> Option<AnalyzerKind> {
     let name = file_name(artifact.path.as_str());
+    if is_environment_config_file(name) {
+        return Some(AnalyzerKind::Environment);
+    }
     match (&artifact.analyzer, artifact.detected_format.as_deref()) {
         (AnalyzerSelection::Specialized(format), _) if format == "python" => {
             Some(AnalyzerKind::Python)
@@ -269,6 +275,11 @@ fn structured_format(format: &str) -> StructuredFormat {
     }
 }
 
+fn is_environment_config_file(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower == ".env" || lower.starts_with(".env.") || lower.ends_with(".properties")
+}
+
 /// Runs the analyzer selected by `kind` against `text`, producing the same
 /// output a cache hit for this artifact's content hash would have returned.
 fn compute_fresh(
@@ -321,6 +332,9 @@ fn compute_fresh(
         AnalyzerKind::GenericText => {
             AnalyzerOutput::GenericText(GenericTextExtractor.extract(artifact, text))
         }
+        AnalyzerKind::Environment => {
+            AnalyzerOutput::Environment(EnvironmentFacts::parse_assignments(artifact, text))
+        }
         // Not reachable via `analyzer_kind()` -- `Cargo.toml` artifacts
         // already dispatch to `AnalyzerKind::Cargo` through this path, and
         // `RustWorkspaceAnalyzer` is instead run from a dedicated pre-pass in
@@ -338,6 +352,7 @@ struct BuilderState {
     nodes: BTreeMap<GraphNodeId, GraphNode>,
     relations: Vec<Relation>,
     relation_count: usize,
+    environment_facts: EnvironmentFacts,
     artifact_paths: BTreeSet<String>,
     python_modules: BTreeMap<String, GraphNodeId>,
     rust_modules: BTreeMap<String, GraphNodeId>,
@@ -355,6 +370,7 @@ impl BuilderState {
             nodes: BTreeMap::new(),
             relations: Vec::new(),
             relation_count: 0,
+            environment_facts: EnvironmentFacts::default(),
             artifact_paths: artifacts
                 .iter()
                 .map(|artifact| artifact.path.as_str().to_owned())
@@ -405,6 +421,108 @@ impl BuilderState {
         id
     }
 
+    fn materialize_environment_facts(&mut self) {
+        let mut facts = std::mem::take(&mut self.environment_facts);
+        facts.sort_deterministically();
+        for fact in &facts.env {
+            self.materialize_env_fact(fact);
+        }
+        for fact in &facts.config {
+            self.materialize_config_fact(fact);
+        }
+        self.environment_facts = facts;
+    }
+
+    fn materialize_env_fact(&mut self, fact: &EnvFact) {
+        let target = self.env_var(fact.name.original());
+        let owner = fact.owner.clone().or_else(|| {
+            (fact.source == FactSourceKind::SourceCode)
+                .then(|| self.smallest_symbol_owner(&fact.evidence))
+                .flatten()
+                .map(|id| id.to_string())
+        });
+        let source = self.fact_source_node(fact.source, owner.as_deref(), &fact.evidence);
+        let kind = match fact.role {
+            FactRole::Define => RelationKind::DefinesEnv,
+            FactRole::Read | FactRole::Reference => RelationKind::ReadsEnv,
+        };
+        self.relate_if_absent(
+            source,
+            target,
+            kind,
+            fact.confidence,
+            vec![fact.evidence.clone()],
+            Some(environment_provenance(fact.source, fact.confidence)),
+        );
+    }
+
+    fn materialize_config_fact(&mut self, fact: &ConfigFact) {
+        let target = self.config_key(fact);
+        let source = self.fact_source_node(fact.source, fact.owner.as_deref(), &fact.evidence);
+        let kind = match fact.role {
+            FactRole::Define => RelationKind::BindsConfig,
+            FactRole::Read | FactRole::Reference => RelationKind::ReferencesConfig,
+        };
+        self.relate_if_absent(
+            source,
+            target,
+            kind,
+            fact.confidence,
+            vec![fact.evidence.clone()],
+            Some(environment_provenance(fact.source, fact.confidence)),
+        );
+    }
+
+    fn config_key(&mut self, fact: &ConfigFact) -> GraphNodeId {
+        let id = GraphNodeId::new(format!("config-key:{}", fact.key.canonical));
+        self.insert(GraphNode::Config(ConfigNode {
+            id: id.clone(),
+            kind: ConfigNodeKind::Key,
+            name: fact.key.canonical.clone(),
+            evidence: fact.evidence.clone(),
+        }))
+    }
+
+    fn fact_source_node(
+        &self,
+        source: FactSourceKind,
+        owner: Option<&str>,
+        evidence: &EvidenceRef,
+    ) -> GraphNodeId {
+        if let Some(owner) = owner {
+            let path = evidence.path.as_str();
+            return match source {
+                FactSourceKind::Compose => {
+                    GraphNodeId::new(format!("config:{path}#services.{owner}"))
+                }
+                FactSourceKind::CiWorkflow => {
+                    GraphNodeId::new(format!("config:{path}#jobs.{owner}"))
+                }
+                _ => GraphNodeId::new(owner),
+            };
+        }
+        GraphNodeId::new(format!("artifact:{}", evidence.path.as_str()))
+    }
+
+    fn smallest_symbol_owner(&self, evidence: &EvidenceRef) -> Option<GraphNodeId> {
+        let line = evidence.span.as_ref()?.start_line;
+        self.nodes
+            .values()
+            .filter_map(|node| {
+                let GraphNode::Symbol(symbol) = node else {
+                    return None;
+                };
+                if symbol.evidence.artifact_id != evidence.artifact_id {
+                    return None;
+                }
+                let span = symbol.evidence.span.as_ref()?;
+                (span.start_line <= line && line <= span.end_line)
+                    .then_some((span.end_line - span.start_line, symbol.id.clone()))
+            })
+            .min_by_key(|(span_length, id)| (*span_length, id.clone()))
+            .map(|(_, id)| id)
+    }
+
     fn relate(
         &mut self,
         source: GraphNodeId,
@@ -447,6 +565,23 @@ impl BuilderState {
             evidence,
             provenance,
         });
+    }
+
+    fn relate_if_absent(
+        &mut self,
+        source: GraphNodeId,
+        target: GraphNodeId,
+        kind: RelationKind,
+        confidence: Confidence,
+        evidence: Vec<EvidenceRef>,
+        provenance: Option<RelationProvenance>,
+    ) {
+        if self.relations.iter().any(|relation| {
+            relation.source == source && relation.target == target && relation.kind == kind
+        }) {
+            return;
+        }
+        self.relate_with_provenance(source, target, kind, confidence, evidence, provenance);
     }
 
     fn add_artifact_node(&mut self, artifact: &Artifact) {
@@ -587,23 +722,45 @@ impl BuilderState {
     fn apply_output(&mut self, artifact: &Artifact, output: AnalyzerOutput) {
         let node = artifact_node_id(artifact);
         match output {
-            AnalyzerOutput::Python(analysis) => self.process_python(artifact, analysis, &node),
-            AnalyzerOutput::Rust(analysis) => self.process_rust(artifact, analysis, &node),
+            AnalyzerOutput::Python(analysis) => {
+                self.environment_facts
+                    .extend(EnvironmentFacts::from_python(&analysis));
+                self.process_python(artifact, analysis, &node);
+            }
+            AnalyzerOutput::Rust(analysis) => {
+                self.environment_facts
+                    .extend(EnvironmentFacts::from_rust(&analysis));
+                self.process_rust(artifact, analysis, &node);
+            }
             AnalyzerOutput::TypeScript(analysis) => {
+                self.environment_facts
+                    .extend(EnvironmentFacts::from_typescript(&analysis));
                 self.process_typescript(artifact, analysis, &node)
             }
             AnalyzerOutput::Requirements(profile) => {
                 self.process_requirements(profile, &node);
             }
             AnalyzerOutput::Dockerfile(analysis) => {
+                self.environment_facts
+                    .extend(EnvironmentFacts::from_dockerfile(&analysis));
                 self.process_dockerfile(artifact, analysis, &node);
             }
             AnalyzerOutput::Markdown(analysis) => self.process_markdown(artifact, analysis, &node),
-            AnalyzerOutput::Compose(profile) => self.process_compose(artifact, profile, &node),
-            AnalyzerOutput::Actions(profile) => self.process_actions(artifact, profile, &node),
+            AnalyzerOutput::Compose(profile) => {
+                self.environment_facts
+                    .extend(EnvironmentFacts::from_compose(&profile));
+                self.process_compose(artifact, profile, &node);
+            }
+            AnalyzerOutput::Actions(profile) => {
+                self.environment_facts
+                    .extend(EnvironmentFacts::from_actions(&profile));
+                self.process_actions(artifact, profile, &node);
+            }
             AnalyzerOutput::Cargo(profile) => self.process_cargo(profile, &node),
             AnalyzerOutput::PyProject(profile) => self.process_pyproject(profile, &node),
             AnalyzerOutput::Structured(_, analysis) => {
+                self.environment_facts
+                    .extend(EnvironmentFacts::from_structured(&analysis));
                 self.process_structured(artifact, analysis, &node);
             }
             AnalyzerOutput::SyntaxIndexed(language, output) => {
@@ -618,6 +775,7 @@ impl BuilderState {
             AnalyzerOutput::GenericText(findings) => {
                 self.process_generic_text(artifact, &findings, &node);
             }
+            AnalyzerOutput::Environment(facts) => self.environment_facts.extend(facts),
             AnalyzerOutput::RustWorkspace(analysis) => self.register_rust_crate_roots(&analysis),
         }
     }
@@ -2458,6 +2616,15 @@ fn format_provenance(
         language: Some(language.to_owned()),
         resolver_strategy,
         resolution,
+        confidence,
+    }
+}
+
+fn environment_provenance(source: FactSourceKind, confidence: Confidence) -> RelationProvenance {
+    RelationProvenance {
+        language: Some("environment".to_owned()),
+        resolver_strategy: format!("environment-fact-{source:?}"),
+        resolution: RelationResolution::SyntaxOnly,
         confidence,
     }
 }

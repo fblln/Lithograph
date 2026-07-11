@@ -7,7 +7,7 @@
 
 use crate::analysis::{SyntaxIndexedLanguage, TreeSitterAdapterOutput};
 use crate::domain::{
-    Artifact, ArtifactId, EvidenceRef, ModelExposurePolicy, SourceSpan, TextStatus,
+    Artifact, ArtifactId, Confidence, EvidenceRef, ModelExposurePolicy, SourceSpan, TextStatus,
 };
 use serde::{Deserialize, Serialize};
 use tree_sitter::Node;
@@ -28,6 +28,8 @@ pub struct TypeScriptAnalysis {
     /// Call sites whose callee is statically named. Resolution is deferred to
     /// graph construction, where local symbols and imported artifacts exist.
     pub calls: Vec<TypeScriptCall>,
+    /// Environment reads such as `process.env.NAME`.
+    pub env_reads: Vec<TypeScriptEnvRead>,
 }
 
 impl Default for TypeScriptAnalysis {
@@ -38,6 +40,7 @@ impl Default for TypeScriptAnalysis {
             classes: Vec::new(),
             functions: Vec::new(),
             calls: Vec::new(),
+            env_reads: Vec::new(),
         }
     }
 }
@@ -104,6 +107,20 @@ pub struct TypeScriptCall {
     pub evidence: EvidenceRef,
 }
 
+/// One TypeScript environment read. Dynamic property expressions retain their
+/// source expression but have no fabricated variable name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TypeScriptEnvRead {
+    /// Literal environment name, when statically readable.
+    pub name: Option<String>,
+    /// Full property expression as written.
+    pub expression: String,
+    /// Confidence in the extracted name.
+    pub confidence: Confidence,
+    /// Source evidence for the member expression.
+    pub evidence: EvidenceRef,
+}
+
 /// Tree-sitter-backed analyzer for TypeScript and TSX artifacts.
 #[derive(Debug, Clone, Copy)]
 pub struct TypeScriptAnalyzer {
@@ -137,6 +154,7 @@ impl TypeScriptAnalyzer {
                 classes: Vec::new(),
                 functions: Vec::new(),
                 calls: Vec::new(),
+                env_reads: Vec::new(),
             };
         }
 
@@ -148,6 +166,7 @@ impl TypeScriptAnalyzer {
                 classes: Vec::new(),
                 functions: Vec::new(),
                 calls: Vec::new(),
+                env_reads: Vec::new(),
             };
         }
         let Some(tree) = parser.parse(text, None) else {
@@ -157,6 +176,7 @@ impl TypeScriptAnalyzer {
                 classes: Vec::new(),
                 functions: Vec::new(),
                 calls: Vec::new(),
+                env_reads: Vec::new(),
             };
         };
 
@@ -168,6 +188,8 @@ impl TypeScriptAnalyzer {
         }
         let mut calls = Vec::new();
         collect_calls(tree.root_node(), artifact, text, &mut calls);
+        let mut env_reads = Vec::new();
+        collect_env_reads(tree.root_node(), artifact, text, &mut env_reads);
 
         TypeScriptAnalysis {
             language: self.language,
@@ -175,6 +197,7 @@ impl TypeScriptAnalyzer {
             classes,
             functions,
             calls,
+            env_reads,
         }
     }
 
@@ -202,6 +225,60 @@ fn collect_calls(
     for child in node.children(&mut cursor) {
         collect_calls(child, artifact, source, calls);
     }
+}
+
+fn collect_env_reads(
+    node: Node<'_>,
+    artifact: &Artifact,
+    source: &str,
+    reads: &mut Vec<TypeScriptEnvRead>,
+) {
+    if matches!(node.kind(), "member_expression" | "subscript_expression") {
+        let expression = node_text(node, source).to_owned();
+        if expression.starts_with("process.env.") || expression.starts_with("process.env[") {
+            let name = expression
+                .strip_prefix("process.env.")
+                .map(str::trim)
+                .or_else(|| {
+                    expression
+                        .strip_prefix("process.env[")
+                        .and_then(|value| value.strip_suffix(']'))
+                        .map(str::trim)
+                        .filter(|value| {
+                            value
+                                .chars()
+                                .next()
+                                .is_some_and(|character| matches!(character, '\"' | '\'' | '`'))
+                        })
+                })
+                .map(|value| value.trim_matches(['\"', '\'', '`']))
+                .filter(|value| {
+                    !value.is_empty()
+                        && value
+                            .chars()
+                            .all(|character| character.is_ascii_alphanumeric() || character == '_')
+                })
+                .map(str::to_owned);
+            reads.push(TypeScriptEnvRead {
+                confidence: if name.is_some() {
+                    Confidence::High
+                } else {
+                    Confidence::Low
+                },
+                name,
+                expression,
+                evidence: evidence(artifact, node),
+            });
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_env_reads(child, artifact, source, reads);
+    }
+}
+
+fn node_text<'a>(node: Node<'_>, source: &'a str) -> &'a str {
+    source.get(node.byte_range()).unwrap_or_default()
 }
 
 fn callee_name<'a>(function: Node<'_>, source: &'a str) -> Option<&'a str> {
@@ -345,8 +422,8 @@ fn evidence(artifact: &Artifact, node: Node<'_>) -> EvidenceRef {
 mod tests {
     use super::TypeScriptAnalyzer;
     use crate::domain::{
-        AnalyzerSelection, Artifact, ArtifactCategory, ContentHash, ModelExposurePolicy, RepoPath,
-        SupportTier, TextStatus,
+        AnalyzerSelection, Artifact, ArtifactCategory, Confidence, ContentHash,
+        ModelExposurePolicy, RepoPath, SupportTier, TextStatus,
     };
 
     fn artifact(path: &str) -> Result<Artifact, Box<dyn std::error::Error>> {
@@ -434,6 +511,20 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["run", "start", "unknown"]
         );
+        Ok(())
+    }
+
+    #[test]
+    fn extracts_literal_and_dynamic_process_env_reads() -> Result<(), Box<dyn std::error::Error>> {
+        let analysis = TypeScriptAnalyzer::typescript().analyze(
+            &artifact("src/config.ts")?,
+            "const host = process.env.API_HOST; const key = process.env[envName];\n",
+        );
+        assert_eq!(analysis.env_reads.len(), 2);
+        assert_eq!(analysis.env_reads[0].name.as_deref(), Some("API_HOST"));
+        assert_eq!(analysis.env_reads[0].confidence, Confidence::High);
+        assert!(analysis.env_reads[1].name.is_none());
+        assert_eq!(analysis.env_reads[1].confidence, Confidence::Low);
         Ok(())
     }
 }

@@ -6,7 +6,7 @@ use std::error::Error;
 
 const TABLE_SNAPSHOT: &str = "\
 kind            name            members  input_hash                                                        tokens
-Configuration   Configuration        23  3ff68e804254ecdf6acd55f7e90933d940df4ef0e9f453d6a1f4f755c11c8b9a     295
+Configuration   Configuration        46  3ff68e804254ecdf6acd55f7e90933d940df4ef0e9f453d6a1f4f755c11c8b9a     295
 Directory       assets                2  3029d94afd11745b29441c5ecd57daf06d7140c928d35bc44a3911eb472f769d      64
 Directory       data                  1  6b99ef6840a59c785d9f18965146b65ed88f2f225487b77007c2ef5e5cbb0227       9
 Directory       generated             4  af7c6864a5f8b357a9d86e0806a7739ea426ccbcceebf15fd1f4a462e06a3c40      37

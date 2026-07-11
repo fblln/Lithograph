@@ -6,10 +6,10 @@ use crate::ask::{McpExport, WikiSearch, render_ask_table};
 use crate::cli::{
     AdrCommand, AdrCreateArgs, AdrDeleteArgs, AdrGetArgs, AdrListArgs, AdrTarget, AdrUpdateArgs,
     AskArgs, Cli, Command, DriftArgs, GoldenArgs, GraphCommand, GraphExportArgs, GraphImportArgs,
-    GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectDsmArgs, InspectGraphArgs,
-    InspectMetricsArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, IntegrateMcpArgs,
-    McpExportArgs, McpServerArgs, OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
-    WatchArgs,
+    GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectDsmArgs, InspectEnvArgs,
+    InspectGraphArgs, InspectMetricsArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs,
+    IntegrateMcpArgs, McpExportArgs, McpServerArgs, OutputFormat, QualityArgs, ValidateMermaidArgs,
+    ViewerArgs, WatchArgs,
 };
 use crate::domain::Artifact;
 use crate::drift::{DriftDetector, DriftReport};
@@ -35,6 +35,7 @@ use crate::orchestrate::{
 };
 use crate::plan::{DocumentationModule, ModulePlanner};
 use crate::quality::{inspect as inspect_quality, render_table as render_quality_table};
+use crate::resolve::{EnvironmentExplanation, explain_environment};
 use crate::run::{PerformanceBudget, RunMetadata};
 use crate::storage::JsonStore;
 use crate::viewer::{generate as generate_viewer, render_report as render_viewer_report};
@@ -695,6 +696,7 @@ where
     match command.target {
         InspectTarget::Artifacts(args) => execute_inspect_artifacts(args, writer),
         InspectTarget::Graph(args) => execute_inspect_graph(args, writer),
+        InspectTarget::Env(args) => execute_inspect_env(args, writer),
         InspectTarget::Modules(args) => execute_inspect_modules(args, writer),
         InspectTarget::Dsm(args) => execute_inspect_dsm(args, writer),
         InspectTarget::Metrics(args) => execute_inspect_metrics(args, writer),
@@ -899,6 +901,77 @@ where
     };
     writer.write_all(output.as_bytes())?;
     Ok(())
+}
+
+fn execute_inspect_env<W>(
+    args: InspectEnvArgs,
+    writer: &mut W,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    let walk_options = WalkOptions {
+        exclude_globs: crate::orchestrate::scan_exclude_globs(),
+        ..WalkOptions::default()
+    };
+    let artifacts = RepositoryWalker::new(walk_options).walk(&args.path)?;
+    let graph = GraphBuilder.build(&args.path, &artifacts);
+    let issues = GraphValidator.validate(&graph, &artifacts);
+    if !issues.is_empty() {
+        return Err(render_graph_diagnostics(&issues).into());
+    }
+    let explanation = explain_environment(&graph, args.variable.as_deref());
+    let output = match args.format {
+        OutputFormat::Table => render_environment_table(&explanation),
+        OutputFormat::Json => {
+            let mut json = serde_json::to_string_pretty(&explanation)?;
+            json.push('\n');
+            json
+        }
+    };
+    writer.write_all(output.as_bytes())?;
+    Ok(())
+}
+
+/// Renders environment explanations in a stable, reviewable table.
+pub fn render_environment_table(explanation: &EnvironmentExplanation) -> String {
+    if explanation.variables.is_empty() {
+        return "no environment variables matched\n".to_owned();
+    }
+    let mut output = String::new();
+    for variable in &explanation.variables {
+        output.push_str(&format!("{} ({})\n", variable.name, variable.canonical));
+        output.push_str(&format!(
+            "  resolved: {}\n",
+            if variable.resolved.is_empty() {
+                "none".to_owned()
+            } else {
+                variable
+                    .resolved
+                    .iter()
+                    .map(|link| format!("{} [{:?}]", link.config_key, link.confidence))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            }
+        ));
+        output.push_str(&format!("  code users: {}\n", variable.code_users.len()));
+        output.push_str(&format!("  definitions: {}\n", variable.definitions.len()));
+        if !variable.candidates.is_empty() {
+            output.push_str(&format!(
+                "  candidates: {}\n",
+                variable
+                    .candidates
+                    .iter()
+                    .map(|candidate| candidate.config_key.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        if let Some(reason) = &variable.unresolved_reason {
+            output.push_str(&format!("  reason: {reason}\n"));
+        }
+    }
+    output
 }
 
 fn execute_inspect_dsm<W>(

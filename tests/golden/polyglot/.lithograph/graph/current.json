@@ -1,9 +1,9 @@
 {
   "metadata": {
     "schema_version": 1,
-    "graph_model_version": 1,
-    "node_count": 132,
-    "relation_count": 152,
+    "graph_model_version": 2,
+    "node_count": 155,
+    "relation_count": 178,
     "migrations_applied": []
   },
   "graph": {
@@ -491,6 +491,282 @@
             "end_line": 34
           },
           "structured_path": null
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:paths",
+        "kind": "Key",
+        "name": "paths",
+        "evidence": {
+          "artifact_id": "artifact:config/settings.yaml",
+          "path": "config/settings.yaml",
+          "span": null,
+          "structured_path": "paths"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:paths.schema",
+        "kind": "Key",
+        "name": "paths.schema",
+        "evidence": {
+          "artifact_id": "artifact:config/settings.yaml",
+          "path": "config/settings.yaml",
+          "span": null,
+          "structured_path": "paths.schema"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:paths.static.assets",
+        "kind": "Key",
+        "name": "paths.static.assets",
+        "evidence": {
+          "artifact_id": "artifact:config/settings.yaml",
+          "path": "config/settings.yaml",
+          "span": null,
+          "structured_path": "paths.static_assets"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:properties",
+        "kind": "Key",
+        "name": "properties",
+        "evidence": {
+          "artifact_id": "artifact:config/schema.json",
+          "path": "config/schema.json",
+          "span": null,
+          "structured_path": "properties"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:properties.route.file",
+        "kind": "Key",
+        "name": "properties.route.file",
+        "evidence": {
+          "artifact_id": "artifact:config/schema.json",
+          "path": "config/schema.json",
+          "span": null,
+          "structured_path": "properties.route_file"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:properties.route.file.description",
+        "kind": "Key",
+        "name": "properties.route.file.description",
+        "evidence": {
+          "artifact_id": "artifact:config/schema.json",
+          "path": "config/schema.json",
+          "span": null,
+          "structured_path": "properties.route_file.description"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:properties.route.file.type",
+        "kind": "Key",
+        "name": "properties.route.file.type",
+        "evidence": {
+          "artifact_id": "artifact:config/schema.json",
+          "path": "config/schema.json",
+          "span": null,
+          "structured_path": "properties.route_file.type"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:properties.worker.image",
+        "kind": "Key",
+        "name": "properties.worker.image",
+        "evidence": {
+          "artifact_id": "artifact:config/schema.json",
+          "path": "config/schema.json",
+          "span": null,
+          "structured_path": "properties.worker_image"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:properties.worker.image.default",
+        "kind": "Key",
+        "name": "properties.worker.image.default",
+        "evidence": {
+          "artifact_id": "artifact:config/schema.json",
+          "path": "config/schema.json",
+          "span": null,
+          "structured_path": "properties.worker_image.default"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:properties.worker.image.type",
+        "kind": "Key",
+        "name": "properties.worker.image.type",
+        "evidence": {
+          "artifact_id": "artifact:config/schema.json",
+          "path": "config/schema.json",
+          "span": null,
+          "structured_path": "properties.worker_image.type"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:required",
+        "kind": "Key",
+        "name": "required",
+        "evidence": {
+          "artifact_id": "artifact:config/schema.json",
+          "path": "config/schema.json",
+          "span": null,
+          "structured_path": "required"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:required.0",
+        "kind": "Key",
+        "name": "required.0",
+        "evidence": {
+          "artifact_id": "artifact:config/schema.json",
+          "path": "config/schema.json",
+          "span": null,
+          "structured_path": "required[0]"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:schema",
+        "kind": "Key",
+        "name": "schema",
+        "evidence": {
+          "artifact_id": "artifact:config/schema.json",
+          "path": "config/schema.json",
+          "span": null,
+          "structured_path": "$schema"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:service",
+        "kind": "Key",
+        "name": "service",
+        "evidence": {
+          "artifact_id": "artifact:config/settings.yaml",
+          "path": "config/settings.yaml",
+          "span": null,
+          "structured_path": "service"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:service.command",
+        "kind": "Key",
+        "name": "service.command",
+        "evidence": {
+          "artifact_id": "artifact:config/settings.yaml",
+          "path": "config/settings.yaml",
+          "span": null,
+          "structured_path": "service.command"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:service.env",
+        "kind": "Key",
+        "name": "service.env",
+        "evidence": {
+          "artifact_id": "artifact:config/settings.yaml",
+          "path": "config/settings.yaml",
+          "span": null,
+          "structured_path": "service.env"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:service.env.ridgeline.cache.dir",
+        "kind": "Key",
+        "name": "service.env.ridgeline.cache.dir",
+        "evidence": {
+          "artifact_id": "artifact:config/settings.yaml",
+          "path": "config/settings.yaml",
+          "span": null,
+          "structured_path": "service.env.RIDGELINE_CACHE_DIR"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:service.env.ridgeline.worker",
+        "kind": "Key",
+        "name": "service.env.ridgeline.worker",
+        "evidence": {
+          "artifact_id": "artifact:config/settings.yaml",
+          "path": "config/settings.yaml",
+          "span": null,
+          "structured_path": "service.env.RIDGELINE_WORKER"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:service.image",
+        "kind": "Key",
+        "name": "service.image",
+        "evidence": {
+          "artifact_id": "artifact:config/settings.yaml",
+          "path": "config/settings.yaml",
+          "span": null,
+          "structured_path": "service.image"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:service.name",
+        "kind": "Key",
+        "name": "service.name",
+        "evidence": {
+          "artifact_id": "artifact:config/settings.yaml",
+          "path": "config/settings.yaml",
+          "span": null,
+          "structured_path": "service.name"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:service.port",
+        "kind": "Key",
+        "name": "service.port",
+        "evidence": {
+          "artifact_id": "artifact:config/settings.yaml",
+          "path": "config/settings.yaml",
+          "span": null,
+          "structured_path": "service.port"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:title",
+        "kind": "Key",
+        "name": "title",
+        "evidence": {
+          "artifact_id": "artifact:config/schema.json",
+          "path": "config/schema.json",
+          "span": null,
+          "structured_path": "title"
+        }
+      },
+      {
+        "node_type": "Config",
+        "id": "config-key:type",
+        "kind": "Key",
+        "name": "type",
+        "evidence": {
+          "artifact_id": "artifact:config/schema.json",
+          "path": "config/schema.json",
+          "span": null,
+          "structured_path": "type"
         }
       },
       {
@@ -1362,6 +1638,30 @@
         "provenance": {
           "language": null,
           "resolver_strategy": "graph-builder",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:154",
+        "source": "artifact:Dockerfile",
+        "target": "env:RIDGELINE_WORKER",
+        "kind": "DefinesEnv",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:Dockerfile",
+            "path": "Dockerfile",
+            "span": {
+              "start_line": 12,
+              "end_line": 12
+            },
+            "structured_path": null
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-Dockerfile",
           "resolution": "SyntaxOnly",
           "confidence": "High"
         }
@@ -2297,6 +2597,258 @@
         }
       },
       {
+        "id": "relation:159",
+        "source": "artifact:config/schema.json",
+        "target": "config-key:properties",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/schema.json",
+            "path": "config/schema.json",
+            "span": null,
+            "structured_path": "properties"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:160",
+        "source": "artifact:config/schema.json",
+        "target": "config-key:properties.route.file",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/schema.json",
+            "path": "config/schema.json",
+            "span": null,
+            "structured_path": "properties.route_file"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:161",
+        "source": "artifact:config/schema.json",
+        "target": "config-key:properties.route.file.description",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/schema.json",
+            "path": "config/schema.json",
+            "span": null,
+            "structured_path": "properties.route_file.description"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:162",
+        "source": "artifact:config/schema.json",
+        "target": "config-key:properties.route.file.type",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/schema.json",
+            "path": "config/schema.json",
+            "span": null,
+            "structured_path": "properties.route_file.type"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:163",
+        "source": "artifact:config/schema.json",
+        "target": "config-key:properties.worker.image",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/schema.json",
+            "path": "config/schema.json",
+            "span": null,
+            "structured_path": "properties.worker_image"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:164",
+        "source": "artifact:config/schema.json",
+        "target": "config-key:properties.worker.image.default",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/schema.json",
+            "path": "config/schema.json",
+            "span": null,
+            "structured_path": "properties.worker_image.default"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:165",
+        "source": "artifact:config/schema.json",
+        "target": "config-key:properties.worker.image.type",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/schema.json",
+            "path": "config/schema.json",
+            "span": null,
+            "structured_path": "properties.worker_image.type"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:166",
+        "source": "artifact:config/schema.json",
+        "target": "config-key:required",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/schema.json",
+            "path": "config/schema.json",
+            "span": null,
+            "structured_path": "required"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:167",
+        "source": "artifact:config/schema.json",
+        "target": "config-key:required.0",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/schema.json",
+            "path": "config/schema.json",
+            "span": null,
+            "structured_path": "required[0]"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:168",
+        "source": "artifact:config/schema.json",
+        "target": "config-key:schema",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/schema.json",
+            "path": "config/schema.json",
+            "span": null,
+            "structured_path": "$schema"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:177",
+        "source": "artifact:config/schema.json",
+        "target": "config-key:title",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/schema.json",
+            "path": "config/schema.json",
+            "span": null,
+            "structured_path": "title"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:178",
+        "source": "artifact:config/schema.json",
+        "target": "config-key:type",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/schema.json",
+            "path": "config/schema.json",
+            "span": null,
+            "structured_path": "type"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
         "id": "relation:56",
         "source": "artifact:config/settings.yaml",
         "target": "config:config/settings.yaml#service.name",
@@ -2525,6 +3077,237 @@
           "resolver_strategy": "graph-builder",
           "resolution": "SyntaxOnly",
           "confidence": "Low"
+        }
+      },
+      {
+        "id": "relation:156",
+        "source": "artifact:config/settings.yaml",
+        "target": "config-key:paths",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/settings.yaml",
+            "path": "config/settings.yaml",
+            "span": null,
+            "structured_path": "paths"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:157",
+        "source": "artifact:config/settings.yaml",
+        "target": "config-key:paths.schema",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/settings.yaml",
+            "path": "config/settings.yaml",
+            "span": null,
+            "structured_path": "paths.schema"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:158",
+        "source": "artifact:config/settings.yaml",
+        "target": "config-key:paths.static.assets",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/settings.yaml",
+            "path": "config/settings.yaml",
+            "span": null,
+            "structured_path": "paths.static_assets"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:169",
+        "source": "artifact:config/settings.yaml",
+        "target": "config-key:service",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/settings.yaml",
+            "path": "config/settings.yaml",
+            "span": null,
+            "structured_path": "service"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:170",
+        "source": "artifact:config/settings.yaml",
+        "target": "config-key:service.command",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/settings.yaml",
+            "path": "config/settings.yaml",
+            "span": null,
+            "structured_path": "service.command"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:171",
+        "source": "artifact:config/settings.yaml",
+        "target": "config-key:service.env",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/settings.yaml",
+            "path": "config/settings.yaml",
+            "span": null,
+            "structured_path": "service.env"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:172",
+        "source": "artifact:config/settings.yaml",
+        "target": "config-key:service.env.ridgeline.cache.dir",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/settings.yaml",
+            "path": "config/settings.yaml",
+            "span": null,
+            "structured_path": "service.env.RIDGELINE_CACHE_DIR"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:173",
+        "source": "artifact:config/settings.yaml",
+        "target": "config-key:service.env.ridgeline.worker",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/settings.yaml",
+            "path": "config/settings.yaml",
+            "span": null,
+            "structured_path": "service.env.RIDGELINE_WORKER"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:174",
+        "source": "artifact:config/settings.yaml",
+        "target": "config-key:service.image",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/settings.yaml",
+            "path": "config/settings.yaml",
+            "span": null,
+            "structured_path": "service.image"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:175",
+        "source": "artifact:config/settings.yaml",
+        "target": "config-key:service.name",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/settings.yaml",
+            "path": "config/settings.yaml",
+            "span": null,
+            "structured_path": "service.name"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:176",
+        "source": "artifact:config/settings.yaml",
+        "target": "config-key:service.port",
+        "kind": "BindsConfig",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:config/settings.yaml",
+            "path": "config/settings.yaml",
+            "span": null,
+            "structured_path": "service.port"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-StructuredConfig",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
         }
       },
       {
@@ -4388,6 +5171,27 @@
         }
       },
       {
+        "id": "relation:155",
+        "source": "config:docker-compose.yml#services.api",
+        "target": "env:RIDGELINE_WORKER",
+        "kind": "DefinesEnv",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:docker-compose.yml",
+            "path": "docker-compose.yml",
+            "span": null,
+            "structured_path": "services.api.environment"
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-Compose",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
         "id": "relation:59",
         "source": "config:docker-compose.yml#services.api",
         "target": "image:ghcr.io/example/route-api:${VERSION:-dev}",
@@ -4680,6 +5484,30 @@
         "provenance": {
           "language": "python",
           "resolver_strategy": "specialized-hybrid",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
+        "id": "relation:153",
+        "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
+        "target": "env:RIDGELINE_WORKER",
+        "kind": "ReadsEnv",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:src/python_app/service.py",
+            "path": "src/python_app/service.py",
+            "span": {
+              "start_line": 16,
+              "end_line": 16
+            },
+            "structured_path": null
+          }
+        ],
+        "provenance": {
+          "language": "environment",
+          "resolver_strategy": "environment-fact-SourceCode",
           "resolution": "SyntaxOnly",
           "confidence": "High"
         }

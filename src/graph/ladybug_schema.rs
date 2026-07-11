@@ -5,8 +5,11 @@
 //! untyped Cypher strings throughout the rest of the application. The adapter
 //! introduced by LIT-24.2 will execute these statements transactionally.
 
-/// First LadybugDB schema version owned by Lithograph.
-pub const LADYBUG_SCHEMA_VERSION: u32 = 1;
+/// Current LadybugDB schema version owned by Lithograph.
+///
+/// Version two records the environment/configuration graph semantics while
+/// retaining the same physical tables and forward-compatible JSON payloads.
+pub const LADYBUG_SCHEMA_VERSION: u32 = 2;
 
 /// Version of deterministic metric and classification algorithms whose output
 /// is stored in the analytics tables. Bump it when an algorithm's meaning,
@@ -166,7 +169,7 @@ mod tests {
 
     #[test]
     fn migration_ids_are_deterministic_and_versioned() {
-        assert_eq!(LADYBUG_SCHEMA_VERSION, 1);
+        assert_eq!(LADYBUG_SCHEMA_VERSION, 2);
         assert_eq!(migration_id(1, 2), "ladybug-schema:1->2");
     }
 }

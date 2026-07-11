@@ -3,7 +3,7 @@
     {
       "name": "Configuration",
       "kind": "Configuration",
-      "member_count": 23,
+      "member_count": 46,
       "evidence": [
         "artifact:config/schema.json",
         "artifact:config/settings.yaml",
