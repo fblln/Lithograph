@@ -1,0 +1,2821 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:oklch(0.12 0.004 260)}
+a{color:oklch(0.74 0.16 35)}
+a:hover{color:oklch(0.82 0.14 35)}
+input[type=range]{accent-color:oklch(0.74 0.16 35)}
+</style>
+</helmet>
+<template id="__bundler_thumbnail">
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+<rect width="100" height="100" fill="#16161c"/>
+<circle cx="50" cy="46" r="9" fill="#e8935f"/>
+<circle cx="28" cy="30" r="6" fill="#e0709a"/>
+<circle cx="74" cy="32" r="6" fill="#8fb3f0"/>
+<circle cx="30" cy="68" r="6" fill="#8fd0b0"/>
+<circle cx="72" cy="66" r="6" fill="#c79ae0"/>
+<line x1="50" y1="46" x2="28" y2="30" stroke="#3a3a44" stroke-width="2"/>
+<line x1="50" y1="46" x2="74" y2="32" stroke="#3a3a44" stroke-width="2"/>
+<line x1="50" y1="46" x2="30" y2="68" stroke="#3a3a44" stroke-width="2"/>
+<line x1="50" y1="46" x2="72" y2="66" stroke="#3a3a44" stroke-width="2"/>
+</svg>
+</template>
+<div data-screen-label="Lithograph Atlas" style="width:1600px;height:940px;display:flex;flex-direction:column;background:oklch(0.16 0.004 260);color:oklch(0.94 0.004 260);font-family:Inter,ui-sans-serif,system-ui,sans-serif;overflow:hidden;">
+
+<div style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid oklch(0.32 0.01 260 / 0.5);background:oklch(0.195 0.006 260);flex:none;">
+<div style="display:flex;align-items:center;gap:7px;font-weight:600;font-size:13.5px;white-space:nowrap;">
+<svg width="16" height="16" viewBox="0 0 18 18">
+<circle cx="4" cy="4" r="2.6" fill="oklch(0.74 0.16 35)" />
+<circle cx="14" cy="4" r="2.6" fill="oklch(0.78 0.16 55)" />
+<circle cx="9" cy="13.5" r="2.6" fill="oklch(0.75 0.14 165)" />
+<line x1="4" y1="4" x2="9" y2="13.5" stroke="oklch(0.4 0.01 260)" stroke-width="1.1" />
+<line x1="14" y1="4" x2="9" y2="13.5" stroke="oklch(0.4 0.01 260)" stroke-width="1.1" />
+</svg>
+Lithograph <span style="color:oklch(0.62 0.008 260);font-weight:500;">Atlas</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:oklch(0.64 0.008 260);padding:4px 10px;background:oklch(0.22 0.007 260);border-radius:6px;white-space:nowrap;">
+<span style="color:oklch(0.88 0.004 260);font-weight:600;">fixtures/polyglot</span>
+<span>snapshot 5bcfa51 &middot; 22 files &middot; 2 min ago</span>
+</div>
+<div style="position:relative;flex:1;max-width:380px;">
+<input type="text" placeholder="Search files, symbols, tensions, docs, tags..." value="{{ search }}" onChange="{{ onSearchInput }}" style="width:100%;box-sizing:border-box;background:oklch(0.22 0.007 260);border:1px solid oklch(0.32 0.01 260 / 0.5);border-radius:6px;padding:6px 10px;color:oklch(0.94 0.004 260);font-size:12px;outline:none;font-family:inherit;" style-focus="border-color:oklch(0.55 0.02 260);" />
+<sc-if value="{{ hasSearchMatches }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;top:32px;left:0;right:0;background:oklch(0.2 0.006 260);border:1px solid oklch(0.32 0.01 260 / 0.6);border-radius:8px;max-height:300px;overflow:auto;z-index:40;box-shadow:0 10px 28px rgba(0,0,0,0.45);">
+<sc-for list="{{ searchGroups }}" as="grp" hint-placeholder-count="2">
+<div>
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);padding:7px 10px 3px;">{{ grp.header }}</div>
+<sc-for list="{{ grp.items }}" as="res" hint-placeholder-count="3">
+<div onClick="{{ res.onSelect }}" style="display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:12px;" style-hover="background:oklch(0.26 0.008 260);">
+<span style="width:8px;height:8px;border-radius:50%;background:{{ res.color }};flex:none;"></span>
+<span style="flex:1;color:oklch(0.9 0.004 260);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ res.label }}</span>
+<span style="font-size:10px;color:oklch(0.55 0.008 260);white-space:nowrap;">{{ res.kindLabel }}</span>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+<div style="display:flex;gap:2px;background:oklch(0.22 0.007 260);border-radius:7px;padding:2px;">
+<button onClick="{{ onModeExplore }}" style="font-size:11.5px;font-weight:600;padding:5px 14px;border-radius:5px;border:none;cursor:pointer;font-family:inherit;background:{{ exploreTabBg }};color:{{ exploreTabColor }};">Explore</button>
+<button onClick="{{ onModeDocs }}" style="font-size:11.5px;font-weight:600;padding:5px 14px;border-radius:5px;border:none;cursor:pointer;font-family:inherit;background:{{ docsTabBg }};color:{{ docsTabColor }};">Docs</button>
+</div>
+<div style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+<div onClick="{{ onCopyLink }}" title="Copy deep link" style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:oklch(0.6 0.008 260);background:oklch(0.14 0.004 260);border:1px solid oklch(0.32 0.01 260 / 0.5);padding:4px 8px;border-radius:5px;cursor:pointer;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" style-hover="color:oklch(0.85 0.004 260);">{{ deepLink }}</div>
+<div style="font-size:11px;color:oklch(0.64 0.008 260);white-space:nowrap;">{{ renderedCount }}/{{ nodeCount }} nodes &middot; budget {{ budgetLabel }}</div>
+<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:oklch(0.72 0.12 150);"><span style="width:7px;height:7px;border-radius:50%;background:oklch(0.72 0.12 150);"></span>Ready</div>
+</div>
+</div>
+
+<div style="flex:1;display:flex;min-height:0;">
+
+<div style="width:260px;flex:none;border-right:1px solid oklch(0.32 0.01 260 / 0.5);background:oklch(0.18 0.005 260);display:flex;flex-direction:column;min-height:0;">
+<div style="padding:11px 12px 10px;border-bottom:1px solid oklch(0.32 0.01 260 / 0.5);flex:none;">
+<div style="display:flex;gap:6px;margin-bottom:9px;">
+<sc-for list="{{ statCells }}" as="s" hint-placeholder-count="5">
+<div style="flex:1;text-align:center;">
+<div style="font-size:15px;font-weight:700;color:{{ s.color }};line-height:1.1;">{{ s.value }}</div>
+<div style="font-size:8.5px;font-weight:600;letter-spacing:0.3px;text-transform:uppercase;color:oklch(0.55 0.008 260);margin-top:1px;">{{ s.label }}</div>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:oklch(0.14 0.004 260);">
+<sc-for list="{{ compositionBar }}" as="seg" hint-placeholder-count="6">
+<div title="{{ seg.title }}" style="width:{{ seg.pct }}%;background:{{ seg.color }};"></div>
+</sc-for>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:3px 9px;margin-top:7px;">
+<sc-for list="{{ compositionLegend }}" as="seg" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:4px;font-size:9.5px;color:oklch(0.66 0.008 260);">
+<span style="width:7px;height:7px;border-radius:2px;background:{{ seg.color }};"></span>{{ seg.label }}
+</div>
+</sc-for>
+</div>
+</div>
+<div style="display:flex;border-bottom:1px solid oklch(0.32 0.01 260 / 0.5);flex:none;">
+<button onClick="{{ onTabFiles }}" style="flex:1;padding:9px 0;font-size:10.5px;font-weight:600;letter-spacing:0.3px;text-transform:uppercase;background:none;border:none;cursor:pointer;font-family:inherit;color:{{ filesTabColor }};border-bottom:2px solid {{ filesTabBorder }};">Files</button>
+<button onClick="{{ onTabTags }}" style="flex:1;padding:9px 0;font-size:10.5px;font-weight:600;letter-spacing:0.3px;text-transform:uppercase;background:none;border:none;cursor:pointer;font-family:inherit;color:{{ tagsTabColor }};border-bottom:2px solid {{ tagsTabBorder }};">Tags</button>
+<button onClick="{{ onTabFilters }}" style="flex:1;padding:9px 0;font-size:10.5px;font-weight:600;letter-spacing:0.3px;text-transform:uppercase;background:none;border:none;cursor:pointer;font-family:inherit;color:{{ filtersTabColor }};border-bottom:2px solid {{ filtersTabBorder }};">Filters</button>
+<button onClick="{{ onTabSaved }}" style="flex:1;padding:9px 0;font-size:10.5px;font-weight:600;letter-spacing:0.3px;text-transform:uppercase;background:none;border:none;cursor:pointer;font-family:inherit;color:{{ savedTabColor }};border-bottom:2px solid {{ savedTabBorder }};">Saved</button>
+</div>
+<div style="flex:1;overflow:auto;">
+
+<sc-if value="{{ showFiles }}" hint-placeholder-val="{{ true }}">
+<div style="padding:8px;">
+<sc-for list="{{ explorerRows }}" as="row" hint-placeholder-count="14">
+<div onClick="{{ row.onClick }}" style="display:flex;align-items:center;gap:5px;padding:3.5px 6px;border-radius:5px;cursor:pointer;font-size:12px;" style-hover="background:oklch(0.24 0.008 260);">
+<span style="width:{{ row.indent }}px;flex:none;"></span>
+<span style="width:11px;flex:none;color:oklch(0.5 0.008 260);font-size:9px;">{{ row.arrow }}</span>
+<span style="color:{{ row.textColor }};font-weight:{{ row.fontWeight }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ row.name }}</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ showTags }}" hint-placeholder-val="{{ false }}">
+<div style="padding:10px;display:flex;flex-direction:column;gap:12px;">
+<input type="text" placeholder="Search tags..." value="{{ tagSearch }}" onChange="{{ onTagSearchInput }}" style="width:100%;box-sizing:border-box;background:oklch(0.22 0.007 260);border:1px solid oklch(0.32 0.01 260 / 0.5);border-radius:6px;padding:6px 9px;color:oklch(0.94 0.004 260);font-size:11.5px;outline:none;font-family:inherit;" />
+<sc-if value="{{ hasActiveTags }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-wrap:wrap;gap:5px;">
+<sc-for list="{{ activeTagChips }}" as="chip" hint-placeholder-count="2">
+<div onClick="{{ chip.onRemove }}" style="display:flex;align-items:center;gap:5px;font-family:ui-monospace,Menlo,monospace;font-size:10px;padding:3px 7px;border-radius:20px;cursor:pointer;border:1px solid {{ chip.border }};color:{{ chip.color }};background:{{ chip.bg }};">{{ chip.label }}<span style="opacity:0.7;">&times;</span></div>
+</sc-for>
+</div>
+</sc-if>
+<sc-for list="{{ tagFacetGroups }}" as="ns" hint-placeholder-count="4">
+<div>
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin-bottom:5px;">{{ ns.label }}</div>
+<sc-for list="{{ ns.values }}" as="tag" hint-placeholder-count="3">
+<div style="display:flex;align-items:center;gap:6px;padding:3px 2px;border-radius:4px;" style-hover="background:oklch(0.24 0.008 260);">
+<span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:oklch(0.85 0.004 260);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ tag.label }}</span>
+<span style="font-size:10px;color:oklch(0.55 0.008 260);">{{ tag.count }}</span>
+<button onClick="{{ tag.onInclude }}" title="Include" style="width:18px;height:18px;border-radius:4px;border:1px solid {{ tag.incBorder }};background:{{ tag.incBg }};color:{{ tag.incColor }};font-size:11px;line-height:1;cursor:pointer;font-family:inherit;padding:0;">+</button>
+<button onClick="{{ tag.onExclude }}" title="Exclude" style="width:18px;height:18px;border-radius:4px;border:1px solid {{ tag.excBorder }};background:{{ tag.excBg }};color:{{ tag.excColor }};font-size:11px;line-height:1;cursor:pointer;font-family:inherit;padding:0;">&ndash;</button>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ showFilters }}" hint-placeholder-val="{{ false }}">
+<div style="padding:10px;display:flex;flex-direction:column;gap:14px;">
+<div>
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;color:oklch(0.55 0.008 260);text-transform:uppercase;margin-bottom:7px;">Graph budget</div>
+<input type="range" min="10" max="500" step="10" value="{{ budget }}" onChange="{{ onBudgetInput }}" style="width:100%;" />
+<div style="font-size:10.5px;color:oklch(0.62 0.008 260);margin-top:2px;">max {{ budget }} nodes &middot; rendering {{ renderedCount }} of {{ nodeCount }}</div>
+</div>
+<div>
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;color:oklch(0.55 0.008 260);text-transform:uppercase;margin-bottom:7px;">Node kinds</div>
+<sc-for list="{{ nodeKindRows }}" as="row" hint-placeholder-count="10">
+<div onClick="{{ row.onToggle }}" style="display:flex;align-items:center;gap:7px;padding:3.5px 2px;cursor:pointer;border-radius:4px;opacity:{{ row.opacity }};" style-hover="background:oklch(0.24 0.008 260);">
+<span style="width:8px;height:8px;border-radius:50%;background:{{ row.color }};flex:none;"></span>
+<span style="font-size:11.5px;color:oklch(0.88 0.004 260);flex:1;">{{ row.label }}</span>
+<span style="font-size:10px;color:oklch(0.55 0.008 260);">{{ row.count }}</span>
+</div>
+</sc-for>
+</div>
+<div>
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;color:oklch(0.55 0.008 260);text-transform:uppercase;margin-bottom:7px;">Relation kinds</div>
+<sc-for list="{{ relGroupRows }}" as="grp" hint-placeholder-count="6">
+<div style="margin-bottom:7px;">
+<div onClick="{{ grp.onToggleAll }}" style="display:flex;align-items:center;gap:6px;padding:2.5px 2px;cursor:pointer;opacity:{{ grp.opacity }};">
+<span style="font-size:10px;font-weight:600;color:oklch(0.7 0.008 260);flex:1;">{{ grp.label }}</span>
+<span style="font-size:10px;color:oklch(0.5 0.008 260);">{{ grp.groupCount }}</span>
+</div>
+<sc-for list="{{ grp.kinds }}" as="row" hint-placeholder-count="3">
+<div onClick="{{ row.onToggle }}" style="display:flex;align-items:center;gap:7px;padding:2.5px 2px 2.5px 12px;cursor:pointer;border-radius:4px;opacity:{{ row.opacity }};" style-hover="background:oklch(0.24 0.008 260);">
+<span style="width:7px;height:7px;border-radius:50%;background:{{ row.color }};flex:none;"></span>
+<span style="font-size:11px;color:oklch(0.82 0.004 260);flex:1;">{{ row.label }}</span>
+<span style="font-size:10px;color:oklch(0.55 0.008 260);">{{ row.count }}</span>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+<div style="opacity:{{ focusDepthOpacity }};pointer-events:{{ focusDepthPointerEvents }};">
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;color:oklch(0.55 0.008 260);text-transform:uppercase;margin-bottom:7px;">Focus depth</div>
+<div style="display:flex;gap:5px;flex-wrap:wrap;">
+<sc-for list="{{ focusDepthOptions }}" as="opt" hint-placeholder-count="4">
+<button onClick="{{ opt.onClick }}" style="font-size:10.5px;padding:4px 9px;border-radius:6px;border:1px solid {{ opt.borderColor }};background:{{ opt.bg }};color:{{ opt.color }};cursor:pointer;font-family:inherit;">{{ opt.label }}</button>
+</sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ showSaved }}" hint-placeholder-val="{{ false }}">
+<div style="padding:10px;display:flex;flex-direction:column;gap:8px;">
+<div style="font-size:11px;color:oklch(0.6 0.008 260);margin-bottom:2px;">Saved investigations restore selection, overlays, and filters.</div>
+<sc-for list="{{ savedRows }}" as="inv" hint-placeholder-count="2">
+<div onClick="{{ inv.onOpen }}" style="border:1px solid oklch(0.32 0.01 260 / 0.5);border-radius:8px;padding:9px 10px;cursor:pointer;background:oklch(0.2 0.006 260);" style-hover="border-color:oklch(0.45 0.01 260);">
+<div style="display:flex;align-items:center;gap:6px;">
+<span style="font-size:12px;font-weight:600;color:oklch(0.92 0.004 260);flex:1;">{{ inv.title }}</span>
+<sc-if value="{{ inv.stale }}" hint-placeholder-val="{{ false }}">
+<span style="font-size:9px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;color:oklch(0.78 0.15 75);background:oklch(0.78 0.15 75 / 0.14);padding:2px 6px;border-radius:10px;">stale</span>
+</sc-if>
+</div>
+<div style="font-size:10.5px;color:oklch(0.6 0.008 260);margin-top:3px;">{{ inv.note }}</div>
+<div style="font-family:ui-monospace,Menlo,monospace;font-size:9.5px;color:oklch(0.5 0.008 260);margin-top:5px;">{{ inv.meta }}</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+</div>
+</div>
+
+<div ref="{{ containerRef }}" style="position:relative;flex:1;min-width:0;background:oklch(0.13 0.004 260);overflow:hidden;">
+<svg ref="{{ svgRef }}" style="position:absolute;inset:0;width:100%;height:100%;cursor:grab;"></svg>
+
+<div style="position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:8px;">
+<div style="display:flex;gap:2px;background:oklch(0.19 0.006 260 / 0.94);border:1px solid oklch(0.32 0.01 260 / 0.6);border-radius:7px;padding:2px;">
+<sc-for list="{{ viewOptions }}" as="opt" hint-placeholder-count="3">
+<button onClick="{{ opt.onClick }}" style="font-size:10.5px;font-weight:600;padding:5px 12px;border-radius:5px;border:none;cursor:pointer;font-family:inherit;background:{{ opt.bg }};color:{{ opt.color }};">{{ opt.label }}</button>
+</sc-for>
+</div>
+<sc-if value="{{ showOverlayToggle }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;align-items:center;gap:6px;">
+<span style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.55 0.008 260);">Color</span>
+<div style="display:flex;gap:2px;background:oklch(0.19 0.006 260 / 0.94);border:1px solid oklch(0.32 0.01 260 / 0.6);border-radius:7px;padding:2px;">
+<sc-for list="{{ overlayOptions }}" as="opt" hint-placeholder-count="4">
+<button onClick="{{ opt.onClick }}" style="font-size:10.5px;font-weight:600;padding:4px 10px;border-radius:5px;border:none;cursor:pointer;font-family:inherit;background:{{ opt.bg }};color:{{ opt.color }};">{{ opt.label }}</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ showOverlayToggle }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;align-items:center;gap:6px;">
+<span style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.55 0.008 260);">Edges</span>
+<div style="display:flex;gap:2px;background:oklch(0.19 0.006 260 / 0.94);border:1px solid oklch(0.32 0.01 260 / 0.6);border-radius:7px;padding:2px;">
+<sc-for list="{{ edgeViewOptions }}" as="opt" hint-placeholder-count="2">
+<button onClick="{{ opt.onClick }}" style="font-size:10.5px;font-weight:600;padding:4px 10px;border-radius:5px;border:none;cursor:pointer;font-family:inherit;background:{{ opt.bg }};color:{{ opt.color }};">{{ opt.label }}</button>
+</sc-for>
+</div>
+</div>
+<button onClick="{{ onToggleSubClusters }}" title="Group members into mini-clusters by kind" style="display:none;"></button>
+</sc-if>
+<sc-if value="{{ isolateActive }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ onToggleIsolate }}" style="display:flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:6px 10px;border-radius:7px;cursor:pointer;background:oklch(0.74 0.16 35 / 0.16);color:oklch(0.74 0.16 35);border:1px solid oklch(0.74 0.16 35 / 0.45);">Boundary edges only<span style="opacity:0.7;">&times;</span></div>
+</sc-if>
+<sc-if value="{{ layoutCustomized }}" hint-placeholder-val="{{ false }}">
+<button onClick="{{ onResetLayout }}" title="Forget moved nodes and clusters" style="font-size:10.5px;font-weight:600;padding:6px 12px;border-radius:7px;border:1px solid oklch(0.32 0.01 260 / 0.6);cursor:pointer;font-family:inherit;background:oklch(0.19 0.006 260 / 0.94);color:oklch(0.8 0.006 260);">Reset layout</button>
+</sc-if>
+</div>
+
+<sc-if value="{{ hasSelectionBanner }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;top:48px;left:10px;display:flex;align-items:center;gap:8px;background:oklch(0.19 0.006 260 / 0.94);border:1px solid oklch(0.32 0.01 260 / 0.6);padding:6px 10px;border-radius:8px;max-width:55%;">
+<span style="width:8px;height:8px;border-radius:50%;background:{{ selectedColor }};flex:none;"></span>
+<span style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ selectedLabel }}</span>
+<span style="font-size:10.5px;color:oklch(0.6 0.008 260);white-space:nowrap;">{{ selectedKindLabel }}</span>
+<button onClick="{{ onClearSelection }}" style="margin-left:2px;background:none;border:none;color:oklch(0.6 0.008 260);cursor:pointer;font-size:15px;line-height:1;padding:0 2px;font-family:inherit;">&times;</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ truncationVisible }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;background:oklch(0.78 0.15 75 / 0.12);border:1px solid oklch(0.78 0.15 75 / 0.5);color:oklch(0.85 0.12 80);padding:6px 12px;border-radius:8px;font-size:11.5px;white-space:nowrap;z-index:10;">
+{{ truncationText }}
+<button onClick="{{ onRaiseBudget }}" style="font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:5px;border:1px solid oklch(0.78 0.15 75 / 0.6);background:none;color:oklch(0.85 0.12 80);cursor:pointer;font-family:inherit;">Raise budget</button>
+</div>
+</sc-if>
+
+<div style="position:absolute;bottom:10px;left:12px;font-size:10.5px;color:oklch(0.55 0.008 260);font-family:ui-monospace,Menlo,monospace;">{{ statusLine }}</div>
+
+<div style="position:absolute;bottom:12px;right:12px;display:flex;flex-direction:column;gap:6px;">
+<button onClick="{{ onZoomIn }}" style="width:26px;height:26px;border-radius:6px;background:oklch(0.22 0.007 260);border:1px solid oklch(0.32 0.01 260 / 0.6);color:oklch(0.9 0.004 260);font-size:15px;cursor:pointer;font-family:inherit;">+</button>
+<button onClick="{{ onZoomOut }}" style="width:26px;height:26px;border-radius:6px;background:oklch(0.22 0.007 260);border:1px solid oklch(0.32 0.01 260 / 0.6);color:oklch(0.9 0.004 260);font-size:16px;cursor:pointer;font-family:inherit;">&ndash;</button>
+<button onClick="{{ onResetView }}" style="width:26px;height:26px;border-radius:6px;background:oklch(0.22 0.007 260);border:1px solid oklch(0.32 0.01 260 / 0.6);color:oklch(0.9 0.004 260);font-size:11px;cursor:pointer;font-family:inherit;">&#10021;</button>
+</div>
+
+<sc-if value="{{ blastLegendVisible }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;background:oklch(0.19 0.006 260 / 0.94);border:1px solid oklch(0.32 0.01 260 / 0.6);padding:6px 12px;border-radius:8px;font-size:10.5px;color:oklch(0.72 0.006 260);white-space:nowrap;">
+<span style="font-weight:600;color:oklch(0.9 0.004 260);">Blast radius</span>
+<span>{{ blastLegendText }}</span>
+<span style="display:flex;align-items:center;gap:2px;">
+<span style="width:11px;height:11px;border-radius:3px;background:oklch(0.96 0.02 40);"></span>
+<span style="width:11px;height:11px;border-radius:3px;background:oklch(0.74 0.17 38);"></span>
+<span style="width:11px;height:11px;border-radius:3px;background:oklch(0.68 0.13 145);"></span>
+<span style="width:11px;height:11px;border-radius:3px;background:oklch(0.62 0.1 250);"></span>
+</span>
+<span style="color:oklch(0.5 0.008 260);">near &rarr; far</span>
+</div>
+</sc-if>
+
+<sc-if value="{{ matrixView }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:oklch(0.13 0.004 260);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;overflow:auto;" data-screen-label="Matrix">
+<button onClick="{{ onBackToGraph }}" style="position:absolute;top:14px;left:14px;display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:6px 12px;border-radius:7px;border:1px solid oklch(0.32 0.01 260 / 0.6);cursor:pointer;font-family:inherit;background:oklch(0.19 0.006 260 / 0.94);color:oklch(0.85 0.004 260);">&larr; Back to graph</button>
+<div style="font-size:14px;font-weight:600;margin-bottom:3px;">Cluster coupling matrix</div>
+<div style="font-size:11px;color:oklch(0.6 0.008 260);margin-bottom:18px;max-width:520px;text-align:center;line-height:1.5;">Directed relations from the <span style="color:oklch(0.85 0.004 260);">row</span> cluster into the <span style="color:oklch(0.85 0.004 260);">column</span> cluster. The diagonal is internal edges. Click a cell to inspect that coupling on the graph.</div>
+<div style="display:flex;flex-direction:column;gap:3px;">
+<div style="display:flex;gap:3px;align-items:flex-end;">
+<div style="width:104px;flex:none;"></div>
+<sc-for list="{{ matrix.cols }}" as="col" hint-placeholder-count="8">
+<div style="width:46px;flex:none;text-align:center;font-size:9px;font-weight:600;color:{{ col.color }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ col.label }}</div>
+</sc-for>
+</div>
+<sc-for list="{{ matrix.rows }}" as="row" hint-placeholder-count="8">
+<div style="display:flex;gap:3px;align-items:center;">
+<div onClick="{{ row.onLabelClick }}" style="width:104px;flex:none;text-align:right;padding-right:8px;font-size:10.5px;font-weight:600;color:{{ row.color }};cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ row.label }}</div>
+<sc-for list="{{ row.cells }}" as="cell" hint-placeholder-count="8">
+<div onClick="{{ cell.onClick }}" title="{{ cell.title }}" style="width:46px;height:38px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:5px;font-size:11px;font-weight:600;cursor:{{ cell.cursor }};background:{{ cell.bg }};color:{{ cell.textColor }};border:1px solid {{ cell.border }};">{{ cell.text }}</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+</div>
+
+<sc-if value="{{ modeExplore }}" hint-placeholder-val="{{ true }}">
+<div style="width:340px;flex:none;border-left:1px solid oklch(0.32 0.01 260 / 0.5);background:oklch(0.18 0.005 260);overflow:auto;padding:14px;" data-screen-label="Inspector">
+
+<sc-if value="{{ agentVisible }}" hint-placeholder-val="{{ false }}">
+<div style="border:1px solid oklch(0.74 0.16 35 / 0.5);border-radius:10px;padding:12px;margin-bottom:14px;background:oklch(0.74 0.16 35 / 0.06);">
+<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
+<span style="font-size:10px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.74 0.16 35);flex:1;">Subsystem docs agent</span>
+<button onClick="{{ onAgentClose }}" style="background:none;border:none;color:oklch(0.6 0.008 260);cursor:pointer;font-size:14px;line-height:1;font-family:inherit;padding:0;">&times;</button>
+</div>
+<div style="font-size:12.5px;font-weight:600;margin-bottom:8px;">{{ agentClusterLabel }}</div>
+<sc-if value="{{ agentShowContext }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;">
+<sc-for list="{{ agentContextRows }}" as="row" hint-placeholder-count="5">
+<div style="display:flex;font-size:11px;"><span style="color:oklch(0.6 0.008 260);flex:1;">{{ row.label }}</span><span style="color:oklch(0.88 0.004 260);font-family:ui-monospace,Menlo,monospace;font-size:10.5px;">{{ row.value }}</span></div>
+</sc-for>
+</div>
+<button onClick="{{ onAgentGenerate }}" style="width:100%;font-size:11.5px;font-weight:600;padding:7px 0;border-radius:7px;border:none;cursor:pointer;font-family:inherit;background:oklch(0.74 0.16 35);color:oklch(0.16 0.004 260);">Generate with MCP agent</button>
+</sc-if>
+<sc-if value="{{ agentShowStream }}" hint-placeholder-val="{{ false }}">
+<div style="height:3px;border-radius:2px;background:oklch(0.26 0.008 260);margin-bottom:8px;overflow:hidden;"><div style="height:100%;width:{{ agentPct }}%;background:oklch(0.74 0.16 35);"></div></div>
+<div style="font-size:11.5px;line-height:1.55;color:oklch(0.85 0.004 260);white-space:pre-wrap;">{{ agentText }}</div>
+</sc-if>
+<sc-if value="{{ agentShowDone }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:11px;color:oklch(0.72 0.12 150);margin:8px 0;">Draft complete &middot; pinned to snapshot 5bcfa51 &middot; 6 evidence links validated</div>
+<button onClick="{{ onAgentOpenDocs }}" style="width:100%;font-size:11.5px;font-weight:600;padding:7px 0;border-radius:7px;border:1px solid oklch(0.74 0.16 35 / 0.5);cursor:pointer;font-family:inherit;background:none;color:oklch(0.74 0.16 35);">Open in Docs workspace</button>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ showOverview }}" hint-placeholder-val="{{ true }}">
+<div style="font-size:10px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin-bottom:4px;">Snapshot overview</div>
+<div style="font-size:11px;color:oklch(0.6 0.008 260);margin-bottom:10px;">Click a cluster region, node, or tension to drill in. Drag a cluster's <span style="color:oklch(0.74 0.16 35);">&#8759; pill</span> to move the whole group &mdash; nodes rebalance and your layout is remembered.</div>
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:8px 10px;border:1px solid oklch(0.32 0.01 260 / 0.4);border-radius:8px;background:oklch(0.15 0.004 260);">
+<div style="display:flex;align-items:center;gap:6px;flex:none;">
+<svg width="42" height="20" viewBox="0 0 42 20"><circle cx="6" cy="10" r="3" fill="oklch(0.6 0.03 260)"/><circle cx="21" cy="10" r="5" fill="oklch(0.62 0.06 230)"/><circle cx="36" cy="10" r="7.5" fill="oklch(0.7 0.13 205)"/></svg>
+</div>
+<div style="font-size:10.5px;color:oklch(0.62 0.008 260);line-height:1.45;">Node size = <span style="color:oklch(0.85 0.004 260);">importance</span> (degree, evidence, members). <span style="color:oklch(0.82 0.14 85);">Double-click</span> a symbol with a <span style="color:oklch(0.82 0.14 85);">+N</span> badge to reveal its methods &amp; props.</div>
+</div>
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin-bottom:6px;">Clusters</div>
+<sc-for list="{{ clusterRows }}" as="cl" hint-placeholder-count="8">
+<div onClick="{{ cl.onClick }}" style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-radius:6px;cursor:pointer;" style-hover="background:oklch(0.24 0.008 260);">
+<span style="width:9px;height:9px;border-radius:3px;background:{{ cl.color }};flex:none;"></span>
+<span style="font-size:12px;color:oklch(0.9 0.004 260);flex:1;">{{ cl.label }}</span>
+<span style="font-size:10px;color:oklch(0.55 0.008 260);">{{ cl.memberCount }}</span>
+<div style="width:44px;height:4px;border-radius:2px;background:oklch(0.26 0.008 260);overflow:hidden;flex:none;"><div style="height:100%;width:{{ cl.cohesionPct }}%;background:{{ cl.color }};"></div></div>
+</div>
+</sc-for>
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin:14px 0 6px;">Tensions</div>
+<sc-for list="{{ tensionRows }}" as="tn" hint-placeholder-count="5">
+<div onClick="{{ tn.onClick }}" style="padding:7px 8px;border-radius:7px;cursor:pointer;border:1px solid oklch(0.32 0.01 260 / 0.4);margin-bottom:6px;background:oklch(0.2 0.006 260);" style-hover="border-color:oklch(0.45 0.01 260);">
+<div style="display:flex;align-items:center;gap:6px;">
+<span style="width:7px;height:7px;border-radius:50%;background:{{ tn.sevColor }};flex:none;"></span>
+<span style="font-size:11.5px;font-weight:600;color:oklch(0.9 0.004 260);flex:1;line-height:1.3;">{{ tn.label }}</span>
+</div>
+<div style="font-size:10px;color:oklch(0.55 0.008 260);margin-top:3px;padding-left:13px;">{{ tn.meta }}</div>
+</div>
+</sc-for>
+</sc-if>
+
+<sc-if value="{{ showNodeInspector }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ onBackToOverview }}" style="font-size:10.5px;color:oklch(0.6 0.008 260);cursor:pointer;margin-bottom:10px;" style-hover="color:oklch(0.85 0.004 260);">&larr; Overview</div>
+<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
+<span style="width:9px;height:9px;border-radius:50%;background:{{ inspector.kindColor }};flex:none;"></span>
+<span style="font-size:10px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.6 0.008 260);">{{ inspector.kindLabel }}</span>
+</div>
+<div style="font-size:15px;font-weight:600;margin-bottom:2px;word-break:break-word;">{{ inspector.title }}</div>
+<sc-if value="{{ inspector.hasSubtitle }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:11.5px;color:oklch(0.62 0.008 260);margin-bottom:8px;">{{ inspector.subtitle }}</div>
+</sc-if>
+<sc-if value="{{ inspector.hasPath }}" hint-placeholder-val="{{ false }}">
+<div style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:oklch(0.6 0.008 260);background:oklch(0.14 0.004 260);padding:5px 7px;border-radius:5px;margin-bottom:8px;word-break:break-all;">{{ inspector.path }}</div>
+</sc-if>
+<sc-if value="{{ inspector.hasDescription }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:12px;line-height:1.5;color:oklch(0.82 0.004 260);margin-bottom:10px;">{{ inspector.description }}</div>
+</sc-if>
+<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px;">
+<sc-for list="{{ inspector.tags }}" as="tag" hint-placeholder-count="2">
+<span style="font-family:ui-monospace,Menlo,monospace;font-size:9.5px;color:oklch(0.7 0.008 260);background:oklch(0.24 0.008 260);padding:2.5px 7px;border-radius:10px;">{{ tag.label }}</span>
+</sc-for>
+</div>
+<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px;">
+<sc-for list="{{ inspector.metrics }}" as="m" hint-placeholder-count="3">
+<div style="display:flex;font-size:11px;"><span style="color:oklch(0.6 0.008 260);flex:1;">{{ m.label }}</span><span style="color:oklch(0.88 0.004 260);font-family:ui-monospace,Menlo,monospace;font-size:10.5px;">{{ m.value }}</span></div>
+</sc-for>
+</div>
+<div style="border:1px solid oklch(0.32 0.01 260 / 0.5);border-radius:9px;padding:10px 11px;margin-bottom:12px;background:oklch(0.15 0.004 260);">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+<span style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.6 0.008 260);flex:1;">&#9889; Blast radius</span>
+<span style="font-size:9px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;padding:2px 7px;border-radius:10px;background:{{ blast.sevBg }};color:{{ blast.sevColor }};">{{ blast.sevLabel }}</span>
+</div>
+<div style="display:flex;gap:2px;background:oklch(0.2 0.006 260);border-radius:6px;padding:2px;margin-bottom:9px;">
+<button onClick="{{ blast.onDependents }}" style="flex:1;font-size:10px;font-weight:600;padding:5px 0;border-radius:4px;border:none;cursor:pointer;font-family:inherit;background:{{ blast.dependentsBg }};color:{{ blast.dependentsColor }};">Dependents</button>
+<button onClick="{{ blast.onDependencies }}" style="flex:1;font-size:10px;font-weight:600;padding:5px 0;border-radius:4px;border:none;cursor:pointer;font-family:inherit;background:{{ blast.dependenciesBg }};color:{{ blast.dependenciesColor }};">Dependencies</button>
+</div>
+<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:5px;">
+<span style="font-size:20px;font-weight:700;color:{{ blast.sevColor }};">{{ blast.impactPct }}%</span>
+<span style="font-size:11px;color:oklch(0.62 0.008 260);">{{ blast.impactText }}</span>
+</div>
+<div style="height:6px;border-radius:3px;background:oklch(0.22 0.007 260);overflow:hidden;margin-bottom:7px;"><div style="height:100%;width:{{ blast.impactPct }}%;background:{{ blast.sevColor }};"></div></div>
+<div style="font-size:10.5px;color:oklch(0.6 0.008 260);margin-bottom:9px;">{{ blast.depthText }}</div>
+<sc-if value="{{ blast.hasAffected }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:9px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin-bottom:5px;">{{ blast.dirLabel }}</div>
+<sc-for list="{{ blast.affected }}" as="a" hint-placeholder-count="4">
+<div onClick="{{ a.onClick }}" style="display:flex;align-items:center;gap:7px;padding:3px 4px;border-radius:5px;cursor:pointer;" style-hover="background:oklch(0.24 0.008 260);">
+<span style="width:7px;height:7px;border-radius:50%;background:{{ a.color }};flex:none;"></span>
+<span style="font-size:11px;color:oklch(0.85 0.004 260);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ a.label }}</span>
+<span style="font-size:9.5px;color:oklch(0.55 0.008 260);font-family:ui-monospace,Menlo,monospace;">{{ a.hopLabel }}</span>
+</div>
+</sc-for>
+<sc-if value="{{ blast.hasMore }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:10px;color:oklch(0.5 0.008 260);padding:3px 4px;">{{ blast.moreText }}</div>
+</sc-if>
+<button onClick="{{ blast.onShowOnGraph }}" style="width:100%;margin-top:7px;font-size:10.5px;font-weight:600;padding:6px 0;border-radius:6px;border:1px solid {{ blast.showBtnBorder }};cursor:pointer;font-family:inherit;background:{{ blast.showBtnBg }};color:{{ blast.showBtnColor }};">{{ blast.showBtnLabel }}</button>
+</sc-if>
+<sc-if value="{{ blast.isEmpty }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:10.5px;color:oklch(0.55 0.008 260);">Nothing {{ blast.emptyWord }} this node along impact edges &mdash; it&rsquo;s a leaf in this direction.</div>
+</sc-if>
+</div>
+<sc-if value="{{ inspector.hasEvidence }}" hint-placeholder-val="{{ false }}">
+<div style="margin-bottom:12px;">
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin-bottom:6px;">Evidence</div>
+<sc-for list="{{ inspector.evidence }}" as="ev" hint-placeholder-count="2">
+<div style="display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:oklch(0.74 0.16 35);background:oklch(0.74 0.16 35 / 0.14);padding:3px 7px;border-radius:5px;margin:0 5px 5px 0;">{{ ev.label }}</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ inspector.hasTensions }}" hint-placeholder-val="{{ false }}">
+<div style="margin-bottom:12px;">
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin-bottom:6px;">Tensions</div>
+<sc-for list="{{ inspector.tensionLinks }}" as="tn" hint-placeholder-count="2">
+<div onClick="{{ tn.onClick }}" style="display:flex;align-items:center;gap:6px;padding:4px;border-radius:5px;cursor:pointer;" style-hover="background:oklch(0.24 0.008 260);">
+<span style="width:7px;height:7px;border-radius:50%;background:{{ tn.sevColor }};flex:none;"></span>
+<span style="font-size:11px;color:oklch(0.85 0.004 260);line-height:1.3;">{{ tn.label }}</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ inspector.hasRelatedDocs }}" hint-placeholder-val="{{ false }}">
+<div style="margin-bottom:12px;">
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin-bottom:6px;">Related docs</div>
+<sc-for list="{{ inspector.relatedDocs }}" as="doc" hint-placeholder-count="2">
+<div onClick="{{ doc.onClick }}" style="display:flex;align-items:center;gap:6px;padding:4px;border-radius:5px;cursor:pointer;" style-hover="background:oklch(0.24 0.008 260);">
+<span style="width:6px;height:6px;border-radius:50%;background:{{ doc.freshColor }};flex:none;"></span>
+<span style="font-size:11.5px;color:oklch(0.85 0.004 260);flex:1;">{{ doc.title }}</span>
+<span style="font-size:10px;color:oklch(0.55 0.008 260);">open &rarr;</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ inspector.hasOutgoing }}" hint-placeholder-val="{{ false }}">
+<div style="margin-bottom:12px;">
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin-bottom:6px;">Outgoing</div>
+<sc-for list="{{ inspector.outgoing }}" as="rel" hint-placeholder-count="3">
+<div onClick="{{ rel.onClick }}" style="display:flex;align-items:baseline;gap:6px;padding:4px;border-radius:5px;cursor:pointer;" style-hover="background:oklch(0.24 0.008 260);">
+<span style="width:7px;height:7px;border-radius:50%;background:{{ rel.relColor }};flex:none;margin-top:3px;"></span>
+<span style="font-size:11.5px;color:oklch(0.85 0.004 260);"><span style="color:oklch(0.62 0.008 260);">{{ rel.relLabel }}</span> {{ rel.otherLabel }}</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ inspector.hasIncoming }}" hint-placeholder-val="{{ false }}">
+<div>
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin-bottom:6px;">Incoming</div>
+<sc-for list="{{ inspector.incoming }}" as="rel" hint-placeholder-count="3">
+<div onClick="{{ rel.onClick }}" style="display:flex;align-items:baseline;gap:6px;padding:4px;border-radius:5px;cursor:pointer;" style-hover="background:oklch(0.24 0.008 260);">
+<span style="width:7px;height:7px;border-radius:50%;background:{{ rel.relColor }};flex:none;margin-top:3px;"></span>
+<span style="font-size:11.5px;color:oklch(0.85 0.004 260);">{{ rel.otherLabel }} <span style="color:oklch(0.62 0.008 260);">{{ rel.relLabel }}</span></span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{ showClusterInspector }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ onBackToOverview }}" style="font-size:10.5px;color:oklch(0.6 0.008 260);cursor:pointer;margin-bottom:10px;" style-hover="color:oklch(0.85 0.004 260);">&larr; Overview</div>
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+<span style="width:11px;height:11px;border-radius:3px;background:{{ clusterView.color }};flex:none;"></span>
+<span style="font-size:15px;font-weight:600;">{{ clusterView.label }}</span>
+<span style="font-size:10px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;color:oklch(0.55 0.008 260);margin-left:auto;">cluster</span>
+</div>
+<div style="font-size:12px;line-height:1.5;color:oklch(0.82 0.004 260);margin-bottom:12px;">{{ clusterView.summary }}</div>
+<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;">
+<div style="display:flex;align-items:center;font-size:11px;"><span style="color:oklch(0.6 0.008 260);width:92px;">Members</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:oklch(0.9 0.004 260);">{{ clusterView.memberCount }}</span></div>
+<div style="display:flex;align-items:center;font-size:11px;"><span style="color:oklch(0.6 0.008 260);width:92px;">Cohesion</span><div style="flex:1;height:4px;border-radius:2px;background:oklch(0.26 0.008 260);overflow:hidden;margin-right:8px;"><div style="height:100%;width:{{ clusterView.cohesionPct }}%;background:{{ clusterView.color }};"></div></div><span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:oklch(0.9 0.004 260);">{{ clusterView.cohesion }}</span></div>
+<div style="display:flex;align-items:center;font-size:11px;"><span style="color:oklch(0.6 0.008 260);width:92px;">Conductance</span><div style="flex:1;height:4px;border-radius:2px;background:oklch(0.26 0.008 260);overflow:hidden;margin-right:8px;"><div style="height:100%;width:{{ clusterView.conductancePct }}%;background:oklch(0.78 0.15 75);"></div></div><span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:oklch(0.9 0.004 260);">{{ clusterView.conductance }}</span></div>
+<div style="display:flex;align-items:center;font-size:11px;"><span style="color:oklch(0.6 0.008 260);width:92px;">Boundary edges</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:oklch(0.9 0.004 260);">{{ clusterView.boundaryCount }}</span></div>
+</div>
+<div style="display:flex;gap:6px;margin-bottom:14px;">
+<button onClick="{{ clusterView.onFocus }}" style="flex:1;font-size:11px;font-weight:600;padding:6px 0;border-radius:7px;border:1px solid oklch(0.32 0.01 260 / 0.6);cursor:pointer;font-family:inherit;background:oklch(0.22 0.007 260);color:oklch(0.9 0.004 260);">Focus</button>
+<button onClick="{{ onToggleIsolate }}" style="flex:1.4;font-size:11px;font-weight:600;padding:6px 0;border-radius:7px;border:1px solid {{ isolateBtnBorder }};cursor:pointer;font-family:inherit;background:{{ isolateBtnBg }};color:{{ isolateBtnColor }};">Boundary edges</button>
+<button onClick="{{ clusterView.onDraftDocs }}" style="flex:1.6;font-size:11px;font-weight:600;padding:6px 0;border-radius:7px;border:none;cursor:pointer;font-family:inherit;background:oklch(0.74 0.16 35);color:oklch(0.16 0.004 260);">Draft docs</button>
+</div>
+<sc-if value="{{ clusterView.hasBridges }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin-bottom:6px;">Bridge nodes</div>
+<sc-for list="{{ clusterView.bridgeRows }}" as="b" hint-placeholder-count="1">
+<div onClick="{{ b.onClick }}" style="display:flex;align-items:center;gap:7px;padding:4px;border-radius:5px;cursor:pointer;margin-bottom:2px;" style-hover="background:oklch(0.24 0.008 260);">
+<span style="width:8px;height:8px;border-radius:50%;background:{{ b.color }};flex:none;"></span>
+<span style="font-size:11.5px;color:oklch(0.88 0.004 260);flex:1;">{{ b.label }}</span>
+<span style="font-size:10px;color:oklch(0.55 0.008 260);">{{ b.meta }}</span>
+</div>
+</sc-for>
+</sc-if>
+<div style="display:flex;flex-wrap:wrap;gap:4px;margin:10px 0 12px;">
+<sc-for list="{{ clusterView.tagChips }}" as="tag" hint-placeholder-count="2">
+<span style="font-family:ui-monospace,Menlo,monospace;font-size:9.5px;color:oklch(0.7 0.008 260);background:oklch(0.24 0.008 260);padding:2.5px 7px;border-radius:10px;">{{ tag.label }}</span>
+</sc-for>
+</div>
+<sc-if value="{{ clusterView.hasTensions }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin-bottom:6px;">Tensions in this cluster</div>
+<sc-for list="{{ clusterView.tensionLinks }}" as="tn" hint-placeholder-count="2">
+<div onClick="{{ tn.onClick }}" style="display:flex;align-items:center;gap:6px;padding:4px;border-radius:5px;cursor:pointer;margin-bottom:2px;" style-hover="background:oklch(0.24 0.008 260);">
+<span style="width:7px;height:7px;border-radius:50%;background:{{ tn.sevColor }};flex:none;"></span>
+<span style="font-size:11px;color:oklch(0.85 0.004 260);line-height:1.3;">{{ tn.label }}</span>
+</div>
+</sc-for>
+</sc-if>
+<sc-if value="{{ clusterView.hasRelatedDocs }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin:12px 0 6px;">Related docs</div>
+<sc-for list="{{ clusterView.relatedDocs }}" as="doc" hint-placeholder-count="2">
+<div onClick="{{ doc.onClick }}" style="display:flex;align-items:center;gap:6px;padding:4px;border-radius:5px;cursor:pointer;margin-bottom:2px;" style-hover="background:oklch(0.24 0.008 260);">
+<span style="width:6px;height:6px;border-radius:50%;background:{{ doc.freshColor }};flex:none;"></span>
+<span style="font-size:11.5px;color:oklch(0.85 0.004 260);flex:1;">{{ doc.title }}</span>
+<span style="font-size:10px;color:oklch(0.55 0.008 260);">open &rarr;</span>
+</div>
+</sc-for>
+</sc-if>
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin:12px 0 6px;">Members by degree</div>
+<sc-for list="{{ clusterView.topMembers }}" as="m" hint-placeholder-count="6">
+<div onClick="{{ m.onClick }}" style="display:flex;align-items:center;gap:7px;padding:3.5px 4px;border-radius:5px;cursor:pointer;" style-hover="background:oklch(0.24 0.008 260);">
+<span style="width:8px;height:8px;border-radius:50%;background:{{ m.color }};flex:none;"></span>
+<span style="font-size:11.5px;color:oklch(0.88 0.004 260);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ m.label }}</span>
+<span style="font-size:10px;color:oklch(0.55 0.008 260);">{{ m.degree }}</span>
+</div>
+</sc-for>
+</sc-if>
+
+<sc-if value="{{ showTensionInspector }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ onBackToOverview }}" style="font-size:10.5px;color:oklch(0.6 0.008 260);cursor:pointer;margin-bottom:10px;" style-hover="color:oklch(0.85 0.004 260);">&larr; Overview</div>
+<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
+<span style="font-size:9.5px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;padding:3px 8px;border-radius:10px;background:{{ tensionView.sevBg }};color:{{ tensionView.sevColor }};">{{ tensionView.sevLabel }}</span>
+<span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:oklch(0.6 0.008 260);">{{ tensionView.category }}</span>
+<span style="font-size:10px;color:oklch(0.55 0.008 260);margin-left:auto;">conf. {{ tensionView.confidence }}</span>
+</div>
+<div style="font-size:14px;font-weight:600;line-height:1.35;margin-bottom:10px;">{{ tensionView.label }}</div>
+<div style="font-size:12px;line-height:1.55;color:oklch(0.82 0.004 260);margin-bottom:12px;">{{ tensionView.why }}</div>
+<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px;">
+<sc-for list="{{ tensionView.metrics }}" as="m" hint-placeholder-count="3">
+<div style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:oklch(0.72 0.008 260);">{{ m.label }}</div>
+</sc-for>
+</div>
+<div style="margin-bottom:12px;">
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin-bottom:6px;">Evidence</div>
+<sc-for list="{{ tensionView.evidence }}" as="ev" hint-placeholder-count="3">
+<div style="display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:oklch(0.74 0.16 35);background:oklch(0.74 0.16 35 / 0.14);padding:3px 7px;border-radius:5px;margin:0 5px 5px 0;">{{ ev.label }}</div>
+</sc-for>
+</div>
+<div style="margin-bottom:12px;">
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin-bottom:6px;">Affected nodes</div>
+<sc-for list="{{ tensionView.affectedRows }}" as="row" hint-placeholder-count="4">
+<div onClick="{{ row.onClick }}" style="display:flex;align-items:center;gap:7px;padding:3.5px 4px;border-radius:5px;cursor:pointer;" style-hover="background:oklch(0.24 0.008 260);">
+<span style="width:8px;height:8px;border-radius:50%;background:{{ row.color }};flex:none;"></span>
+<span style="font-size:11.5px;color:oklch(0.88 0.004 260);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ row.label }}</span>
+<span style="font-size:10px;color:oklch(0.55 0.008 260);">{{ row.kindLabel }}</span>
+</div>
+</sc-for>
+</div>
+<div style="margin-bottom:14px;">
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin-bottom:6px;">Suggested next</div>
+<sc-for list="{{ tensionView.suggested }}" as="s" hint-placeholder-count="2">
+<div style="font-size:11px;color:oklch(0.78 0.008 260);padding:5px 8px;border:1px dashed oklch(0.35 0.01 260);border-radius:6px;margin-bottom:5px;font-family:ui-monospace,Menlo,monospace;">{{ s.label }}</div>
+</sc-for>
+</div>
+<div style="display:flex;gap:6px;">
+<button onClick="{{ tensionView.onFocusAffected }}" style="flex:1;font-size:11px;font-weight:600;padding:7px 0;border-radius:7px;border:none;cursor:pointer;font-family:inherit;background:oklch(0.74 0.16 35);color:oklch(0.16 0.004 260);">Focus affected</button>
+<button onClick="{{ tensionView.onSave }}" style="flex:1;font-size:11px;font-weight:600;padding:7px 0;border-radius:7px;border:1px solid oklch(0.32 0.01 260 / 0.6);cursor:pointer;font-family:inherit;background:oklch(0.22 0.007 260);color:oklch(0.9 0.004 260);">{{ tensionView.saveLabel }}</button>
+</div>
+</sc-if>
+
+</div>
+</sc-if>
+
+<sc-if value="{{ modeDocs }}" hint-placeholder-val="{{ false }}">
+<div style="width:520px;flex:none;border-left:1px solid oklch(0.32 0.01 260 / 0.5);background:oklch(0.18 0.005 260);display:flex;min-height:0;" data-screen-label="Docs workspace">
+<div style="width:158px;flex:none;border-right:1px solid oklch(0.32 0.01 260 / 0.4);overflow:auto;padding:10px 6px;">
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);padding:0 6px 6px;">Sections</div>
+<sc-if value="{{ docsFilterActive }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ onDocsFilterClear }}" style="display:flex;align-items:center;gap:5px;margin:0 4px 8px;font-size:10px;padding:4px 8px;border-radius:12px;cursor:pointer;background:oklch(0.74 0.16 35 / 0.14);color:oklch(0.74 0.16 35);border:1px solid oklch(0.74 0.16 35 / 0.45);line-height:1.3;">
+<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ docsFilterLabel }}</span><span style="opacity:0.7;">&times;</span>
+</div>
+</sc-if>
+<sc-for list="{{ docsNav }}" as="sec" hint-placeholder-count="9">
+<div onClick="{{ sec.onClick }}" style="display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:6px;cursor:pointer;background:{{ sec.bg }};opacity:{{ sec.opacity }};" style-hover="background:oklch(0.24 0.008 260);">
+<span style="width:6px;height:6px;border-radius:50%;background:{{ sec.freshColor }};flex:none;"></span>
+<span style="font-size:11.5px;color:{{ sec.color }};font-weight:{{ sec.weight }};">{{ sec.title }}</span>
+</div>
+</sc-for>
+<sc-if value="{{ hasGeneratedDocs }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);padding:12px 6px 6px;">Subsystems</div>
+<sc-for list="{{ generatedNav }}" as="sec" hint-placeholder-count="1">
+<div onClick="{{ sec.onClick }}" style="display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:6px;cursor:pointer;background:{{ sec.bg }};opacity:{{ sec.opacity }};" style-hover="background:oklch(0.24 0.008 260);">
+<span style="width:6px;height:6px;border-radius:50%;background:{{ sec.freshColor }};flex:none;"></span>
+<span style="font-size:11.5px;color:{{ sec.color }};font-weight:{{ sec.weight }};">{{ sec.title }}</span>
+</div>
+</sc-for>
+</sc-if>
+</div>
+<div style="flex:1;overflow:auto;padding:16px;">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+<div style="font-size:16px;font-weight:600;flex:1;">{{ docSection.title }}</div>
+<span style="font-size:9.5px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;padding:3px 8px;border-radius:10px;background:{{ docSection.freshBg }};color:{{ docSection.freshColor }};">{{ docSection.freshLabel }}</span>
+</div>
+<div style="font-family:ui-monospace,Menlo,monospace;font-size:9.5px;color:oklch(0.5 0.008 260);margin-bottom:12px;">snapshot 5bcfa51 &middot; {{ docSection.query }}</div>
+<sc-if value="{{ docSection.hasStaleReason }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;gap:10px;background:oklch(0.78 0.15 75 / 0.1);border:1px solid oklch(0.78 0.15 75 / 0.45);color:oklch(0.85 0.12 80);padding:7px 10px;border-radius:8px;font-size:11px;margin-bottom:12px;line-height:1.4;">
+{{ docSection.staleReason }}
+<button onClick="{{ docSection.onRegenerate }}" style="font-size:10px;font-weight:600;padding:3px 9px;border-radius:5px;border:1px solid oklch(0.78 0.15 75 / 0.6);background:none;color:oklch(0.85 0.12 80);cursor:pointer;font-family:inherit;white-space:nowrap;">Regenerate</button>
+</div>
+</sc-if>
+<sc-for list="{{ docSection.paragraphs }}" as="p" hint-placeholder-count="2">
+<div style="font-size:12.5px;line-height:1.65;color:oklch(0.86 0.004 260);margin-bottom:10px;">{{ p.text }}</div>
+</sc-for>
+<div style="margin:14px 0 12px;">
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin-bottom:6px;">Evidence</div>
+<sc-for list="{{ docSection.evidence }}" as="ev" hint-placeholder-count="2">
+<div style="display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:oklch(0.74 0.16 35);background:oklch(0.74 0.16 35 / 0.14);padding:3px 7px;border-radius:5px;margin:0 5px 5px 0;">{{ ev.label }}</div>
+</sc-for>
+</div>
+<div style="font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:oklch(0.5 0.008 260);margin-bottom:6px;">In the graph</div>
+<div style="display:flex;flex-wrap:wrap;gap:5px;">
+<sc-for list="{{ docSection.relatedChips }}" as="chip" hint-placeholder-count="3">
+<div onClick="{{ chip.onClick }}" style="display:flex;align-items:center;gap:5px;font-size:10.5px;padding:4px 9px;border-radius:14px;cursor:pointer;border:1px solid oklch(0.32 0.01 260 / 0.6);background:oklch(0.22 0.007 260);color:oklch(0.88 0.004 260);" style-hover="border-color:oklch(0.5 0.01 260);">
+<span style="width:7px;height:7px;border-radius:50%;background:{{ chip.color }};flex:none;"></span>
+{{ chip.label }}
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      mode: 'explore',
+      leftTab: 'files',
+      search: '',
+      tagSearch: '',
+      selectedType: null,
+      selectedId: null,
+      overlay: 'kind',
+      clusterMap: false,
+      matrixView: false,
+      edgeView: 'nodes',
+      subClusters: false,
+      blastDir: 'dependents',
+      focusDepth: null,
+      budget: 500,
+      nodeVisible: {},
+      relVisible: {},
+      expandedFolders: {},
+      expandedNodes: {},
+      tagsInclude: [],
+      tagsExclude: [],
+      isolateBoundary: false,
+      docsSection: 'overview',
+      agent: { stage: 'idle', clusterId: null, text: '', pct: 0 },
+      generatedDocs: [],
+      savedLocal: [],
+      copied: false,
+      pins: {},
+      clusterAnchors: {},
+    };
+    const saved = this.loadLayout();
+    this.state.pins = saved.pins || {};
+    this.state.clusterAnchors = saved.clusterAnchors || {};
+    this.runtime = {};
+    this.svgRef = React.createRef();
+    this.containerRef = React.createRef();
+    this.data = null;
+    this.atlas = null;
+    this.engine = null;
+  }
+
+  async componentDidMount() {
+    let dataMod, engineMod, atlasMod;
+    if (window.__litho) {
+      ({ D: dataMod, E: engineMod, A: atlasMod } = window.__litho);
+    } else {
+      try {
+        [dataMod, engineMod, atlasMod] = await Promise.all([
+          import('./graph-data.js'),
+          import('./graph-engine.js'),
+          import('./atlas-data.js'),
+        ]);
+      } catch (e) {
+        // Bundled/offline: wait for the inlined helmet module script to publish globals.
+        for (let i = 0; i < 150 && !window.__litho; i++) await new Promise((r) => setTimeout(r, 30));
+        if (!window.__litho) throw e;
+        ({ D: dataMod, E: engineMod, A: atlasMod } = window.__litho);
+      }
+    }
+    this.data = dataMod;
+    this.engine = engineMod;
+    this.atlas = atlasMod;
+    this.degrees = engineMod.computeDegrees(dataMod.nodes, dataMod.relations);
+    this.nodeCountByKind = this.countBy(dataMod.nodes, 'kind', dataMod.NODE_KINDS);
+    this.relCountByKind = this.countBy(dataMod.relations, 'kind', dataMod.RELATION_KINDS);
+    this.crossEdges = atlasMod.crossClusterEdges();
+    this.setState({}, () => {
+      this.initGraph();
+      this.startLoop();
+      this.forceUpdate();
+      // Let the separation force settle the constellation, then frame it.
+      setTimeout(() => this.fitView(), 900);
+      setTimeout(() => this.fitView(), 2200);
+    });
+  }
+
+  componentWillUnmount() {
+    if (this.raf) cancelAnimationFrame(this.raf);
+    if (this.agentTimer) clearInterval(this.agentTimer);
+    if (this.runtime.resizeObserver) this.runtime.resizeObserver.disconnect();
+  }
+
+  countBy(list, field, kindsMeta) {
+    const counts = {};
+    for (const meta of kindsMeta) counts[meta.key] = 0;
+    for (const item of list) counts[item[field]] = (counts[item[field]] || 0) + 1;
+    return counts;
+  }
+  humanize(str) {
+    if (!str) return '';
+    return str.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+  }
+  withAlpha(color, a) {
+    return color.replace(')', ' / ' + a + ')');
+  }
+
+  // -------------------------------------------------------------------------
+  // Scene setup
+  // -------------------------------------------------------------------------
+  initGraph() {
+    const svg = this.svgRef.current, container = this.containerRef.current;
+    if (!svg || !container) return;
+    const { nodes, relations } = this.data;
+    const { clusters, clusterOfNode } = this.atlas;
+    const engine = this.engine;
+    const sim = engine.createForceSim(nodes, relations, { charge: 700, linkDistance: 48, linkStrength: 0.05, centerStrength: 0.002 });
+    const rt = this.runtime;
+    Object.assign(rt, {
+      svg, container, pos: sim.pos, sim,
+      transform: { x: 0, y: 0, k: 1 },
+      hoveredId: null, dragId: null, panning: false, lastX: 0, lastY: 0, moved: false,
+      pendingCluster: null, dragCluster: null, clusterMoved: false, width: 300, height: 300, centered: false,
+    });
+    this.applyAnchors();
+
+    const NS = 'http://www.w3.org/2000/svg';
+    const scene = document.createElementNS(NS, 'g');
+    svg.appendChild(scene);
+    rt.scene = scene;
+    const hullsLayer = document.createElementNS(NS, 'g');
+    const subHullsLayer = document.createElementNS(NS, 'g');
+    const edgesLayer = document.createElementNS(NS, 'g');
+    const clusterEdgesLayer = document.createElementNS(NS, 'g');
+    const nodesLayer = document.createElementNS(NS, 'g');
+    scene.appendChild(hullsLayer);
+    scene.appendChild(subHullsLayer);
+    scene.appendChild(edgesLayer);
+    scene.appendChild(clusterEdgesLayer);
+    scene.appendChild(nodesLayer);
+
+    // Aggregated cluster<->cluster edges (one bundled curve per cluster pair).
+    this.ensureSubGroups();
+    rt.clusterEdgeEls = [];
+    const cPairs = {};
+    for (const rel of this.data.relations) {
+      const a = this.atlas.clusterOfNode[rel.source], b = this.atlas.clusterOfNode[rel.target];
+      if (!a || !b || a === b) continue;
+      const key = a < b ? a + '|' + b : b + '|' + a;
+      cPairs[key] = (cPairs[key] || 0) + 1;
+    }
+    let cMax = 1;
+    for (const v of Object.values(cPairs)) cMax = Math.max(cMax, v);
+    for (const [key, count] of Object.entries(cPairs)) {
+      const [a, b] = key.split('|');
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', 'oklch(0.62 0.05 250)');
+      path.setAttribute('stroke-linecap', 'round');
+      path.style.display = 'none';
+      clusterEdgesLayer.appendChild(path);
+      const lbl = document.createElementNS(NS, 'text');
+      lbl.textContent = String(count);
+      lbl.setAttribute('fill', 'oklch(0.72 0.008 260)');
+      lbl.setAttribute('font-family', 'ui-monospace, Menlo, monospace');
+      lbl.setAttribute('text-anchor', 'middle');
+      lbl.style.display = 'none';
+      lbl.style.pointerEvents = 'none';
+      clusterEdgesLayer.appendChild(lbl);
+      rt.clusterEdgeEls.push({ a, b, count, ratio: count / cMax, path, lbl });
+    }
+
+    // Mini-cluster (sub-group) hull outlines, one per (cluster, kind) group.
+    rt.subHullEls = {};
+    for (const cl of this.atlas.clusters) {
+      for (const grp of (this.subGroups[cl.id] || [])) {
+        const path = document.createElementNS(NS, 'path');
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke-linejoin', 'round');
+        path.setAttribute('stroke-linecap', 'round');
+        path.setAttribute('stroke-dasharray', '3 4');
+        path.style.display = 'none';
+        subHullsLayer.appendChild(path);
+        const lbl = document.createElementNS(NS, 'text');
+        lbl.setAttribute('font-family', 'Inter, ui-sans-serif, sans-serif');
+        lbl.setAttribute('font-weight', '600');
+        lbl.setAttribute('text-anchor', 'middle');
+        lbl.style.display = 'none';
+        lbl.style.pointerEvents = 'none';
+        subHullsLayer.appendChild(lbl);
+        rt.subHullEls[cl.id + '|' + grp.key] = { path, lbl, clId: cl.id, key: grp.key };
+      }
+    }
+
+    rt.hullEls = {};
+    for (const cl of clusters) {
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('fill', this.withAlpha(cl.color, 0.06));
+      path.setAttribute('stroke', this.withAlpha(cl.color, 0.22));
+      path.setAttribute('stroke-linejoin', 'round');
+      path.setAttribute('stroke-linecap', 'round');
+      hullsLayer.appendChild(path);
+      // Drag handle: a pill behind the cluster label, always clickable even
+      // when the hull interior is packed with nodes.
+      const handle = document.createElementNS(NS, 'g');
+      handle.style.cursor = 'grab';
+      const pill = document.createElementNS(NS, 'rect');
+      pill.setAttribute('rx', '9');
+      pill.setAttribute('ry', '9');
+      handle.appendChild(pill);
+      const grip = document.createElementNS(NS, 'text');
+      grip.textContent = '\u2237';
+      grip.setAttribute('font-family', 'Inter, ui-sans-serif, sans-serif');
+      grip.setAttribute('text-anchor', 'middle');
+      grip.setAttribute('dominant-baseline', 'central');
+      handle.appendChild(grip);
+      const label = document.createElementNS(NS, 'text');
+      label.textContent = cl.label.toUpperCase();
+      label.setAttribute('fill', this.withAlpha(cl.color, 0.9));
+      label.setAttribute('font-family', 'Inter, ui-sans-serif, sans-serif');
+      label.setAttribute('font-weight', '700');
+      label.setAttribute('letter-spacing', '1');
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('dominant-baseline', 'central');
+      handle.appendChild(label);
+      hullsLayer.appendChild(handle);
+      rt.hullEls[cl.id] = { path, handle, pill, grip, label };
+      const pick = (e) => {
+        e.stopPropagation();
+        rt.dragCluster = cl.id;
+        rt.clusterMoved = false;
+        handle.style.cursor = 'grabbing';
+        // Freeze members so the sim doesn't pull them back mid-drag; the whole
+        // group then moves rigidly with the pointer.
+        for (const id of cl.members) { const p = rt.pos[id]; if (p) { p.fixed = true; p.vx = 0; p.vy = 0; } }
+        const rect = svg.getBoundingClientRect();
+        rt.lastX = e.clientX - rect.left;
+        rt.lastY = e.clientY - rect.top;
+        try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+      };
+      path.style.cursor = 'grab';
+      path.addEventListener('pointerdown', pick);
+      handle.addEventListener('pointerdown', pick);
+      handle.addEventListener('pointerenter', () => { rt.hoveredCluster = cl.id; });
+      handle.addEventListener('pointerleave', () => { if (rt.hoveredCluster === cl.id) rt.hoveredCluster = null; handle.style.cursor = 'grab'; });
+      path.addEventListener('pointerenter', () => { rt.hoveredCluster = cl.id; });
+      path.addEventListener('pointerleave', () => { if (rt.hoveredCluster === cl.id) rt.hoveredCluster = null; });
+    }
+
+    rt.edgeEls = {};
+    for (const rel of relations) {
+      const el = document.createElementNS(NS, 'line');
+      const meta = this.data.relKindMeta(rel.kind);
+      el.setAttribute('stroke', meta ? meta.color : '#8886');
+      el.setAttribute('fill', 'none');
+      edgesLayer.appendChild(el);
+      rt.edgeEls[rel.id] = el;
+    }
+    rt.nodeEls = {};
+    for (const nd of nodes) {
+      const g = document.createElementNS(NS, 'g');
+      g.style.cursor = 'pointer';
+      const c = document.createElementNS(NS, 'circle');
+      g.appendChild(c);
+      const t = document.createElementNS(NS, 'text');
+      t.textContent = nd.label.length > 34 ? nd.label.slice(0, 32) + '\u2026' : nd.label;
+      t.setAttribute('font-family', 'ui-monospace, Menlo, monospace');
+      t.style.display = 'none';
+      t.style.pointerEvents = 'none';
+      g.appendChild(t);
+      const badge = document.createElementNS(NS, 'text');
+      badge.setAttribute('font-family', 'Inter, ui-sans-serif, sans-serif');
+      badge.setAttribute('font-weight', '700');
+      badge.setAttribute('text-anchor', 'middle');
+      badge.setAttribute('dominant-baseline', 'central');
+      badge.style.pointerEvents = 'none';
+      badge.style.display = 'none';
+      g.appendChild(badge);
+      nodesLayer.appendChild(g);
+      rt.nodeEls[nd.id] = { g, c, t, badge };
+      g.addEventListener('pointerenter', () => { if (!rt.dragId && !rt.panning) rt.hoveredId = nd.id; });
+      g.addEventListener('pointerleave', () => { if (rt.hoveredId === nd.id) rt.hoveredId = null; });
+      g.addEventListener('dblclick', (e) => { e.stopPropagation(); this.toggleExpand(nd.id); });
+      g.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        rt.pendingCluster = null;
+        rt.dragId = nd.id;
+        rt.dragIdCluster = this.atlas.clusterOfNode[nd.id] || null;
+        rt.moved = false;
+        const members = rt.dragIdCluster ? this.atlas.clusterById[rt.dragIdCluster].members : [nd.id];
+        for (const id of members) { const mp = rt.pos[id]; if (mp) { mp.fixed = true; mp.vx = 0; mp.vy = 0; } }
+        const rect = svg.getBoundingClientRect();
+        rt.lastX = e.clientX - rect.left;
+        rt.lastY = e.clientY - rect.top;
+        try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+      });
+    }
+
+    // Cluster-map meta scene
+    const metaScene = document.createElementNS(NS, 'g');
+    metaScene.style.display = 'none';
+    svg.appendChild(metaScene);
+    rt.metaScene = metaScene;
+    const metaNodes = clusters.map((cl) => ({ id: cl.id }));
+    const pairCounts = {};
+    for (const rel of this.crossEdges) {
+      const a = clusterOfNode[rel.source], b = clusterOfNode[rel.target];
+      const key = a < b ? a + '|' + b : b + '|' + a;
+      pairCounts[key] = (pairCounts[key] || 0) + 1;
+    }
+    const metaRels = Object.entries(pairCounts).map(([key, count], i) => {
+      const [a, b] = key.split('|');
+      return { id: 'mr' + i, source: a, target: b, count };
+    });
+    const metaSim = engine.createForceSim(metaNodes, metaRels, { charge: 9000, linkDistance: 230, linkStrength: 0.04, centerStrength: 0.03 });
+    rt.metaSim = metaSim;
+    rt.metaPos = metaSim.pos;
+    rt.metaEdgeEls = [];
+    for (const mr of metaRels) {
+      const line = document.createElementNS(NS, 'line');
+      line.setAttribute('stroke', 'oklch(0.45 0.01 260)');
+      line.setAttribute('stroke-width', 1 + mr.count * 0.9);
+      line.setAttribute('opacity', '0.55');
+      metaScene.appendChild(line);
+      const cnt = document.createElementNS(NS, 'text');
+      cnt.textContent = mr.count;
+      cnt.setAttribute('fill', 'oklch(0.65 0.008 260)');
+      cnt.setAttribute('font-size', '10');
+      cnt.setAttribute('font-family', 'ui-monospace, Menlo, monospace');
+      cnt.setAttribute('text-anchor', 'middle');
+      metaScene.appendChild(cnt);
+      rt.metaEdgeEls.push({ rel: mr, line, cnt });
+    }
+    rt.metaNodeEls = {};
+    for (const cl of clusters) {
+      const g = document.createElementNS(NS, 'g');
+      g.style.cursor = 'pointer';
+      const r = 16 + cl.members.length * 1.5;
+      const circ = document.createElementNS(NS, 'circle');
+      circ.setAttribute('r', r);
+      circ.setAttribute('fill', this.withAlpha(cl.color, 0.16));
+      circ.setAttribute('stroke', cl.color);
+      circ.setAttribute('stroke-width', '1.4');
+      g.appendChild(circ);
+      const count = document.createElementNS(NS, 'text');
+      count.textContent = cl.members.length;
+      count.setAttribute('fill', cl.color);
+      count.setAttribute('font-size', '15');
+      count.setAttribute('font-weight', '700');
+      count.setAttribute('font-family', 'Inter, ui-sans-serif, sans-serif');
+      count.setAttribute('text-anchor', 'middle');
+      count.setAttribute('dy', '0.35em');
+      g.appendChild(count);
+      const label = document.createElementNS(NS, 'text');
+      label.textContent = cl.label;
+      label.setAttribute('fill', 'oklch(0.9 0.004 260)');
+      label.setAttribute('font-size', '12');
+      label.setAttribute('font-weight', '600');
+      label.setAttribute('font-family', 'Inter, ui-sans-serif, sans-serif');
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('y', r + 16);
+      g.appendChild(label);
+      metaScene.appendChild(g);
+      rt.metaNodeEls[cl.id] = g;
+      g.addEventListener('pointerdown', (e) => { rt.pendingCluster = cl.id; });
+      g.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        this.setState({ clusterMap: false });
+        this.selectCluster(cl.id, true);
+      });
+    }
+
+    const resize = () => {
+      const rect = container.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      rt.width = rect.width;
+      rt.height = rect.height;
+      if (!rt.centered) {
+        rt.transform.x = rect.width / 2;
+        rt.transform.y = rect.height / 2;
+        rt.centered = true;
+      }
+    };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(container);
+    rt.resizeObserver = ro;
+    this.attachHandlers();
+  }
+
+  attachHandlers() {
+    const rt = this.runtime;
+    const svg = rt.svg;
+    const getXY = (e) => {
+      const rect = svg.getBoundingClientRect();
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    };
+    svg.addEventListener('pointerdown', (e) => {
+      rt.panning = true;
+      rt.moved = false;
+      const { x, y } = getXY(e);
+      rt.lastX = x; rt.lastY = y;
+      try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    svg.addEventListener('pointermove', (e) => {
+      const { x, y } = getXY(e);
+      const dx = (x - rt.lastX) / rt.transform.k, dy = (y - rt.lastY) / rt.transform.k;
+      if (rt.dragCluster) {
+        const cl = this.atlas.clusterById[rt.dragCluster];
+        if (this.state.subClusters) { this.moveOrgCenter(rt.dragCluster, dx, dy); }
+        else { for (const id of cl.members) { const p = rt.pos[id]; if (p) { p.x += dx; p.y += dy; p.vx = 0; p.vy = 0; } } }
+        if (Math.abs(x - rt.lastX) + Math.abs(y - rt.lastY) > 1) rt.clusterMoved = true;
+      } else if (rt.dragId) {
+        // Move the grabbed node's whole cluster together (node leads, siblings follow).
+        if (this.state.subClusters) {
+          if (rt.dragIdCluster) this.moveOrgCenter(rt.dragIdCluster, dx, dy);
+        } else {
+          const members = rt.dragIdCluster ? this.atlas.clusterById[rt.dragIdCluster].members : [rt.dragId];
+          for (const id of members) { const p = rt.pos[id]; if (p) { p.x += dx; p.y += dy; p.vx = 0; p.vy = 0; } }
+        }
+        if (Math.abs(x - rt.lastX) + Math.abs(y - rt.lastY) > 1) rt.moved = true;
+      } else if (rt.panning) {
+        rt.transform.x += x - rt.lastX;
+        rt.transform.y += y - rt.lastY;
+        if (Math.abs(x - rt.lastX) + Math.abs(y - rt.lastY) > 1) rt.moved = true;
+      }
+      rt.lastX = x; rt.lastY = y;
+    });
+    svg.addEventListener('pointerup', () => {
+      if (this.state.clusterMap) {
+        // Radial view: positions are fixed by the layout — clicks select, no drag/pin.
+        if (rt.dragId && !rt.moved) this.selectNode(rt.dragId);
+        else if (rt.pendingCluster && !rt.moved) this.selectCluster(rt.pendingCluster, false);
+        else if (rt.panning && !rt.moved) this.clearSelection();
+        const els = rt.dragCluster && rt.hullEls[rt.dragCluster];
+        if (els && els.handle) els.handle.style.cursor = 'grab';
+        rt.dragId = null; rt.dragIdCluster = null; rt.dragCluster = null; rt.pendingCluster = null; rt.panning = false;
+        return;
+      }
+      if (rt.dragCluster) {
+        const cl = this.atlas.clusterById[rt.dragCluster];
+        if (this.state.subClusters) {
+          if (rt.clusterMoved) this.persistOrgCenters(); else this.selectCluster(rt.dragCluster, false);
+        } else if (rt.clusterMoved) {
+          // Keep members frozen; moveCluster pins them exactly where dropped.
+          let sx = 0, sy = 0, n = 0;
+          for (const id of cl.members) { const p = rt.pos[id]; if (p) { sx += p.x; sy += p.y; n++; } }
+          if (n) this.moveCluster(rt.dragCluster, sx / n, sy / n);
+        } else {
+          for (const id of cl.members) { const p = rt.pos[id]; if (p && !(this.state.pins || {})[id]) p.fixed = false; }
+          this.selectCluster(rt.dragCluster, false);
+        }
+        const els = rt.hullEls[rt.dragCluster];
+        if (els && els.handle) els.handle.style.cursor = 'grab';
+        rt.dragCluster = null;
+        rt.pendingCluster = null;
+        return;
+      }
+      if (rt.dragId) {
+        const p = rt.pos[rt.dragId];
+        if (this.state.subClusters) {
+          if (rt.moved) this.persistOrgCenters(); else this.selectNode(rt.dragId);
+        } else if (rt.moved) {
+          if (rt.dragIdCluster) {
+            // Unselected-node drag: whole cluster moved rigidly — pin it where dropped.
+            const cl = this.atlas.clusterById[rt.dragIdCluster];
+            let sx = 0, sy = 0, n = 0;
+            for (const id of cl.members) { const mp = rt.pos[id]; if (mp) { sx += mp.x; sy += mp.y; n++; } }
+            this.moveCluster(rt.dragIdCluster, sx / n, sy / n);
+          } else if (p) {
+            // Selected-node solo drag: on drop, the cluster follows and rebalances around it.
+            this.rebalanceClusterTo(rt.dragId, p.x, p.y);
+          }
+        } else {
+          const members = rt.dragIdCluster ? this.atlas.clusterById[rt.dragIdCluster].members : [rt.dragId];
+          for (const id of members) { const mp = rt.pos[id]; if (mp && !(this.state.pins || {})[id]) mp.fixed = false; }
+          this.selectNode(rt.dragId);
+        }
+        rt.dragId = null;
+        rt.dragIdCluster = null;
+      } else if (rt.panning) {
+        rt.panning = false;
+        if (!rt.moved) {
+          if (rt.pendingCluster) this.selectCluster(rt.pendingCluster, false);
+          else this.clearSelection();
+        }
+      }
+      rt.pendingCluster = null;
+    });
+    svg.addEventListener('pointerleave', () => { if (!rt.dragId) rt.hoveredId = null; });
+    svg.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const { x, y } = getXY(e);
+      const before = this.engine.screenToWorld(rt.transform, x, y);
+      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+      rt.transform.k = this.engine.clamp(rt.transform.k * factor, 0.12, 4);
+      rt.transform.x = x - before.x * rt.transform.k;
+      rt.transform.y = y - before.y * rt.transform.k;
+    }, { passive: false });
+    svg.addEventListener('dblclick', () => this.resetView());
+  }
+
+  // -------------------------------------------------------------------------
+  // Render loop
+  // -------------------------------------------------------------------------
+  startLoop() {
+    const step = () => {
+      const rt = this.runtime;
+      if (rt && rt.svg) {
+        if (this.state.clusterMap) {
+          this.layoutRadial();
+        } else if (this.state.subClusters) {
+          this.layoutOrganized();
+        } else if (rt.sim) { rt.sim.tick(); this.separateClusters(); }
+        this.updateScene();
+      }
+      this.raf = requestAnimationFrame(step);
+    };
+    this.raf = requestAnimationFrame(step);
+  }
+
+  visibleKindSet(map, kindsMeta) {
+    const set = new Set();
+    for (const meta of kindsMeta) if (map[meta.key] !== false) set.add(meta.key);
+    return set;
+  }
+
+  renderedNodeSet() {
+    const st = this.state;
+    const total = this.data.nodes.length;
+    if (st.budget >= total) return null;
+    const sorted = [...this.data.nodes].sort((a, b) => (this.degrees[b.id] || 0) - (this.degrees[a.id] || 0));
+    return new Set(sorted.slice(0, st.budget).map((n) => n.id));
+  }
+
+  tagAllowed(id) {
+    const st = this.state;
+    const tags = this.atlas.nodeTags[id] || [];
+    if (st.tagsExclude.some((t) => tags.includes(t))) return false;
+    if (st.tagsInclude.length && !st.tagsInclude.some((t) => tags.includes(t))) return false;
+    return true;
+  }
+
+  computeVisibleNodeIds() {
+    const st = this.state;
+    this.ensureHierarchy();
+    const kindSet = this.visibleKindSet(st.nodeVisible, this.data.NODE_KINDS);
+    const budgetSet = this.renderedNodeSet();
+    let focusSet = null;
+    if (st.selectedType === 'node' && st.selectedId && st.focusDepth) {
+      focusSet = this.engine.neighborsWithin(st.selectedId, this.data.relations, st.focusDepth);
+    }
+    const out = new Set();
+    for (const nd of this.data.nodes) {
+      if (!kindSet.has(nd.kind)) continue;
+      if (budgetSet && !budgetSet.has(nd.id)) continue;
+      if (!this.tagAllowed(nd.id)) continue;
+      if (focusSet && !focusSet.has(nd.id)) continue;
+      const parent = this.collapsibleChild[nd.id];
+      if (parent && !st.expandedNodes[parent] && !(focusSet && focusSet.has(nd.id))) continue;
+      out.add(nd.id);
+    }
+    return out;
+  }
+
+  highlightSet() {
+    const st = this.state;
+    const rt = this.runtime;
+    if (st.mode === 'docs') {
+      const d = this.currentDocSection();
+      if (d) {
+        const set = new Set(d.relatedNodes || []);
+        for (const cid of (d.relatedClusters || [])) {
+          const cl = this.atlas.clusterById[cid];
+          if (cl) for (const m of cl.members) set.add(m);
+        }
+        if (set.size) return set;
+      }
+      if (rt.hoveredId) {
+        const s2 = this.engine.directNeighbors(rt.hoveredId, this.data.relations);
+        s2.add(rt.hoveredId);
+        return s2;
+      }
+      return null;
+    }
+    if (st.selectedType === 'node' && st.selectedId) {
+      if (st.overlay === 'blast') {
+        const depthMap = this.engine.blastRadius(st.selectedId, this.data.relations, st.blastDir, this.engine.IMPACT_EDGE_KINDS);
+        return new Set(Object.keys(depthMap));
+      }
+      const set = this.engine.directNeighbors(st.selectedId, this.data.relations);
+      set.add(st.selectedId);
+      return set;
+    }
+    if (st.selectedType === 'cluster' && st.selectedId) {
+      const cl = this.atlas.clusterById[st.selectedId];
+      return new Set(cl ? cl.members : []);
+    }
+    if (st.selectedType === 'tension' && st.selectedId) {
+      const tn = this.atlas.tensionById[st.selectedId];
+      return new Set(tn ? tn.affected : []);
+    }
+    if (rt.hoveredId) {
+      const set = this.engine.directNeighbors(rt.hoveredId, this.data.relations);
+      set.add(rt.hoveredId);
+      return set;
+    }
+    return null;
+  }
+
+  nodeFill(nd) {
+    const st = this.state;
+    if (st.overlay === 'tension') {
+      const sev = this.atlas.nodeTensionSeverity[nd.id];
+      return sev ? this.atlas.SEVERITY[sev].color : 'oklch(0.35 0.006 260)';
+    }
+    if (st.overlay === 'centrality') {
+      const d = this.engine.clamp((this.degrees[nd.id] || 0) / 12, 0, 1);
+      return `oklch(${(0.4 + 0.42 * d).toFixed(3)} ${(0.03 + 0.13 * d).toFixed(3)} 200)`;
+    }
+    const meta = this.data.nodeKindMeta(nd.kind);
+    return meta ? meta.color : '#999';
+  }
+
+  updateScene() {
+    const rt = this.runtime;
+    const st = this.state;
+    if (!rt.scene || !rt.width) return;
+    const k = rt.transform.k;
+    const tf = `translate(${rt.transform.x} ${rt.transform.y}) scale(${k})`;
+    rt.scene.setAttribute('transform', tf);
+    rt.scene.style.display = '';
+    rt.metaScene.style.display = 'none';
+    const radial = st.clusterMap;
+
+    const visible = this.computeVisibleNodeIds();
+    rt.visibleCache = visible;
+    const relVisible = this.visibleKindSet(st.relVisible, this.data.RELATION_KINDS);
+    const highlight = this.highlightSet();
+    const active = !!highlight;
+    let searchMatches = null;
+    if (st.search && st.search.trim()) {
+      const q = st.search.trim().toLowerCase();
+      searchMatches = new Set(this.data.nodes.filter((nd) => nd.label.toLowerCase().includes(q) || (nd.path || '').toLowerCase().includes(q)).map((nd) => nd.id));
+    }
+    const isolate = st.isolateBoundary && st.selectedType === 'cluster' && st.selectedId;
+    const showAllLabels = k > 1.6;
+    let blastDepth = null, blastMax = 1;
+    if (st.overlay === 'blast' && st.selectedType === 'node' && st.selectedId) {
+      blastDepth = this.engine.blastRadius(st.selectedId, this.data.relations, st.blastDir, this.engine.IMPACT_EDGE_KINDS);
+      for (const id in blastDepth) blastMax = Math.max(blastMax, blastDepth[id]);
+    }
+
+    // Live cluster centroids (for cluster-edges + sub-hulls)
+    const centroids = {};
+    for (const cl of this.atlas.clusters) {
+      let sx = 0, sy = 0, cn = 0;
+      for (const id of cl.members) { if (!visible.has(id)) continue; const p = rt.pos[id]; if (p) { sx += p.x; sy += p.y; cn++; } }
+      if (cn) centroids[cl.id] = { x: sx / cn, y: sy / cn };
+    }
+    const clusterEdges = st.edgeView === 'clusters';
+
+    // Hulls
+    for (const cl of this.atlas.clusters) {
+      const pts = cl.members.filter((id) => visible.has(id)).map((id) => [rt.pos[id].x, rt.pos[id].y]);
+      const els = rt.hullEls[cl.id];
+      if (pts.length < 1) { els.path.style.display = 'none'; els.handle.style.display = 'none'; continue; }
+      // Radial view: no hull blob or drag pill — just a cluster label out past the ring arc.
+      if (radial) {
+        els.path.style.display = 'none';
+        els.pill.style.display = 'none';
+        els.grip.style.display = 'none';
+        els.handle.style.display = '';
+        const arc = rt.radialArc && rt.radialArc[cl.id];
+        const isSelR = st.selectedType === 'cluster' && st.selectedId === cl.id;
+        if (arc) {
+          const lr = arc.R + 42;
+          els.label.style.display = '';
+          els.label.setAttribute('x', Math.cos(arc.mid) * lr);
+          els.label.setAttribute('y', Math.sin(arc.mid) * lr);
+          els.label.setAttribute('font-size', Math.min(13 / k, 20));
+          els.label.setAttribute('fill', this.withAlpha(cl.color, isSelR ? 1 : 0.9));
+          els.label.style.opacity = 1;
+        }
+        continue;
+      }
+      els.pill.style.display = '';
+      els.grip.style.display = '';
+      els.path.style.display = '';
+      els.handle.style.display = '';
+      const hull = this.engine.convexHull(pts);
+      els.path.setAttribute('d', this.engine.hullPath(hull));
+      els.path.setAttribute('stroke-width', 46);
+      const isSel = st.selectedType === 'cluster' && st.selectedId === cl.id;
+      const isHov = rt.hoveredCluster === cl.id;
+      const isDrag = rt.dragCluster === cl.id;
+      const emph = isSel || isHov || isDrag;
+      els.path.setAttribute('fill', this.withAlpha(cl.color, emph ? 0.13 : 0.055));
+      els.path.setAttribute('stroke', this.withAlpha(cl.color, emph ? 0.45 : 0.18));
+      let minY = Infinity, sumX = 0;
+      for (const p of pts) { minY = Math.min(minY, p[1]); sumX += p[0]; }
+      const cx = sumX / pts.length;
+      const cy = minY - 40;
+      const fs = Math.min(12.5 / k, 19);
+      const dimmed = st.selectedType === 'cluster' && !isSel;
+      // Handle geometry (grip + label inside a pill)
+      const padY = 7 / k;
+      const gripW = fs * 1.1;
+      const gap = 5 / k;
+      const textW = cl.label.length * fs * 0.62;
+      const pillW = gripW + gap + textW + 16 / k;
+      const pillH = fs + padY * 2;
+      const gripX = cx - pillW / 2 + gripW / 2 + 6 / k;
+      const labelX = gripX + gripW / 2 + gap + textW / 2;
+      els.handle.style.opacity = dimmed ? 0.4 : 1;
+      els.pill.setAttribute('x', cx - pillW / 2);
+      els.pill.setAttribute('y', cy - pillH / 2);
+      els.pill.setAttribute('width', pillW);
+      els.pill.setAttribute('height', pillH);
+      els.pill.setAttribute('rx', pillH / 2);
+      els.pill.setAttribute('ry', pillH / 2);
+      els.pill.setAttribute('fill', this.withAlpha(cl.color, emph ? 0.2 : 0.11));
+      els.pill.setAttribute('stroke', this.withAlpha(cl.color, emph ? 0.7 : 0.35));
+      els.pill.setAttribute('stroke-width', 1 / k);
+      els.grip.setAttribute('x', gripX);
+      els.grip.setAttribute('y', cy);
+      els.grip.setAttribute('font-size', fs * 1.15);
+      els.grip.setAttribute('fill', this.withAlpha(cl.color, 0.9));
+      els.label.setAttribute('x', labelX);
+      els.label.setAttribute('y', cy + 0.5 / k);
+      els.label.setAttribute('font-size', fs);
+      els.label.setAttribute('fill', this.withAlpha(cl.color, emph ? 1 : 0.9));
+    }
+
+    // Edges (node-to-node) — hidden in cluster-edge mode
+    for (const rel of this.data.relations) {
+      const el = rt.edgeEls[rel.id];
+      let show = !clusterEdges && relVisible.has(rel.kind) && visible.has(rel.source) && visible.has(rel.target);
+      if (show && isolate) {
+        const a = this.atlas.clusterOfNode[rel.source], b = this.atlas.clusterOfNode[rel.target];
+        show = (a === st.selectedId) !== (b === st.selectedId);
+      }
+      if (!show) { el.style.display = 'none'; continue; }
+      el.style.display = '';
+      const a = rt.pos[rel.source], b = rt.pos[rel.target];
+      el.setAttribute('x1', a.x); el.setAttribute('y1', a.y);
+      el.setAttribute('x2', b.x); el.setAttribute('y2', b.y);
+      const lit = active && highlight.has(rel.source) && highlight.has(rel.target);
+      el.style.opacity = active ? (lit ? 0.9 : 0.07) : 0.45;
+      el.setAttribute('stroke-width', Math.max(0.7, 1.1 / k));
+    }
+
+    // Aggregated cluster<->cluster edges
+    for (const ce of rt.clusterEdgeEls) {
+      const A = centroids[ce.a], B = centroids[ce.b];
+      const litPair = !active || (st.selectedType === 'cluster' && (st.selectedId === ce.a || st.selectedId === ce.b));
+      if (!clusterEdges || !A || !B) { ce.path.style.display = 'none'; ce.lbl.style.display = 'none'; continue; }
+      ce.path.style.display = '';
+      ce.lbl.style.display = '';
+      const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
+      // gentle arc: offset control point perpendicular to the chord
+      const ddx = B.x - A.x, ddy = B.y - A.y;
+      const len = Math.hypot(ddx, ddy) || 1;
+      const nx = -ddy / len, ny = ddx / len;
+      const bow = Math.min(len * 0.12, 40);
+      const cxp = mx + nx * bow, cyp = my + ny * bow;
+      ce.path.setAttribute('d', `M ${A.x} ${A.y} Q ${cxp} ${cyp} ${B.x} ${B.y}`);
+      ce.path.setAttribute('stroke-width', (1.2 + ce.ratio * 9) / k);
+      ce.path.setAttribute('stroke', litPair ? 'oklch(0.7 0.09 250)' : 'oklch(0.5 0.03 250)');
+      ce.path.style.opacity = litPair ? 0.85 : 0.28;
+      ce.lbl.setAttribute('x', cxp);
+      ce.lbl.setAttribute('y', cyp - 3 / k);
+      ce.lbl.setAttribute('font-size', 11 / k);
+      ce.lbl.style.opacity = litPair ? 0.9 : 0.35;
+    }
+
+    // Mini-cluster (sub-group) hulls
+    for (const key in rt.subHullEls) {
+      const sh = rt.subHullEls[key];
+      const grp = (this.subGroups[sh.clId] || []).find((g) => g.key === sh.key);
+      const cl = this.atlas.clusterById[sh.clId];
+      const pts = grp ? grp.ids.filter((id) => visible.has(id)).map((id) => [rt.pos[id].x, rt.pos[id].y]) : [];
+      const dimmed = st.selectedType === 'cluster' && st.selectedId !== sh.clId;
+      if (!st.subClusters || pts.length < 1) { sh.path.style.display = 'none'; sh.lbl.style.display = 'none'; continue; }
+      sh.path.style.display = '';
+      const hull = this.engine.convexHull(pts);
+      sh.path.setAttribute('d', this.engine.hullPath(hull));
+      sh.path.setAttribute('stroke-width', 30);
+      sh.path.setAttribute('stroke', this.withAlpha(cl.color, dimmed ? 0.12 : 0.32));
+      sh.path.style.opacity = dimmed ? 0.4 : 1;
+      let minY = Infinity, sumX = 0;
+      for (const p of pts) { minY = Math.min(minY, p[1]); sumX += p[0]; }
+      const meta = this.data.nodeKindMeta(sh.key);
+      sh.lbl.style.display = k > 0.6 ? '' : 'none';
+      sh.lbl.textContent = (meta ? meta.label : sh.key);
+      sh.lbl.setAttribute('x', sumX / pts.length);
+      sh.lbl.setAttribute('y', minY - 16 / k);
+      sh.lbl.setAttribute('font-size', 8.5 / k);
+      sh.lbl.setAttribute('fill', this.withAlpha(cl.color, dimmed ? 0.4 : 0.85));
+    }
+
+    // Nodes
+    for (const nd of this.data.nodes) {
+      const els = rt.nodeEls[nd.id];
+      if (!visible.has(nd.id)) { els.g.style.display = 'none'; continue; }
+      els.g.style.display = '';
+      const p = rt.pos[nd.id];
+      els.g.setAttribute('transform', `translate(${p.x} ${p.y})`);
+      const degree = this.degrees[nd.id] || 0;
+      const r = this.importanceRadius(nd) / k;
+      const isSelected = st.selectedType === 'node' && nd.id === st.selectedId;
+      const isHovered = nd.id === rt.hoveredId;
+      const lit = !active || highlight.has(nd.id) || isSelected || isHovered;
+      const isMatch = !!(searchMatches && searchMatches.has(nd.id));
+      els.c.setAttribute('r', r);
+      if (blastDepth) {
+        els.c.setAttribute('fill', blastDepth[nd.id] !== undefined ? this.engine.blastColor(blastDepth[nd.id], blastMax) : 'oklch(0.32 0.006 260)');
+      } else {
+        els.c.setAttribute('fill', this.nodeFill(nd));
+      }
+      if (isSelected || isHovered) {
+        els.c.setAttribute('stroke', '#fff');
+        els.c.setAttribute('stroke-width', 2 / k);
+      } else if (isMatch) {
+        els.c.setAttribute('stroke', '#fff');
+        els.c.setAttribute('stroke-width', 1.5 / k);
+      } else {
+        els.c.setAttribute('stroke', 'none');
+        els.c.setAttribute('stroke-width', 0);
+      }
+      els.g.style.opacity = lit ? 1 : 0.12;
+      const shouldLabel = isSelected || isHovered || (active && highlight.has(nd.id)) || showAllLabels || degree >= 8;
+      if (shouldLabel && lit) {
+        els.t.style.display = '';
+        els.t.setAttribute('x', r + 5 / k);
+        els.t.setAttribute('dy', '0.32em');
+        els.t.setAttribute('font-size', 11 / k);
+        els.t.setAttribute('fill', isSelected || isHovered ? '#fff' : 'rgba(230,232,240,0.82)');
+      } else {
+        els.t.style.display = 'none';
+      }
+      // Expand affordance: "+N" when a Symbol has collapsed members, "\u2212" when expanded
+      const kids = this.childrenOf && this.childrenOf[nd.id];
+      if (kids && kids.length && lit) {
+        const expanded = st.expandedNodes[nd.id];
+        els.badge.style.display = '';
+        els.badge.textContent = expanded ? '\u2212' : '+' + kids.length;
+        els.badge.setAttribute('x', p.x);
+        els.badge.setAttribute('y', p.y - r - 7 / k);
+        els.badge.setAttribute('font-size', 10 / k);
+        els.badge.setAttribute('fill', expanded ? 'oklch(0.7 0.01 260)' : 'oklch(0.82 0.14 85)');
+      } else {
+        els.badge.style.display = 'none';
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Actions
+  // -------------------------------------------------------------------------
+  // ---- Layout persistence (draggable, rebalancing, resettable) ----
+  loadLayout() {
+    try {
+      const raw = localStorage.getItem('lithograph-atlas-layout');
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return { pins: {}, clusterAnchors: {} };
+  }
+  persistLayout(pins, clusterAnchors) {
+    try {
+      localStorage.setItem('lithograph-atlas-layout', JSON.stringify({ pins, clusterAnchors }));
+    } catch (e) {}
+  }
+  // Partition each cluster's members into mini-groups by kind.
+  ensureSubGroups() {
+    if (this.subGroups) return;
+    this.subGroups = {};
+    this.subOf = {};
+    for (const cl of this.atlas.clusters) {
+      const groups = {};
+      for (const id of cl.members) {
+        const nd = this.data.nodeById[id];
+        (groups[nd.kind] ||= []).push(id);
+      }
+      const list = Object.entries(groups).map(([key, ids]) => ({ key, ids }));
+      list.forEach((g, idx) => {
+        g.idx = idx; g.count = list.length;
+        for (const id of g.ids) this.subOf[id] = { clId: cl.id, key: g.key, idx, count: list.length };
+      });
+      this.subGroups[cl.id] = list;
+    }
+  }
+  subOffset(sub) {
+    if (!sub || sub.count <= 1) return { dx: 0, dy: 0 };
+    const ang = (sub.idx / sub.count) * Math.PI * 2 - Math.PI / 2;
+    return { dx: Math.cos(ang) * 62, dy: Math.sin(ang) * 62 };
+  }
+
+  // Deterministic intra-cluster layout: each kind becomes a compact mini-grid,
+  // the mini-grids sit in a centered row. Memoized (depends only on membership).
+  ensureSlots() {
+    if (this.slots) return;
+    this.ensureSubGroups();
+    this.slots = {};
+    this.slotRadius = {};
+    const CELL = 42, GAP = 30;
+    for (const cl of this.atlas.clusters) {
+      const groups = (this.subGroups[cl.id] || []).slice().sort((a, b) => b.ids.length - a.ids.length);
+      const dims = groups.map((g) => {
+        const cols = Math.max(1, Math.ceil(Math.sqrt(g.ids.length)));
+        const rows = Math.ceil(g.ids.length / cols);
+        return { cols, rows, w: cols * CELL, h: rows * CELL };
+      });
+      const totalW = dims.reduce((s, d) => s + d.w, 0) + GAP * Math.max(0, groups.length - 1);
+      const maxH = Math.max(CELL, ...dims.map((d) => d.h));
+      const slots = {};
+      let cursorX = -totalW / 2;
+      groups.forEach((g, gi) => {
+        const d = dims[gi];
+        g.ids.forEach((id, idx) => {
+          const col = idx % d.cols, row = Math.floor(idx / d.cols);
+          slots[id] = {
+            dx: cursorX + col * CELL + CELL / 2,
+            dy: (row - (d.rows - 1) / 2) * CELL,
+          };
+        });
+        cursorX += d.w + GAP;
+      });
+      this.slots[cl.id] = slots;
+      this.slotRadius[cl.id] = Math.hypot(totalW, maxH) / 2 + 30;
+    }
+  }
+
+  // Position every member deterministically around its cluster's org-center,
+  // and keep clusters from overlapping by separating the centers.
+  layoutOrganized() {
+    this.ensureSlots();
+    const rt = this.runtime;
+    if (!rt.orgCenter) rt.orgCenter = {};
+    const base = this.computeClusterCenters();
+    for (const cl of this.atlas.clusters) {
+      if (!rt.orgCenter[cl.id]) rt.orgCenter[cl.id] = { x: base[cl.id].x, y: base[cl.id].y };
+    }
+    this.separateOrgCenters();
+    for (const cl of this.atlas.clusters) {
+      const c = rt.orgCenter[cl.id];
+      const slots = this.slots[cl.id];
+      for (const id of cl.members) {
+        const s = slots[id]; const p = rt.pos[id];
+        if (s && p) { p.x = c.x + s.dx; p.y = c.y + s.dy; p.vx = 0; p.vy = 0; }
+      }
+    }
+  }
+  separateOrgCenters() {
+    const rt = this.runtime;
+    const cls = this.atlas.clusters;
+    const dragging = rt.dragCluster || rt.dragIdCluster || null;
+    for (let iter = 0; iter < 2; iter++) {
+      for (let i = 0; i < cls.length; i++) {
+        for (let j = i + 1; j < cls.length; j++) {
+          const A = rt.orgCenter[cls[i].id], B = rt.orgCenter[cls[j].id];
+          if (!A || !B) continue;
+          let dx = B.x - A.x, dy = B.y - A.y;
+          let dist = Math.hypot(dx, dy);
+          const minDist = (this.slotRadius[cls[i].id] || 60) + (this.slotRadius[cls[j].id] || 60) + 24;
+          if (dist >= minDist) continue;
+          if (dist < 0.01) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; dist = 1; }
+          const push = Math.min((minDist - dist) * 0.5, 30);
+          const ux = dx / dist, uy = dy / dist;
+          let aS = 0.5, bS = 0.5;
+          if (dragging === cls[i].id) { aS = 0; bS = 1; } else if (dragging === cls[j].id) { aS = 1; bS = 0; }
+          if (aS) { A.x -= ux * push * aS; A.y -= uy * push * aS; }
+          if (bS) { B.x += ux * push * bS; B.y += uy * push * bS; }
+        }
+      }
+    }
+  }
+  moveOrgCenter(clId, dx, dy) {
+    const rt = this.runtime;
+    if (!rt.orgCenter || !rt.orgCenter[clId]) return;
+    rt.orgCenter[clId].x += dx; rt.orgCenter[clId].y += dy;
+  }
+
+  // Snap non-pinned members back near their cluster centers (used when leaving
+  // the radial view so the graph doesn't slowly migrate from the big circle).
+  reseedClustered() {
+    const rt = this.runtime;
+    if (!rt || !rt.pos) return;
+    const centers = this.computeClusterCenters();
+    for (const cl of this.atlas.clusters) {
+      const c = centers[cl.id];
+      for (const id of cl.members) {
+        const p = rt.pos[id];
+        if (!p || (this.state.pins || {})[id]) continue;
+        p.x = c.x + (Math.random() - 0.5) * 80;
+        p.y = c.y + (Math.random() - 0.5) * 80;
+        p.vx = 0; p.vy = 0;
+      }
+    }
+  }
+
+  // Radial view: every node on one circle, grouped into contiguous cluster arcs.
+  layoutRadial() {
+    const rt = this.runtime;
+    const clusters = this.atlas.clusters;
+    const groups = clusters.map((cl) => ({ cl, ids: cl.members.filter((id) => !rt.visibleCache || rt.visibleCache.has(id)) }))
+      .filter((g) => g.ids.length);
+    const total = groups.reduce((s, g) => s + g.ids.length, 0) || 1;
+    const gapFrac = 0.02;
+    const usable = Math.max(0.4, 1 - gapFrac * groups.length);
+    const R = Math.max(240, total * 8);
+    rt.radialArc = {};
+    let angle = -Math.PI / 2;
+    for (const g of groups) {
+      const span = usable * (g.ids.length / total) * Math.PI * 2;
+      const a0 = angle;
+      g.ids.forEach((id, i) => {
+        const aa = a0 + span * ((i + 0.5) / g.ids.length);
+        const p = rt.pos[id];
+        if (p) { p.x = Math.cos(aa) * R; p.y = Math.sin(aa) * R; p.vx = 0; p.vy = 0; }
+      });
+      rt.radialArc[g.cl.id] = { mid: a0 + span / 2, R };
+      angle = a0 + span + gapFrac * Math.PI * 2;
+    }
+    rt.radialR = R;
+  }
+  persistOrgCenters() {
+    const rt = this.runtime;
+    if (!rt.orgCenter) return;
+    this.setState((s) => {
+      const clusterAnchors = { ...s.clusterAnchors };
+      for (const cl of this.atlas.clusters) if (rt.orgCenter[cl.id]) clusterAnchors[cl.id] = { x: rt.orgCenter[cl.id].x, y: rt.orgCenter[cl.id].y };
+      this.persistLayout(s.pins, clusterAnchors);
+      return { clusterAnchors };
+    });
+  }
+
+  computeClusterCenters() {
+    const centers = {};
+    const clusters = this.atlas.clusters;
+    const R = 250;
+    clusters.forEach((cl, i) => {
+      const angle = (i / clusters.length) * Math.PI * 2 - Math.PI / 2;
+      centers[cl.id] = { x: Math.cos(angle) * R, y: Math.sin(angle) * R * 0.72 };
+    });
+    for (const [cid, pos] of Object.entries(this.state.clusterAnchors || {})) {
+      centers[cid] = { x: pos.x, y: pos.y };
+    }
+    return centers;
+  }
+  applyAnchors() {
+    const rt = this.runtime;
+    if (!rt.sim) return;
+    this.ensureSubGroups();
+    const centers = this.computeClusterCenters();
+    const pins = this.state.pins || {};
+    const sub = this.state.subClusters;
+    for (const cl of this.atlas.clusters) {
+      const c = centers[cl.id];
+      for (const id of cl.members) {
+        const p = rt.pos[id];
+        const pin = pins[id];
+        if (pin) {
+          // Hard pin: sits exactly where the user dropped it, never tugged back.
+          if (p) { p.x = pin.x; p.y = pin.y; p.vx = 0; p.vy = 0; p.fixed = true; }
+        } else {
+          if (p) p.fixed = false;
+          if (sub) {
+            const off = this.subOffset(this.subOf[id]);
+            rt.sim.setAnchor(id, c.x + off.dx, c.y + off.dy, 0.07);
+          } else {
+            rt.sim.setAnchor(id, c.x, c.y, 0.04);
+          }
+        }
+      }
+    }
+  }
+  pinNode(id, x, y) {
+    this.setState((s) => {
+      const pins = { ...s.pins, [id]: { x, y } };
+      this.persistLayout(pins, s.clusterAnchors);
+      return { pins };
+    }, () => this.applyAnchors());
+  }
+  moveCluster(id, cx, cy) {
+    // Pin every member exactly where it was dropped so the whole cluster stays put.
+    const rt = this.runtime;
+    const cl = this.atlas.clusterById[id];
+    this.setState((s) => {
+      const clusterAnchors = { ...s.clusterAnchors, [id]: { x: cx, y: cy } };
+      const pins = { ...s.pins };
+      for (const m of cl.members) {
+        const p = rt.pos[m];
+        if (p) pins[m] = { x: p.x, y: p.y };
+      }
+      this.persistLayout(pins, clusterAnchors);
+      return { clusterAnchors, pins };
+    }, () => this.applyAnchors());
+  }
+  resetLayout() {
+    this.persistLayout({}, {});
+    this.setState({ pins: {}, clusterAnchors: {} }, () => {
+      this.applyAnchors();
+      setTimeout(() => this.fitView(), 700);
+    });
+  }
+
+  // Selected-node solo drag: after drop, pin the node where dropped, re-anchor
+  // its cluster to that point, and free the siblings so the sim rebalances the
+  // cluster around the node's new position.
+  rebalanceClusterTo(nodeId, x, y) {
+    const clId = this.atlas.clusterOfNode[nodeId];
+    this.setState((s) => {
+      const pins = { ...s.pins, [nodeId]: { x, y } };
+      const clusterAnchors = { ...s.clusterAnchors };
+      if (clId) {
+        clusterAnchors[clId] = { x, y };
+        for (const m of this.atlas.clusterById[clId].members) {
+          if (m !== nodeId) delete pins[m]; // free siblings to relax toward the node
+        }
+      }
+      this.persistLayout(pins, clusterAnchors);
+      return { pins, clusterAnchors };
+    }, () => this.applyAnchors());
+  }
+
+  // Cluster geometry: centroid + enclosing radius from visible members.
+  clusterGeometry() {
+    const rt = this.runtime;
+    const geo = {};
+    for (const cl of this.atlas.clusters) {
+      const pts = [];
+      for (const id of cl.members) {
+        if (rt.visibleCache && !rt.visibleCache.has(id)) continue;
+        const p = rt.pos[id];
+        if (p) pts.push(p);
+      }
+      if (!pts.length) continue;
+      let cx = 0, cy = 0;
+      for (const p of pts) { cx += p.x; cy += p.y; }
+      cx /= pts.length; cy /= pts.length;
+      // Robust radius: 85th-percentile distance (ignores a single far-dragged
+      // node), then hard-capped so minDist stays reachable and separation
+      // can never run away to infinity.
+      const dists = pts.map((p) => Math.hypot(p.x - cx, p.y - cy)).sort((m, n) => m - n);
+      const pctl = dists[Math.floor(dists.length * 0.8)] || dists[dists.length - 1] || 0;
+      const r = Math.min(150, Math.max(38, pctl) + 20);
+      geo[cl.id] = { cx, cy, r, members: pts, ids: cl.members };
+    }
+    return geo;
+  }
+
+  // Always-on separation: push overlapping clusters apart. The cluster being
+  // dragged holds its ground; the others yield.
+  separateClusters() {
+    const rt = this.runtime;
+    const geo = this.clusterGeometry();
+    const ids = Object.keys(geo);
+    const dragging = rt.dragCluster || rt.dragIdCluster || null;
+    const pins = this.state.pins || {};
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = geo[ids[i]], b = geo[ids[j]];
+        let dx = b.cx - a.cx, dy = b.cy - a.cy;
+        let dist = Math.hypot(dx, dy);
+        const minDist = a.r + b.r;
+        if (dist >= minDist) continue;
+        if (dist < 0.01) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; dist = 1; }
+        const overlap = (minDist - dist);
+        const ux = dx / dist, uy = dy / dist;
+        // Ease + clamp so clusters glide apart without popping or drifting away.
+        const push = Math.min(overlap * 0.15, 4);
+        let aShare = 0.5, bShare = 0.5;
+        if (dragging === ids[i]) { aShare = 0; bShare = 1; }
+        else if (dragging === ids[j]) { aShare = 1; bShare = 0; }
+        if (aShare) this.shiftCluster(ids[i], -ux * push * aShare, -uy * push * aShare, pins);
+        if (bShare) this.shiftCluster(ids[j], ux * push * bShare, uy * push * bShare, pins);
+      }
+    }
+  }
+
+  // Translate a cluster's members, keeping any pinned members' stored coords in
+  // sync so applyAnchors doesn't later snap them back.
+  shiftCluster(clId, dx, dy, pins) {
+    if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return;
+    const rt = this.runtime;
+    const cl = this.atlas.clusterById[clId];
+    for (const id of cl.members) {
+      const p = rt.pos[id];
+      if (!p) continue;
+      p.x += dx; p.y += dy;
+      const pin = pins[id];
+      if (pin) { pin.x += dx; pin.y += dy; }
+    }
+  }
+
+  // ---- Doc <-> graph linking ----
+  currentDocSection() {
+    const st = this.state;
+    if (st.docsSection && st.docsSection.indexOf('gen:') === 0) {
+      return { relatedNodes: [], relatedClusters: [st.docsSection.slice(4)] };
+    }
+    return this.atlas.docsSections.find((d) => d.id === st.docsSection);
+  }
+  relatedDocSectionsForNode(nodeId) {
+    const cid = this.atlas.clusterOfNode[nodeId];
+    return this.atlas.docsSections.filter((d) => (d.relatedNodes || []).includes(nodeId) || (d.relatedClusters || []).includes(cid));
+  }
+  relatedDocSectionsForCluster(cid) {
+    return this.atlas.docsSections.filter((d) => (d.relatedClusters || []).includes(cid));
+  }
+  docsFilterInfo() {
+    const st = this.state;
+    if (st.selectedType === 'node' && st.selectedId) {
+      const secs = this.relatedDocSectionsForNode(st.selectedId);
+      return { active: true, label: 'Docs mentioning ' + this.data.nodeById[st.selectedId].label, ids: new Set(secs.map((s) => s.id)) };
+    }
+    if (st.selectedType === 'cluster' && st.selectedId) {
+      const secs = this.relatedDocSectionsForCluster(st.selectedId);
+      return { active: true, label: 'Docs for ' + this.atlas.clusterById[st.selectedId].label, ids: new Set(secs.map((s) => s.id)) };
+    }
+    return { active: false, label: '', ids: null };
+  }
+
+  selectNode(id) {
+    this.setState({ selectedType: 'node', selectedId: id, isolateBoundary: false });
+  }
+  selectCluster(id, focus) {
+    this.setState({ selectedType: 'cluster', selectedId: id });
+    if (focus) this.focusCluster(id);
+  }
+  selectTension(id) {
+    this.setState({ selectedType: 'tension', selectedId: id, overlay: 'tension', isolateBoundary: false });
+  }
+  clearSelection() {
+    this.setState({ selectedType: null, selectedId: null, focusDepth: null, isolateBoundary: false });
+  }
+  jumpToNode(id) {
+    this.selectNode(id);
+    this.centerOn(id);
+  }
+  centerOn(id) {
+    const rt = this.runtime;
+    const p = rt.pos[id];
+    if (!p) return;
+    if (rt.transform.k < 1.1) rt.transform.k = 1.4;
+    rt.transform.x = rt.width / 2 - p.x * rt.transform.k;
+    rt.transform.y = rt.height / 2 - p.y * rt.transform.k;
+  }
+  focusCluster(id) {
+    const rt = this.runtime;
+    const cl = this.atlas.clusterById[id];
+    if (!cl) return;
+    let sx = 0, sy = 0, n = 0;
+    for (const m of cl.members) {
+      const p = rt.pos[m];
+      if (p) { sx += p.x; sy += p.y; n++; }
+    }
+    if (!n) return;
+    rt.transform.k = 1.5;
+    rt.transform.x = rt.width / 2 - (sx / n) * rt.transform.k;
+    rt.transform.y = rt.height / 2 - (sy / n) * rt.transform.k;
+  }
+  resetView() {
+    this.fitView();
+  }
+  // Frame all visible nodes within the viewport with padding.
+  fitView() {
+    const rt = this.runtime;
+    if (!rt || !rt.pos) return;
+    const vis = rt.visibleCache;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, n = 0;
+    for (const nd of this.data.nodes) {
+      if (vis && !vis.has(nd.id)) continue;
+      const p = rt.pos[nd.id];
+      if (!p) continue;
+      minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); n++;
+    }
+    if (!n || !isFinite(minX)) { rt.transform = { x: rt.width / 2, y: rt.height / 2, k: 1 }; return; }
+    const pad = 90;
+    const w = Math.max(1, maxX - minX), h = Math.max(1, maxY - minY);
+    const k = this.engine.clamp(Math.min((rt.width - pad * 2) / w, (rt.height - pad * 2) / h), 0.12, 1.4);
+    rt.transform.k = k;
+    rt.transform.x = rt.width / 2 - ((minX + maxX) / 2) * k;
+    rt.transform.y = rt.height / 2 - ((minY + maxY) / 2) * k;
+  }
+  zoom(factor) {
+    const rt = this.runtime;
+    const cx = rt.width / 2, cy = rt.height / 2;
+    const before = this.engine.screenToWorld(rt.transform, cx, cy);
+    rt.transform.k = this.engine.clamp(rt.transform.k * factor, 0.12, 4);
+    rt.transform.x = cx - before.x * rt.transform.k;
+    rt.transform.y = cy - before.y * rt.transform.k;
+  }
+  toggleTag(tag, mode) {
+    this.setState((s) => {
+      let inc = s.tagsInclude.filter((t) => t !== tag);
+      let exc = s.tagsExclude.filter((t) => t !== tag);
+      if (mode === 'include' && !s.tagsInclude.includes(tag)) inc = [...inc, tag];
+      if (mode === 'exclude' && !s.tagsExclude.includes(tag)) exc = [...exc, tag];
+      return { tagsInclude: inc, tagsExclude: exc };
+    });
+  }
+  startAgent(clusterId) {
+    if (this.agentTimer) clearInterval(this.agentTimer);
+    this.setState({ agent: { stage: 'context', clusterId, text: '', pct: 0 } });
+  }
+  runAgent() {
+    const clusterId = this.state.agent.clusterId;
+    const full = this.atlas.AGENT_DOC[clusterId] || this.atlas.AGENT_DOC_DEFAULT;
+    const words = full.split(' ');
+    let i = 0;
+    this.setState({ agent: { stage: 'streaming', clusterId, text: '', pct: 0 } });
+    this.agentTimer = setInterval(() => {
+      i += 3;
+      if (i >= words.length) {
+        clearInterval(this.agentTimer);
+        this.agentTimer = null;
+        this.setState((s) => {
+          const cl = this.atlas.clusterById[clusterId];
+          const already = s.generatedDocs.some((d) => d.clusterId === clusterId);
+          return {
+            agent: { stage: 'done', clusterId, text: full, pct: 100 },
+            generatedDocs: already ? s.generatedDocs : [...s.generatedDocs, { id: 'gen:' + clusterId, clusterId, title: cl.label, text: full }],
+          };
+        });
+      } else {
+        this.setState({ agent: { stage: 'streaming', clusterId, text: words.slice(0, i).join(' ') + ' \u258D', pct: Math.round((i / words.length) * 100) } });
+      }
+    }, 90);
+  }
+
+  // -------------------------------------------------------------------------
+  // renderVals
+  // -------------------------------------------------------------------------
+  emptyInspector() {
+    return {
+      kindLabel: '', kindColor: '', title: '', hasSubtitle: false, subtitle: '',
+      hasPath: false, path: '', hasDescription: false, description: '',
+      hasEvidence: false, evidence: [], hasOutgoing: false, outgoing: [],
+      hasIncoming: false, incoming: [], tags: [], metrics: [], hasTensions: false, tensionLinks: [],
+      hasRelatedDocs: false, relatedDocs: [],
+    };
+  }
+
+  freshnessColor(freshness) {
+    const map = {
+      fresh: 'oklch(0.72 0.12 150)', partial: 'oklch(0.78 0.15 75)',
+      stale: 'oklch(0.66 0.19 25)', generated: 'oklch(0.74 0.16 35)',
+    };
+    return map[freshness] || 'oklch(0.6 0.008 260)';
+  }
+  relatedDocLinks(sections) {
+    return sections.map((d) => ({
+      title: d.title,
+      freshColor: this.freshnessColor(d.freshness),
+      onClick: () => this.setState({ mode: 'docs', docsSection: d.id }),
+    }));
+  }
+
+  buildExplorerRows(st) {
+    const artifacts = this.data.nodes.filter((nd) => nd.kind === 'Artifact');
+    const root = { name: '', children: {}, isFile: false, fullPath: '' };
+    for (const nd of artifacts) {
+      const parts = nd.path.split('/');
+      let cur = root, acc = '';
+      parts.forEach((part, i) => {
+        acc = acc ? acc + '/' + part : part;
+        const isFile = i === parts.length - 1;
+        if (!cur.children[part]) cur.children[part] = { name: part, children: {}, isFile, nodeId: isFile ? nd.id : null, fullPath: acc };
+        cur = cur.children[part];
+      });
+    }
+    const rows = [];
+    const walk = (node, depth) => {
+      const entries = Object.values(node.children).sort((x, y) => (x.isFile === y.isFile ? x.name.localeCompare(y.name) : x.isFile ? 1 : -1));
+      for (const entry of entries) {
+        const expanded = st.expandedFolders[entry.fullPath] !== false;
+        const active = !!(entry.nodeId && st.selectedType === 'node' && entry.nodeId === st.selectedId);
+        rows.push({
+          key: entry.fullPath, name: entry.name, indent: 6 + depth * 13,
+          arrow: entry.isFile ? '' : expanded ? '\u25BE' : '\u25B8',
+          textColor: active ? 'oklch(0.74 0.16 35)' : entry.isFile ? 'oklch(0.8 0.004 260)' : 'oklch(0.68 0.008 260)',
+          fontWeight: entry.isFile ? (active ? '600' : '400') : '600',
+          onClick: entry.isFile
+            ? () => this.jumpToNode(entry.nodeId)
+            : () => this.setState((s) => ({ expandedFolders: { ...s.expandedFolders, [entry.fullPath]: s.expandedFolders[entry.fullPath] === false ? true : false } })),
+        });
+        if (!entry.isFile && expanded) walk(entry, depth + 1);
+      }
+    };
+    walk(root, 0);
+    return rows;
+  }
+
+  buildNodeInspector(node) {
+    if (!node) return this.emptyInspector();
+    const meta = this.data.nodeKindMeta(node.kind);
+    const mk = (rel, otherId, dirOut) => {
+      const other = this.data.nodeById[otherId];
+      const rmeta = this.data.relKindMeta(rel.kind);
+      return { relLabel: rmeta.label, relColor: rmeta.color, otherLabel: other ? other.label : otherId, onClick: () => this.jumpToNode(otherId) };
+    };
+    const outgoing = this.data.relations.filter((r) => r.source === node.id).map((r) => mk(r, r.target, true));
+    const incoming = this.data.relations.filter((r) => r.target === node.id).map((r) => mk(r, r.source, false));
+    const evidence = (node.evidence || []).map((e) => ({ label: e.line ? e.file + ':' + e.line : e.file }));
+    const tags = (this.atlas.nodeTags[node.id] || []).map((t) => ({ label: t }));
+    const fanOut = this.data.relations.filter((r) => r.source === node.id).length;
+    const fanIn = this.data.relations.filter((r) => r.target === node.id).length;
+    const cl = this.atlas.clusterById[this.atlas.clusterOfNode[node.id]];
+    const metrics = [
+      { label: 'Cluster', value: cl ? cl.label : '\u2014' },
+      { label: 'Fan-in / fan-out', value: fanIn + ' / ' + fanOut },
+      { label: 'Degree', value: String(this.degrees[node.id] || 0) },
+    ];
+    const tensionLinks = this.atlas.tensions
+      .filter((t) => t.affected.includes(node.id))
+      .map((t) => ({ label: t.label, sevColor: this.atlas.SEVERITY[t.severity].color, onClick: () => this.selectTension(t.id) }));
+    const relatedDocs = this.relatedDocLinks(this.relatedDocSectionsForNode(node.id));
+    return {
+      kindLabel: node.kind, kindColor: meta ? meta.color : '#999', title: node.label,
+      hasSubtitle: !!node.sub, subtitle: this.humanize(node.sub || ''),
+      hasPath: !!node.path, path: node.path || '',
+      hasDescription: !!node.detail, description: node.detail || '',
+      hasEvidence: evidence.length > 0, evidence,
+      hasOutgoing: outgoing.length > 0, outgoing,
+      hasIncoming: incoming.length > 0, incoming,
+      tags, metrics, hasTensions: tensionLinks.length > 0, tensionLinks,
+      hasRelatedDocs: relatedDocs.length > 0, relatedDocs,
+    };
+  }
+
+  renderVals() {
+    const st = this.state;
+    const loaded = !!this.data;
+    const accent = 'oklch(0.74 0.16 35)';
+    const accentBg = 'oklch(0.74 0.16 35 / 0.16)';
+    const mutedTab = 'oklch(0.6 0.008 260)';
+
+    const base = {
+      svgRef: this.svgRef,
+      containerRef: this.containerRef,
+      search: st.search,
+      onSearchInput: (e) => this.setState({ search: e.target.value }),
+      tagSearch: st.tagSearch,
+      onTagSearchInput: (e) => this.setState({ tagSearch: e.target.value }),
+      modeExplore: st.mode === 'explore',
+      modeDocs: st.mode === 'docs',
+      onModeExplore: () => this.setState({ mode: 'explore' }),
+      onModeDocs: () => this.setState({ mode: 'docs' }),
+      exploreTabBg: st.mode === 'explore' ? accentBg : 'transparent',
+      exploreTabColor: st.mode === 'explore' ? accent : mutedTab,
+      docsTabBg: st.mode === 'docs' ? accentBg : 'transparent',
+      docsTabColor: st.mode === 'docs' ? accent : mutedTab,
+      onTabFiles: () => this.setState({ leftTab: 'files' }),
+      onTabTags: () => this.setState({ leftTab: 'tags' }),
+      onTabFilters: () => this.setState({ leftTab: 'filters' }),
+      onTabSaved: () => this.setState({ leftTab: 'saved' }),
+      showFiles: st.leftTab === 'files',
+      showTags: st.leftTab === 'tags',
+      showFilters: st.leftTab === 'filters',
+      showSaved: st.leftTab === 'saved',
+      filesTabColor: st.leftTab === 'files' ? '#fff' : mutedTab,
+      filesTabBorder: st.leftTab === 'files' ? accent : 'transparent',
+      tagsTabColor: st.leftTab === 'tags' ? '#fff' : mutedTab,
+      tagsTabBorder: st.leftTab === 'tags' ? accent : 'transparent',
+      filtersTabColor: st.leftTab === 'filters' ? '#fff' : mutedTab,
+      filtersTabBorder: st.leftTab === 'filters' ? accent : 'transparent',
+      savedTabColor: st.leftTab === 'saved' ? '#fff' : mutedTab,
+      savedTabBorder: st.leftTab === 'saved' ? accent : 'transparent',
+      onZoomIn: () => this.zoom(1.25),
+      onZoomOut: () => this.zoom(0.8),
+      onResetView: () => this.resetView(),
+      onClearSelection: () => this.clearSelection(),
+      onToggleClusterMap: () => this.setState((s) => ({ clusterMap: !s.clusterMap, matrixView: false })),
+      viewOptions: [
+        { key: 'graph', label: 'Graph', active: !st.clusterMap && !st.matrixView },
+        { key: 'clusters', label: 'Radial', active: st.clusterMap && !st.matrixView },
+        { key: 'matrix', label: 'Matrix', active: st.matrixView },
+      ].map((v) => ({
+        label: v.label,
+        bg: v.active ? accentBg : 'transparent',
+        color: v.active ? accent : 'oklch(0.72 0.006 260)',
+        onClick: () => this.setState({
+          clusterMap: v.key === 'clusters',
+          matrixView: v.key === 'matrix',
+        }, () => {
+          if (v.key === 'graph') { this.reseedClustered(); this.applyAnchors(); }
+          if (v.key !== 'matrix') setTimeout(() => this.fitView(), 250);
+        }),
+      })),
+      showOverlayToggle: !st.matrixView,
+      matrixView: st.matrixView,
+      edgeViewOptions: [
+        { key: 'nodes', label: 'Nodes' },
+        { key: 'clusters', label: 'Clusters' },
+      ].map((o) => ({
+        label: o.label,
+        bg: st.edgeView === o.key ? accentBg : 'transparent',
+        color: st.edgeView === o.key ? accent : 'oklch(0.72 0.006 260)',
+        onClick: () => this.setState({ edgeView: o.key }),
+      })),
+      onToggleSubClusters: () => this.setState((s) => ({ subClusters: !s.subClusters }), () => {
+        const rt = this.runtime;
+        if (this.state.subClusters) {
+          // Seed org-centers from current cluster centroids so the layout eases in.
+          rt.orgCenter = rt.orgCenter || {};
+          for (const cl of this.atlas.clusters) {
+            let sx = 0, sy = 0, n = 0;
+            for (const id of cl.members) { const p = rt.pos[id]; if (p) { sx += p.x; sy += p.y; n++; } }
+            rt.orgCenter[cl.id] = n ? { x: sx / n, y: sy / n } : { x: 0, y: 0 };
+          }
+        } else {
+          this.applyAnchors();
+        }
+        setTimeout(() => this.fitView(), 350);
+      }),
+      subClustersBg: st.subClusters ? accentBg : 'oklch(0.19 0.006 260 / 0.94)',
+      subClustersColor: st.subClusters ? accent : 'oklch(0.8 0.006 260)',
+      subClustersBorder: st.subClusters ? 'oklch(0.74 0.16 35 / 0.5)' : 'oklch(0.32 0.01 260 / 0.6)',
+      onToggleIsolate: () => this.setState((s) => ({ isolateBoundary: !s.isolateBoundary })),
+      isolateActive: st.isolateBoundary,
+      isolateBtnBg: st.isolateBoundary ? accentBg : 'oklch(0.22 0.007 260)',
+      isolateBtnColor: st.isolateBoundary ? accent : 'oklch(0.9 0.004 260)',
+      isolateBtnBorder: st.isolateBoundary ? 'oklch(0.74 0.16 35 / 0.5)' : 'oklch(0.32 0.01 260 / 0.6)',
+      onBackToOverview: () => this.clearSelection(),
+      onBackToGraph: () => this.setState({ clusterMap: false, matrixView: false }),
+      onSetBlastDependents: () => this.setState({ blastDir: 'dependents' }),
+      onSetBlastDependencies: () => this.setState({ blastDir: 'dependencies' }),
+      budget: st.budget,
+      onBudgetInput: (e) => this.setState({ budget: Number(e.target.value) }),
+      onRaiseBudget: () => this.setState({ budget: 500 }),
+      onCopyLink: () => {
+        try { navigator.clipboard.writeText(this.deepLink()); } catch (err) {}
+        this.setState({ copied: true });
+        setTimeout(() => this.setState({ copied: false }), 1200);
+      },
+      deepLink: st.copied ? 'copied \u2713' : this.deepLink(),
+      onAgentClose: () => this.setState({ agent: { stage: 'idle', clusterId: null, text: '', pct: 0 } }),
+      onAgentGenerate: () => this.runAgent(),
+      onAgentOpenDocs: () => this.setState({ mode: 'docs', docsSection: 'gen:' + st.agent.clusterId, agent: { stage: 'idle', clusterId: null, text: '', pct: 0 } }),
+      layoutCustomized: Object.keys(st.pins || {}).length > 0 || Object.keys(st.clusterAnchors || {}).length > 0,
+      onResetLayout: () => this.resetLayout(),
+      onDocsFilterClear: () => this.clearSelection(),
+    };
+
+    if (!loaded) {
+      return {
+        ...base,
+        hasSearchMatches: false, searchGroups: [], nodeCount: 0, edgeCount: 0, renderedCount: 0, budgetLabel: '\u221E',
+        explorerRows: [], nodeKindRows: [], relGroupRows: [], focusDepthOptions: [],
+        focusDepthOpacity: 0.4, focusDepthPointerEvents: 'none',
+        hasActiveTags: false, activeTagChips: [], tagFacetGroups: [], savedRows: [],
+        overlayOptions: [], truncationVisible: false, truncationText: '', statusLine: 'loading graph\u2026',
+        edgeViewOptions: [], onToggleSubClusters: () => {}, subClustersBg: '', subClustersColor: '', subClustersBorder: '',
+        statCells: [], compositionBar: [], compositionLegend: [],
+        matrix: { cols: [], rows: [] }, blast: this.emptyBlast(),
+        blastLegendVisible: false, blastLegendText: '',
+        hasSelectionBanner: false, selectedColor: '', selectedLabel: '', selectedKindLabel: '',
+        showOverview: true, showNodeInspector: false, showClusterInspector: false, showTensionInspector: false,
+        clusterRows: [], tensionRows: [], inspector: this.emptyInspector(),
+        clusterView: this.emptyClusterView(), tensionView: this.emptyTensionView(),
+        agentVisible: false, agentShowContext: false, agentShowStream: false, agentShowDone: false,
+        agentClusterLabel: '', agentContextRows: [], agentText: '', agentPct: 0,
+        docsNav: [], docSection: this.emptyDocSection(), hasGeneratedDocs: false, generatedNav: [],
+        docsFilterActive: false, docsFilterLabel: '',
+      };
+    }
+
+    const { nodes, relations, NODE_KINDS, RELATION_GROUPS } = this.data;
+    const atlas = this.atlas;
+    const visibleIds = this.computeVisibleNodeIds();
+    const renderedCount = visibleIds.size;
+
+    // Search groups
+    const q = (st.search || '').trim().toLowerCase();
+    const searchGroups = [];
+    if (q) {
+      const nodeItems = nodes
+        .filter((nd) => nd.label.toLowerCase().includes(q) || (nd.path || '').toLowerCase().includes(q))
+        .slice(0, 6)
+        .map((nd) => ({
+          label: nd.label, kindLabel: nd.kind, color: this.data.nodeKindMeta(nd.kind).color,
+          onSelect: () => { this.jumpToNode(nd.id); this.setState({ search: '' }); },
+        }));
+      if (nodeItems.length) searchGroups.push({ header: 'Nodes', items: nodeItems });
+      const clItems = atlas.clusters.filter((c) => c.label.toLowerCase().includes(q)).map((c) => ({
+        label: c.label, kindLabel: 'Cluster', color: c.color,
+        onSelect: () => { this.selectCluster(c.id, true); this.setState({ search: '' }); },
+      }));
+      if (clItems.length) searchGroups.push({ header: 'Clusters', items: clItems });
+      const tnItems = atlas.tensions.filter((t) => t.label.toLowerCase().includes(q) || t.category.includes(q)).map((t) => ({
+        label: t.label, kindLabel: 'Tension', color: atlas.SEVERITY[t.severity].color,
+        onSelect: () => { this.selectTension(t.id); this.setState({ search: '' }); },
+      }));
+      if (tnItems.length) searchGroups.push({ header: 'Tensions', items: tnItems });
+      const docItems = atlas.docsSections.filter((d) => d.title.toLowerCase().includes(q) || d.paragraphs.some((p) => p.toLowerCase().includes(q))).slice(0, 3).map((d) => ({
+        label: d.title, kindLabel: 'Doc', color: 'oklch(0.78 0.1 120)',
+        onSelect: () => this.setState({ mode: 'docs', docsSection: d.id, search: '' }),
+      }));
+      if (docItems.length) searchGroups.push({ header: 'Docs', items: docItems });
+      const tagItems = [];
+      for (const g of atlas.tagFacets()) for (const v of g.values) if (v.tag.includes(q)) tagItems.push(v);
+      if (tagItems.length) searchGroups.push({
+        header: 'Tags',
+        items: tagItems.slice(0, 4).map((v) => ({
+          label: v.tag, kindLabel: v.count + ' nodes', color: 'oklch(0.6 0.02 260)',
+          onSelect: () => { this.toggleTag(v.tag, 'include'); this.setState({ search: '', leftTab: 'tags' }); },
+        })),
+      });
+    }
+
+    // Filters
+    const nodeKindRows = NODE_KINDS.map((m) => {
+      const count = this.nodeCountByKind[m.key] || 0;
+      const visible = st.nodeVisible[m.key] !== false;
+      return {
+        key: m.key, label: m.label, color: m.color, count,
+        opacity: !visible ? 0.35 : count === 0 ? 0.45 : 1,
+        onToggle: () => this.setState((s) => ({ nodeVisible: { ...s.nodeVisible, [m.key]: !(s.nodeVisible[m.key] !== false) } })),
+      };
+    });
+    const relGroupRows = RELATION_GROUPS.map((g) => {
+      const kinds = g.kinds.map((kk) => {
+        const rmeta = this.data.relKindMeta(kk);
+        const count = this.relCountByKind[kk] || 0;
+        const visible = st.relVisible[kk] !== false;
+        return {
+          key: kk, label: rmeta.label, color: rmeta.color, count,
+          opacity: !visible ? 0.35 : count === 0 ? 0.45 : 1,
+          onToggle: () => this.setState((s) => ({ relVisible: { ...s.relVisible, [kk]: !(s.relVisible[kk] !== false) } })),
+        };
+      });
+      const groupCount = kinds.reduce((sum, k2) => sum + k2.count, 0);
+      return {
+        key: g.key, label: g.label, kinds, groupCount, opacity: groupCount === 0 ? 0.45 : 1,
+        onToggleAll: () => this.setState((s) => {
+          const allOn = g.kinds.every((kk) => s.relVisible[kk] !== false);
+          const next = { ...s.relVisible };
+          for (const kk of g.kinds) next[kk] = !allOn;
+          return { relVisible: next };
+        }),
+      };
+    });
+    const depths = [null, 1, 2, 3];
+    const focusDepthOptions = depths.map((d) => {
+      const active = st.focusDepth === d;
+      return {
+        label: d === null ? 'All' : d + ' hop' + (d > 1 ? 's' : ''),
+        bg: active ? accentBg : 'oklch(0.22 0.007 260)',
+        borderColor: active ? accent : 'oklch(0.32 0.01 260 / 0.5)',
+        color: active ? accent : 'oklch(0.75 0.006 260)',
+        onClick: () => this.setState({ focusDepth: d }),
+      };
+    });
+
+    // Tags
+    const tq = (st.tagSearch || '').trim().toLowerCase();
+    const tagFacetGroups = atlas.tagFacets()
+      .map((g) => ({
+        label: g.ns,
+        values: g.values.filter((v) => !tq || v.tag.includes(tq)).map((v) => {
+          const inc = st.tagsInclude.includes(v.tag);
+          const exc = st.tagsExclude.includes(v.tag);
+          return {
+            label: v.tag, count: v.count,
+            incBg: inc ? accentBg : 'oklch(0.22 0.007 260)',
+            incColor: inc ? accent : 'oklch(0.6 0.008 260)',
+            incBorder: inc ? 'oklch(0.74 0.16 35 / 0.5)' : 'oklch(0.32 0.01 260 / 0.5)',
+            excBg: exc ? 'oklch(0.66 0.19 25 / 0.16)' : 'oklch(0.22 0.007 260)',
+            excColor: exc ? 'oklch(0.66 0.19 25)' : 'oklch(0.6 0.008 260)',
+            excBorder: exc ? 'oklch(0.66 0.19 25 / 0.5)' : 'oklch(0.32 0.01 260 / 0.5)',
+            onInclude: () => this.toggleTag(v.tag, inc ? 'clear' : 'include'),
+            onExclude: () => this.toggleTag(v.tag, exc ? 'clear' : 'exclude'),
+          };
+        }),
+      }))
+      .filter((g) => g.values.length);
+    const activeTagChips = [
+      ...st.tagsInclude.map((t) => ({
+        label: t, color: accent, bg: accentBg, border: 'oklch(0.74 0.16 35 / 0.5)',
+        onRemove: () => this.toggleTag(t, 'clear'),
+      })),
+      ...st.tagsExclude.map((t) => ({
+        label: '\u00AC ' + t, color: 'oklch(0.66 0.19 25)', bg: 'oklch(0.66 0.19 25 / 0.14)', border: 'oklch(0.66 0.19 25 / 0.5)',
+        onRemove: () => this.toggleTag(t, 'clear'),
+      })),
+    ];
+
+    // Saved
+    const savedRows = [...atlas.savedInvestigations, ...st.savedLocal].map((inv) => ({
+      title: inv.title, note: inv.note, stale: !!inv.stale,
+      meta: 'snapshot ' + inv.snapshot + ' \u00B7 ' + inv.when,
+      onOpen: () => {
+        const s2 = inv.state;
+        if (s2.selectedType === 'tension') this.selectTension(s2.selectedId);
+        else if (s2.selectedType === 'cluster') this.selectCluster(s2.selectedId, true);
+        else if (s2.selectedType === 'node') this.jumpToNode(s2.selectedId);
+        if (s2.overlay) this.setState({ overlay: s2.overlay });
+      },
+    }));
+
+    // Overlays
+    const overlayOptions = [
+      { key: 'kind', label: 'Kind' },
+      { key: 'tension', label: 'Tensions' },
+      { key: 'centrality', label: 'Centrality' },
+      { key: 'blast', label: 'Blast' },
+    ].map((o) => ({
+      label: o.label,
+      bg: st.overlay === o.key ? accentBg : 'transparent',
+      color: st.overlay === o.key ? accent : 'oklch(0.72 0.006 260)',
+      onClick: () => this.setState({ overlay: o.key }),
+    }));
+
+    // Selection banner
+    let selColor = '', selLabel = '', selKind = '';
+    if (st.selectedType === 'node' && st.selectedId) {
+      const nd = this.data.nodeById[st.selectedId];
+      selColor = this.data.nodeKindMeta(nd.kind).color; selLabel = nd.label; selKind = nd.kind;
+    } else if (st.selectedType === 'cluster' && st.selectedId) {
+      const cl = atlas.clusterById[st.selectedId];
+      selColor = cl.color; selLabel = cl.label; selKind = 'Cluster';
+    } else if (st.selectedType === 'tension' && st.selectedId) {
+      const tn = atlas.tensionById[st.selectedId];
+      selColor = atlas.SEVERITY[tn.severity].color; selLabel = tn.label; selKind = 'Tension';
+    }
+
+    // Inspector panels
+    const showNode = st.mode === 'explore' && st.selectedType === 'node';
+    const showCluster = st.mode === 'explore' && st.selectedType === 'cluster';
+    const showTension = st.mode === 'explore' && st.selectedType === 'tension';
+    const showOverview = st.mode === 'explore' && !showNode && !showCluster && !showTension;
+
+    const clusterRows = atlas.clusters.map((cl) => ({
+      label: cl.label, color: cl.color, memberCount: cl.members.length,
+      cohesionPct: Math.round(cl.cohesion * 100),
+      onClick: () => this.selectCluster(cl.id, true),
+    }));
+    const tensionRows = atlas.tensions.map((t) => ({
+      label: t.label,
+      sevColor: atlas.SEVERITY[t.severity].color,
+      meta: atlas.SEVERITY[t.severity].label + ' \u00B7 ' + t.category + ' \u00B7 ' + t.affected.length + ' nodes',
+      onClick: () => this.selectTension(t.id),
+    }));
+
+    const inspector = showNode ? this.buildNodeInspector(this.data.nodeById[st.selectedId]) : this.emptyInspector();
+
+    let clusterView = this.emptyClusterView();
+    if (showCluster) {
+      const cl = atlas.clusterById[st.selectedId];
+      const boundary = atlas.boundaryEdges(cl.id);
+      clusterView = {
+        label: cl.label, color: cl.color, summary: cl.summary,
+        memberCount: cl.members.length,
+        cohesion: cl.cohesion.toFixed(2), cohesionPct: Math.round(cl.cohesion * 100),
+        conductance: cl.conductance.toFixed(2), conductancePct: Math.round(cl.conductance * 100),
+        boundaryCount: boundary.length,
+        hasBridges: cl.bridgeNodes.length > 0,
+        bridgeRows: cl.bridgeNodes.map((id) => {
+          const nd = this.data.nodeById[id];
+          return {
+            label: nd.label, color: this.data.nodeKindMeta(nd.kind).color,
+            meta: 'deg ' + (this.degrees[id] || 0),
+            onClick: () => this.jumpToNode(id),
+          };
+        }),
+        tagChips: cl.dominantTags.map((t) => ({ label: t })),
+        hasTensions: atlas.tensions.some((t) => t.clusterIds.includes(cl.id)),
+        tensionLinks: atlas.tensions.filter((t) => t.clusterIds.includes(cl.id)).map((t) => ({
+          label: t.label, sevColor: atlas.SEVERITY[t.severity].color, onClick: () => this.selectTension(t.id),
+        })),
+        topMembers: [...cl.members].sort((a, b) => (this.degrees[b] || 0) - (this.degrees[a] || 0)).slice(0, 8).map((id) => {
+          const nd = this.data.nodeById[id];
+          return { label: nd.label, color: this.data.nodeKindMeta(nd.kind).color, degree: this.degrees[id] || 0, onClick: () => this.jumpToNode(id) };
+        }),
+        onFocus: () => this.focusCluster(cl.id),
+        onDraftDocs: () => this.startAgent(cl.id),
+        hasRelatedDocs: this.relatedDocSectionsForCluster(cl.id).length > 0,
+        relatedDocs: this.relatedDocLinks(this.relatedDocSectionsForCluster(cl.id)),
+      };
+    }
+
+    let tensionView = this.emptyTensionView();
+    if (showTension) {
+      const tn = atlas.tensionById[st.selectedId];
+      const sev = atlas.SEVERITY[tn.severity];
+      const alreadySaved = st.savedLocal.some((i) => i.state.selectedId === tn.id);
+      tensionView = {
+        label: tn.label, category: tn.category, confidence: tn.confidence, why: tn.why,
+        sevLabel: sev.label, sevColor: sev.color, sevBg: this.withAlpha(sev.color, 0.14),
+        metrics: tn.metrics.map((m) => ({ label: m })),
+        evidence: tn.evidence.map((e) => ({ label: e.line ? e.file + ':' + e.line : e.file })),
+        affectedRows: tn.affected.map((id) => {
+          const nd = this.data.nodeById[id];
+          return { label: nd.label, kindLabel: nd.kind, color: this.data.nodeKindMeta(nd.kind).color, onClick: () => this.jumpToNode(id) };
+        }),
+        suggested: tn.suggested.map((s2) => ({ label: '\u203A ' + s2 })),
+        onFocusAffected: () => {
+          const first = tn.affected[0];
+          this.centerOn(first);
+        },
+        saveLabel: alreadySaved ? 'Saved \u2713' : 'Save investigation',
+        onSave: () => {
+          if (alreadySaved) return;
+          this.setState((s) => ({
+            savedLocal: [...s.savedLocal, {
+              id: 'local:' + tn.id, title: tn.label, when: 'just now', snapshot: '5bcfa51',
+              note: 'Saved from tension detail.', stale: false,
+              state: { selectedType: 'tension', selectedId: tn.id, overlay: 'tension' },
+            }],
+          }));
+        },
+      };
+    }
+
+    // Agent
+    const ag = st.agent;
+    const agCluster = ag.clusterId ? atlas.clusterById[ag.clusterId] : null;
+    let agentContextRows = [];
+    if (agCluster) {
+      const boundary = atlas.boundaryEdges(agCluster.id);
+      const internal = relations.filter((r) => atlas.clusterOfNode[r.source] === agCluster.id && atlas.clusterOfNode[r.target] === agCluster.id);
+      const evCount = agCluster.members.reduce((sum, id) => sum + ((this.data.nodeById[id].evidence || []).length), 0);
+      const tnCount = atlas.tensions.filter((t) => t.clusterIds.includes(agCluster.id)).length;
+      agentContextRows = [
+        { label: 'Scope', value: agCluster.members.length + ' nodes' },
+        { label: 'Internal edges', value: String(internal.length) },
+        { label: 'Boundary edges', value: String(boundary.length) },
+        { label: 'Evidence refs', value: String(evCount) },
+        { label: 'Tensions in scope', value: String(tnCount) },
+        { label: 'Est. context', value: '\u2248 2.1k tokens' },
+      ];
+    }
+
+    // Docs
+    const FRESH = {
+      fresh: { label: 'fresh', color: 'oklch(0.72 0.12 150)' },
+      partial: { label: 'partial', color: 'oklch(0.78 0.15 75)' },
+      stale: { label: 'stale', color: 'oklch(0.66 0.19 25)' },
+      generated: { label: 'new', color: 'oklch(0.74 0.16 35)' },
+    };
+    const docsFilter = this.docsFilterInfo();
+    const navOpacity = (id) => (docsFilter.active && docsFilter.ids && !docsFilter.ids.has(id) ? 0.35 : 1);
+    const docsNav = atlas.docsSections.map((d) => {
+      const active = st.docsSection === d.id;
+      return {
+        title: d.title, freshColor: FRESH[d.freshness].color,
+        bg: active ? 'oklch(0.24 0.008 260)' : 'transparent',
+        color: active ? '#fff' : 'oklch(0.75 0.006 260)',
+        weight: active ? '600' : '400',
+        opacity: navOpacity(d.id),
+        onClick: () => this.setState({ docsSection: d.id }),
+      };
+    });
+    const generatedNav = st.generatedDocs.map((d) => {
+      const active = st.docsSection === d.id;
+      const inFilter = docsFilter.active && st.selectedType === 'cluster' && st.selectedId === d.clusterId;
+      return {
+        title: d.title, freshColor: FRESH.generated.color,
+        bg: active ? 'oklch(0.24 0.008 260)' : 'transparent',
+        color: active ? '#fff' : 'oklch(0.75 0.006 260)',
+        weight: active ? '600' : '400',
+        opacity: docsFilter.active ? (inFilter ? 1 : 0.35) : 1,
+        onClick: () => this.setState({ docsSection: d.id }),
+      };
+    });
+    let docSection = this.emptyDocSection();
+    const genDoc = st.generatedDocs.find((d) => d.id === st.docsSection);
+    if (genDoc) {
+      const cl = atlas.clusterById[genDoc.clusterId];
+      docSection = {
+        title: genDoc.title + ' (subsystem)',
+        freshLabel: 'new', freshColor: FRESH.generated.color, freshBg: this.withAlpha(FRESH.generated.color, 0.14),
+        query: 'MCP generate_subsystem_docs(' + genDoc.clusterId + ')',
+        hasStaleReason: false, staleReason: '', onRegenerate: () => {},
+        paragraphs: [{ text: genDoc.text }],
+        evidence: [{ label: 'validated: 6 evidence links' }],
+        relatedChips: cl.members.slice(0, 6).map((id) => {
+          const nd = this.data.nodeById[id];
+          return { label: nd.label, color: this.data.nodeKindMeta(nd.kind).color, onClick: () => { this.setState({ mode: 'explore' }); this.jumpToNode(id); } };
+        }),
+      };
+    } else {
+      const d = atlas.docsSections.find((x) => x.id === st.docsSection) || atlas.docsSections[0];
+      const f = FRESH[d.freshness];
+      docSection = {
+        title: d.title,
+        freshLabel: f.label, freshColor: f.color, freshBg: this.withAlpha(f.color, 0.14),
+        query: d.query,
+        hasStaleReason: !!d.staleReason, staleReason: d.staleReason || '',
+        onRegenerate: () => {},
+        paragraphs: d.paragraphs.map((p) => ({ text: p })),
+        evidence: d.evidence.map((e) => ({ label: e.line ? e.file + ':' + e.line : e.file })),
+        relatedChips: [
+          ...d.relatedNodes.map((id) => {
+            const nd = this.data.nodeById[id];
+            return { label: nd.label, color: this.data.nodeKindMeta(nd.kind).color, onClick: () => { this.setState({ mode: 'explore' }); this.jumpToNode(id); } };
+          }),
+          ...(d.relatedClusters || []).map((cid) => {
+            const cl = atlas.clusterById[cid];
+            return { label: cl.label, color: cl.color, onClick: () => { this.setState({ mode: 'explore' }); this.selectCluster(cid, true); } };
+          }),
+        ],
+      };
+    }
+
+    const total = nodes.length;
+    const truncated = st.budget < total;
+
+    // Stats rail + kind-composition bar
+    const orphanCount = nodes.filter((nd) => (this.degrees[nd.id] || 0) === 0).length;
+    const evidenceCount = nodes.reduce((sum, nd) => sum + ((nd.evidence || []).length), 0);
+    const statCells = [
+      { value: String(total), label: 'Nodes', color: 'oklch(0.9 0.004 260)' },
+      { value: String(relations.length), label: 'Relations', color: 'oklch(0.9 0.004 260)' },
+      { value: String(atlas.clusters.length), label: 'Clusters', color: 'oklch(0.9 0.004 260)' },
+      { value: String(orphanCount), label: 'Orphans', color: orphanCount ? 'oklch(0.78 0.15 75)' : 'oklch(0.9 0.004 260)' },
+      { value: String(evidenceCount), label: 'Evidence', color: 'oklch(0.74 0.16 35)' },
+    ];
+    const compKinds = this.data.NODE_KINDS
+      .map((m) => ({ label: m.label, color: m.color, count: this.nodeCountByKind[m.key] || 0 }))
+      .filter((k) => k.count > 0)
+      .sort((a, b) => b.count - a.count);
+    const compositionBar = compKinds.map((k) => ({
+      color: k.color, pct: (k.count / total) * 100, title: k.label + ': ' + k.count,
+    }));
+    const compositionLegend = compKinds.slice(0, 5).map((k) => ({ color: k.color, label: k.label }));
+
+    // Cluster coupling matrix (directed; diagonal = internal) — honors active filters
+    const cls = atlas.clusters;
+    const mRelVisible = this.visibleKindSet(st.relVisible, this.data.RELATION_KINDS);
+    const mNodeVisible = this.visibleKindSet(st.nodeVisible, this.data.NODE_KINDS);
+    const counts = {};
+    for (const a of cls) { counts[a.id] = {}; for (const b of cls) counts[a.id][b.id] = 0; }
+    for (const rel of relations) {
+      if (!mRelVisible.has(rel.kind)) continue;
+      const sN = this.data.nodeById[rel.source], tN = this.data.nodeById[rel.target];
+      if (!sN || !tN || !mNodeVisible.has(sN.kind) || !mNodeVisible.has(tN.kind)) continue;
+      const sc = atlas.clusterOfNode[rel.source], tc = atlas.clusterOfNode[rel.target];
+      if (sc && tc) counts[sc][tc] += 1;
+    }
+    const selClusterId = st.selectedType === 'cluster' ? st.selectedId : null;
+    let matMax = 1;
+    for (const a of cls) for (const b of cls) if (a.id !== b.id) matMax = Math.max(matMax, counts[a.id][b.id]);
+    const matrixCols = cls.map((c) => ({ label: c.short, color: c.color, sel: c.id === selClusterId }));
+    const matrixRows = cls.map((rowC) => ({
+      label: rowC.label, color: rowC.color, sel: rowC.id === selClusterId,
+      onLabelClick: () => this.setState({ clusterMap: false, matrixView: false }, () => this.selectCluster(rowC.id, true)),
+      cells: cls.map((colC) => {
+        const n = counts[rowC.id][colC.id];
+        const isDiag = rowC.id === colC.id;
+        let bg, textColor, border;
+        if (isDiag) {
+          bg = this.withAlpha(rowC.color, n ? 0.28 : 0.08);
+          border = this.withAlpha(rowC.color, 0.5);
+          textColor = n ? 'oklch(0.97 0.01 260)' : 'oklch(0.4 0.008 260)';
+        } else if (n === 0) {
+          bg = 'oklch(0.16 0.005 260)'; border = 'oklch(0.22 0.006 260)'; textColor = 'oklch(0.3 0.008 260)';
+        } else {
+          const a = 0.14 + 0.62 * (n / matMax);
+          bg = 'oklch(0.6 0.13 205 / ' + a.toFixed(2) + ')';
+          border = 'oklch(0.6 0.13 205 / 0.4)';
+          textColor = a > 0.45 ? 'oklch(0.98 0.01 260)' : 'oklch(0.75 0.02 205)';
+        }
+        return {
+          text: n ? String(n) : '', bg, border, textColor,
+          cursor: n ? 'pointer' : 'default',
+          title: rowC.label + ' \u2192 ' + colC.label + ': ' + n + (isDiag ? ' internal' : ' cross') + ' edge' + (n === 1 ? '' : 's'),
+          onClick: n ? () => {
+            if (isDiag) this.setState({ clusterMap: false, matrixView: false }, () => this.selectCluster(rowC.id, true));
+            else this.setState({ clusterMap: false, matrixView: false, isolateBoundary: true }, () => this.selectCluster(rowC.id, true));
+          } : () => {},
+        };
+      }),
+    }));
+    const matrix = { cols: matrixCols, rows: matrixRows };
+
+    // Blast radius for the selected node
+    const blast = showNode ? this.buildBlast(this.data.nodeById[st.selectedId], st.blastDir) : this.emptyBlast();
+    const blastLegendVisible = st.overlay === 'blast' && showNode && !st.matrixView;
+    const blastLegendText = blastLegendVisible
+      ? (st.blastDir === 'dependents' ? 'Dependents of ' : 'Dependencies of ') + this.data.nodeById[st.selectedId].label
+      : '';
+
+    return {
+      ...base,
+      statCells, compositionBar, compositionLegend,
+      matrix, blast, blastLegendVisible, blastLegendText,
+      hasSearchMatches: searchGroups.length > 0,
+      searchGroups,
+      nodeCount: total,
+      edgeCount: relations.length,
+      renderedCount,
+      budgetLabel: st.budget >= 500 ? '\u221E' : String(st.budget),
+      explorerRows: this.buildExplorerRows(st),
+      nodeKindRows, relGroupRows, focusDepthOptions,
+      focusDepthOpacity: st.selectedType === 'node' ? 1 : 0.4,
+      focusDepthPointerEvents: st.selectedType === 'node' ? 'auto' : 'none',
+      hasActiveTags: activeTagChips.length > 0,
+      activeTagChips, tagFacetGroups, savedRows, overlayOptions,
+      truncationVisible: truncated,
+      truncationText: 'Budget reached \u2014 showing top ' + Math.min(st.budget, total) + ' of ' + total + ' nodes by degree',
+      statusLine: renderedCount + ' nodes \u00B7 ' + relations.length + ' relations \u00B7 snapshot 5bcfa51 \u00B7 layout cache hit',
+      hasSelectionBanner: !!st.selectedType,
+      selectedColor: selColor, selectedLabel: selLabel, selectedKindLabel: selKind,
+      showOverview, showNodeInspector: showNode, showClusterInspector: showCluster, showTensionInspector: showTension,
+      clusterRows, tensionRows, inspector, clusterView, tensionView,
+      agentVisible: ag.stage !== 'idle',
+      agentShowContext: ag.stage === 'context',
+      agentShowStream: ag.stage === 'streaming',
+      agentShowDone: ag.stage === 'done',
+      agentClusterLabel: agCluster ? agCluster.label : '',
+      agentContextRows,
+      agentText: ag.text,
+      agentPct: ag.pct,
+      docsNav, docSection,
+      hasGeneratedDocs: generatedNav.length > 0,
+      generatedNav,
+      docsFilterActive: docsFilter.active,
+      docsFilterLabel: docsFilter.label,
+    };
+  }
+
+  // Members (methods/props) of a Symbol container, collapsed by default and
+  // revealed on double-click of the parent.
+  ensureHierarchy() {
+    if (this.collapsibleChild) return;
+    this.collapsibleChild = {};
+    this.childrenOf = {};
+    this.expandable = {};
+    for (const r of this.data.relations) {
+      if (r.kind !== 'Contains') continue;
+      const parent = this.data.nodeById[r.source];
+      if (!parent || parent.kind !== 'Symbol') continue; // only class/struct/trait members
+      this.collapsibleChild[r.target] = r.source;
+      (this.childrenOf[r.source] ||= []).push(r.target);
+      this.expandable[r.source] = true;
+    }
+  }
+  toggleExpand(id) {
+    this.ensureHierarchy();
+    if (!this.expandable[id]) return;
+    const rt = this.runtime;
+    const willExpand = !this.state.expandedNodes[id];
+    if (willExpand) {
+      // Seed members at the parent so they emerge from it; the Contains links pull them out.
+      const pp = rt.pos[id];
+      for (const cid of (this.childrenOf[id] || [])) {
+        const cp = rt.pos[cid];
+        if (cp && !(this.state.pins || {})[cid]) {
+          cp.x = pp.x + (Math.random() - 0.5) * 24;
+          cp.y = pp.y + (Math.random() - 0.5) * 24;
+          cp.vx = 0; cp.vy = 0;
+        }
+      }
+    }
+    this.setState((s) => ({ expandedNodes: { ...s.expandedNodes, [id]: willExpand } }));
+  }
+
+  importanceRadius(nd) {
+    if (!this._imp) {
+      this._imp = {};
+      const childCount = {};
+      for (const r of this.data.relations) if (r.kind === 'Contains') childCount[r.source] = (childCount[r.source] || 0) + 1;
+      for (const n2 of this.data.nodes) {
+        const deg = this.degrees[n2.id] || 0;
+        const ev = (n2.evidence || []).length;
+        const kids = childCount[n2.id] || 0;
+        this._imp[n2.id] = deg + ev * 0.6 + kids * 1.4;
+      }
+      this._impMax = Math.max(1, ...Object.values(this._imp));
+    }
+    const t = Math.sqrt((this._imp[nd.id] || 0) / this._impMax);
+    return 5 + t * 17;
+  }
+
+  buildBlast(node, dir) {
+    if (!node) return this.emptyBlast();
+    const depthMap = this.engine.blastRadius(node.id, this.data.relations, dir, this.engine.IMPACT_EDGE_KINDS);
+    const affectedIds = Object.keys(depthMap).filter((id) => id !== node.id);
+    const total = this.data.nodes.length;
+    const pct = Math.round((affectedIds.length / Math.max(1, total - 1)) * 100);
+    let maxDepth = 0;
+    for (const id of affectedIds) maxDepth = Math.max(maxDepth, depthMap[id]);
+    let sevLabel, sevColor;
+    if (pct >= 40) { sevLabel = 'Critical'; sevColor = 'oklch(0.66 0.19 25)'; }
+    else if (pct >= 20) { sevLabel = 'High'; sevColor = 'oklch(0.72 0.16 45)'; }
+    else if (pct >= 8) { sevLabel = 'Moderate'; sevColor = 'oklch(0.78 0.15 75)'; }
+    else { sevLabel = 'Low'; sevColor = 'oklch(0.72 0.12 150)'; }
+    const sorted = affectedIds.sort((a, b) => (depthMap[a] - depthMap[b]) || ((this.degrees[b] || 0) - (this.degrees[a] || 0)));
+    const affected = sorted.slice(0, 7).map((id) => {
+      const nd = this.data.nodeById[id];
+      return { label: nd.label, color: this.data.nodeKindMeta(nd.kind).color, hopLabel: depthMap[id] + ' hop' + (depthMap[id] > 1 ? 's' : ''), onClick: () => this.jumpToNode(id) };
+    });
+    const accent = 'oklch(0.74 0.16 35)', accentBg = 'oklch(0.74 0.16 35 / 0.16)';
+    const dir1 = dir === 'dependents';
+    const blastOn = this.state.overlay === 'blast';
+    return {
+      sevLabel, sevColor, sevBg: this.withAlpha(sevColor, 0.16),
+      impactPct: pct,
+      impactText: affectedIds.length + ' of ' + (total - 1) + ' nodes',
+      depthText: affectedIds.length ? 'Propagates up to ' + maxDepth + ' hop' + (maxDepth > 1 ? 's' : '') + ' deep' : '',
+      dirLabel: dir1 ? 'Dependents (break if changed)' : 'Dependencies (relied upon)',
+      dependentsBg: dir1 ? accentBg : 'transparent', dependentsColor: dir1 ? accent : 'oklch(0.6 0.008 260)',
+      dependenciesBg: !dir1 ? accentBg : 'transparent', dependenciesColor: !dir1 ? accent : 'oklch(0.6 0.008 260)',
+      onDependents: () => this.setState({ blastDir: 'dependents' }),
+      onDependencies: () => this.setState({ blastDir: 'dependencies' }),
+      hasAffected: affected.length > 0,
+      affected,
+      hasMore: affectedIds.length > 7,
+      moreText: '+' + (affectedIds.length - 7) + ' more affected',
+      isEmpty: affectedIds.length === 0,
+      emptyWord: dir1 ? 'depends on' : 'flows out of',
+      onShowOnGraph: () => this.setState({ overlay: blastOn ? 'kind' : 'blast' }),
+      showBtnLabel: blastOn ? 'Hide from graph' : 'Show on graph',
+      showBtnBg: blastOn ? accentBg : 'oklch(0.22 0.007 260)',
+      showBtnColor: blastOn ? accent : 'oklch(0.9 0.004 260)',
+      showBtnBorder: blastOn ? 'oklch(0.74 0.16 35 / 0.5)' : 'oklch(0.32 0.01 260 / 0.6)',
+    };
+  }
+  emptyBlast() {
+    return {
+      sevLabel: '', sevColor: '', sevBg: '', impactPct: 0, impactText: '', depthText: '',
+      dirLabel: '', dependentsBg: '', dependentsColor: '', dependenciesBg: '', dependenciesColor: '',
+      onDependents: () => {}, onDependencies: () => {}, hasAffected: false, affected: [],
+      hasMore: false, moreText: '', isEmpty: false, emptyWord: '',
+      onShowOnGraph: () => {}, showBtnLabel: '', showBtnBg: '', showBtnColor: '', showBtnBorder: '',
+    };
+  }
+
+  emptyClusterView() {    return {
+      label: '', color: '', summary: '', memberCount: 0, cohesion: '0', cohesionPct: 0,
+      conductance: '0', conductancePct: 0, boundaryCount: 0, hasBridges: false, bridgeRows: [],
+      tagChips: [], hasTensions: false, tensionLinks: [], topMembers: [], onFocus: () => {}, onDraftDocs: () => {},
+      hasRelatedDocs: false, relatedDocs: [],
+    };
+  }
+  emptyTensionView() {
+    return {
+      label: '', category: '', confidence: '', why: '', sevLabel: '', sevColor: '', sevBg: '',
+      metrics: [], evidence: [], affectedRows: [], suggested: [], onFocusAffected: () => {}, saveLabel: 'Save investigation', onSave: () => {},
+    };
+  }
+  emptyDocSection() {
+    return {
+      title: '', freshLabel: '', freshColor: '', freshBg: '', query: '', hasStaleReason: false,
+      staleReason: '', onRegenerate: () => {}, paragraphs: [], evidence: [], relatedChips: [],
+    };
+  }
+
+  deepLink() {
+    const st = this.state;
+    let link = '#/' + st.mode;
+    if (st.selectedType && st.selectedId) link += '?sel=' + st.selectedType + ':' + st.selectedId;
+    if (st.overlay !== 'kind') link += (link.includes('?') ? '&' : '?') + 'overlay=' + st.overlay;
+    if (st.clusterMap) link += (link.includes('?') ? '&' : '?') + 'view=clusters';
+    return link;
+  }
+}
+
+</script>
+</body>
+</html>
