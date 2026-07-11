@@ -19,7 +19,7 @@ CI runner exercises it.
 
 The Rust toolchain is pinned in `rust-toolchain.toml` (`stable`, with
 `rustfmt`, `clippy`, and `llvm-tools-preview`). Building from source requires
-only `rustup` and `make`; see the README's Requirements section.
+only `rustup` and `just`; see the README's Requirements section.
 
 ## Installing Today
 
@@ -28,7 +28,7 @@ Until published, install from source or from a git checkout:
 ```sh
 git clone https://github.com/fblln/Lithograph.git
 cd Lithograph
-make toolchain
+just toolchain
 cargo install --path . --locked
 ```
 
@@ -64,7 +64,7 @@ per-repository generated output, never shipped with the binary.
 
 Before tagging a release:
 
-- [ ] `make check-all` passes (format check, clippy with warnings denied, full
+- [ ] `just check-all` passes (format check, clippy with warnings denied, full
       test suite) on the toolchain pinned in `rust-toolchain.toml`.
 - [ ] `cargo test --test golden_snapshot` passes against the committed
       snapshots in `tests/golden/polyglot/` -- no unreviewed generated-output

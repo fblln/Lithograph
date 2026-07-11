@@ -96,7 +96,7 @@ pub fn generate_graph_docs(
         vec![],
         crate::domain::Confidence::Low,
     );
-    let lines = [overview, architecture, workflow, boundaries, data, ops, risks, drift].into_iter().filter_map(|id| document.section_index().get(&id).copied()).map(|section| format!("## {}\n\n<!-- graph-section:{} {} -->\n\n{}\n", section.title, section.id, section.deep_link_target, if section.kind == DocumentSectionKind::OperationalRunbook { "Run `lithograph init`, `lithograph update`, and `make check-all`. Indexing is local/offline; inspect configuration, dependencies, failures, and troubleshooting through graph evidence." } else if section.kind == DocumentSectionKind::Risk && tensions.is_empty() { "No graph-backed tensions were detected." } else { "Graph facts are available through the linked focused view." })).collect::<Vec<_>>();
+    let lines = [overview, architecture, workflow, boundaries, data, ops, risks, drift].into_iter().filter_map(|id| document.section_index().get(&id).copied()).map(|section| format!("## {}\n\n<!-- graph-section:{} {} -->\n\n{}\n", section.title, section.id, section.deep_link_target, if section.kind == DocumentSectionKind::OperationalRunbook { "Run `lithograph init`, `lithograph update`, and `just check-all`. Indexing is local/offline; inspect configuration, dependencies, failures, and troubleshooting through graph evidence." } else if section.kind == DocumentSectionKind::Risk && tensions.is_empty() { "No graph-backed tensions were detected." } else { "Graph facts are available through the linked focused view." })).collect::<Vec<_>>();
     let mermaid = "```mermaid\nflowchart LR\n  graph[\"Graph Snapshot\"] --> docs[\"Architecture Docs\"]\n```\n";
     (
         document,

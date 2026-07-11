@@ -430,7 +430,7 @@ fn command_value(line: &str) -> Option<String> {
     let first = trimmed.split_whitespace().next().unwrap_or("");
     let known = matches!(
         first,
-        "cargo" | "docker" | "make" | "npm" | "pnpm" | "python" | "pytest" | "yarn"
+        "cargo" | "docker" | "just" | "make" | "npm" | "pnpm" | "python" | "pytest" | "yarn"
     );
     known.then(|| trimmed.to_owned())
 }

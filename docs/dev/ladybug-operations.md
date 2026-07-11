@@ -70,7 +70,7 @@ typed graph investigation query.
 ## Validation
 
 ```sh
-make check-all
+just check-all
 ```
 
 This is the single offline validation entry point: formatting, strict Clippy,
