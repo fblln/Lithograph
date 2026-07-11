@@ -218,10 +218,24 @@ fn target_kind_allowed(kind: RelationKind, target: NodeKindTag) -> bool {
         ),
         RelationKind::Implements
         | RelationKind::Inherits
+        | RelationKind::Decorates
+        | RelationKind::HasMethod
+        | RelationKind::MemberOf
+        | RelationKind::UsesType
         | RelationKind::Ffi
         | RelationKind::DataFlows
         | RelationKind::SimilarTo => matches!(target, NodeKindTag::Symbol),
-        RelationKind::References | RelationKind::Emits | RelationKind::ListensOn => true,
+        RelationKind::HandlesRoute => target == NodeKindTag::Symbol,
+        RelationKind::Tests | RelationKind::FileChangesWith | RelationKind::DocumentsSource => {
+            matches!(target, NodeKindTag::Artifact | NodeKindTag::Symbol)
+        }
+        RelationKind::BindsConfig
+        | RelationKind::Reads
+        | RelationKind::Writes
+        | RelationKind::CrossesServiceBoundary
+        | RelationKind::References
+        | RelationKind::Emits
+        | RelationKind::ListensOn => true,
     }
 }
 
@@ -367,6 +381,10 @@ mod tests {
 
         for kind in [
             RelationKind::Inherits,
+            RelationKind::Decorates,
+            RelationKind::HasMethod,
+            RelationKind::MemberOf,
+            RelationKind::UsesType,
             RelationKind::TypeRefs,
             RelationKind::Usages,
             RelationKind::Ffi,

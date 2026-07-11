@@ -15,6 +15,8 @@
 //! implementing [`Resolver`]; this module only owns the shared plumbing.
 
 pub mod imports;
+pub mod symbols;
+pub mod type_aware;
 
 use crate::domain::Confidence;
 use crate::graph::{
@@ -22,7 +24,12 @@ use crate::graph::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+use imports::extract_typescript_import_bindings;
 pub use imports::{LanguageImportResolver, extract_import_reference};
+pub use symbols::{ImportLookup, ImportMap, ProjectSymbol, ProjectSymbolRegistry};
+pub use type_aware::{
+    TYPE_AWARE_LANGUAGES, TypeAwareCapability, TypeAwareLanguage, resolve_type_aware,
+};
 
 /// Typed indexes over one graph snapshot, built once per pipeline run and
 /// shared by every resolver (AC1: typed syntax/package/module/symbol
@@ -43,6 +50,8 @@ pub struct ResolverContext<'a> {
     pub symbols_by_qualified_name: BTreeMap<&'a str, &'a GraphNodeId>,
     /// Artifact node ids by repository-relative path.
     pub artifacts_by_path: BTreeMap<&'a str, &'a GraphNodeId>,
+    /// Shared project-wide declaration index for symbol-aware resolvers.
+    pub symbols: ProjectSymbolRegistry,
 }
 
 impl<'a> ResolverContext<'a> {
@@ -87,6 +96,7 @@ impl<'a> ResolverContext<'a> {
             local_package_names,
             symbols_by_qualified_name,
             artifacts_by_path,
+            symbols: ProjectSymbolRegistry::build(graph),
         }
     }
 }
@@ -157,6 +167,8 @@ impl HybridResolverPipeline {
     /// or artifact path verbatim.
     pub fn default_pipeline() -> Self {
         Self::new(vec![
+            Box::new(TypeScriptCallResolver),
+            Box::new(SymbolNameResolver),
             Box::new(LanguageImportResolver),
             Box::new(PackageMapResolver),
             Box::new(LocalArtifactPathResolver),
@@ -215,6 +227,157 @@ impl HybridResolverPipeline {
 
         report
     }
+}
+
+/// Resolves an unqualified call/type/use only when the project registry has a
+/// single deterministic candidate; ambiguity deliberately remains visible.
+struct SymbolNameResolver;
+
+impl Resolver for SymbolNameResolver {
+    fn strategy(&self) -> &'static str {
+        "project-symbol-import-map"
+    }
+
+    fn resolve(
+        &self,
+        context: &ResolverContext<'_>,
+        relation: &Relation,
+        unresolved_value: &str,
+    ) -> Option<ResolvedTarget> {
+        if relation.kind != crate::graph::RelationKind::Calls {
+            return None;
+        }
+        match ImportMap::new(&context.symbols).lookup(None, None, unresolved_value) {
+            ImportLookup::Suffix { target, confidence }
+            | ImportLookup::UniqueName { target, confidence } => {
+                Some(ResolvedTarget { target, confidence })
+            }
+            ImportLookup::SameModule { .. }
+            | ImportLookup::ExplicitImport { .. }
+            | ImportLookup::Ambiguous { .. }
+            | ImportLookup::Unresolved => None,
+        }
+    }
+}
+
+/// Resolves a named TypeScript/TSX call through a direct named binding from a
+/// relative local import. It runs before import resolution mutates the raw
+/// statement away, and accepts only one callable-symbol match; namespace,
+/// default, missing, and ambiguous bindings remain unresolved.
+struct TypeScriptCallResolver;
+
+impl Resolver for TypeScriptCallResolver {
+    fn strategy(&self) -> &'static str {
+        "typescript-import-binding-call"
+    }
+
+    fn resolve(
+        &self,
+        context: &ResolverContext<'_>,
+        relation: &Relation,
+        unresolved_value: &str,
+    ) -> Option<ResolvedTarget> {
+        if relation.kind != crate::graph::RelationKind::Calls {
+            return None;
+        }
+        let language = relation.provenance.as_ref()?.language.as_deref()?;
+        if !matches!(language, "typescript" | "tsx") {
+            return None;
+        }
+        let source_path = relation.source.as_str().strip_prefix("artifact:")?;
+        let mut candidates = BTreeSet::new();
+
+        for import in context.graph.relations.iter().filter(|import| {
+            import.kind == crate::graph::RelationKind::Imports
+                && import.source == relation.source
+                && import
+                    .provenance
+                    .as_ref()
+                    .and_then(|provenance| provenance.language.as_deref())
+                    == Some(language)
+        }) {
+            let Some(raw_import) = unresolved_value_by_id(context.graph, &import.target) else {
+                continue;
+            };
+            let Some((exported, _)) = extract_typescript_import_bindings(raw_import)
+                .into_iter()
+                .find(|(_, local)| local == unresolved_value)
+            else {
+                continue;
+            };
+            let Some(reference) = extract_import_reference(language, raw_import) else {
+                continue;
+            };
+            if !(reference.starts_with("./") || reference.starts_with("../")) {
+                continue;
+            }
+            for artifact_path in typescript_import_candidates(source_path, &reference, language) {
+                let qualified = format!("{artifact_path}::{exported}");
+                let Some(symbol_id) = context.symbols_by_qualified_name.get(qualified.as_str())
+                else {
+                    continue;
+                };
+                if callable_symbol(context.graph, symbol_id) {
+                    candidates.insert((*symbol_id).clone());
+                }
+            }
+        }
+
+        let mut candidates = candidates.into_iter();
+        let target = candidates.next()?;
+        candidates.next().is_none().then_some(ResolvedTarget {
+            target,
+            confidence: Confidence::High,
+        })
+    }
+}
+
+fn unresolved_value_by_id<'a>(graph: &'a Graph, id: &GraphNodeId) -> Option<&'a str> {
+    graph.nodes.iter().find_map(|node| match node {
+        GraphNode::Unresolved(unresolved) if node.id() == id => Some(unresolved.value.as_str()),
+        _ => None,
+    })
+}
+
+fn callable_symbol(graph: &Graph, id: &GraphNodeId) -> bool {
+    graph.nodes.iter().any(|node| {
+        node.id() == id
+            && matches!(
+                node,
+                GraphNode::Symbol(symbol)
+                    if matches!(symbol.kind, crate::graph::SymbolKind::Function | crate::graph::SymbolKind::Method)
+            )
+    })
+}
+
+fn typescript_import_candidates(source_path: &str, reference: &str, language: &str) -> Vec<String> {
+    use std::path::{Component, Path, PathBuf};
+
+    let source_dir = Path::new(source_path).parent().unwrap_or(Path::new(""));
+    let mut components: Vec<Component<'_>> = source_dir.components().collect();
+    for component in Path::new(reference).components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                components.pop();
+            }
+            other => components.push(other),
+        }
+    }
+    let base = components
+        .into_iter()
+        .collect::<PathBuf>()
+        .to_string_lossy()
+        .replace('\\', "/");
+    let extensions = if language == "tsx" {
+        [".tsx", ".ts"]
+    } else {
+        [".ts", ".tsx"]
+    };
+    extensions
+        .into_iter()
+        .map(|extension| format!("{base}{extension}"))
+        .collect()
 }
 
 /// A relation is eligible for hybrid resolution when it hasn't already

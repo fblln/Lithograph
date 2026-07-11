@@ -650,6 +650,14 @@ fn classify_call(
         literal_or_dynamic(first_arg, source, PythonReferenceKind::HttpCall)
     } else if let Some(kind) = event_call_kind(callee) {
         literal_or_dynamic(first_arg, source, kind)
+    } else if !callee.contains('.') {
+        // Preserve direct calls, including imported functions and
+        // constructors. Member calls require receiver-type evidence.
+        (
+            PythonReferenceKind::Call,
+            callee.to_owned(),
+            Confidence::Low,
+        )
     } else {
         return None;
     };

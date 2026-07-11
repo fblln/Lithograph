@@ -493,10 +493,10 @@
       "text": "web/index.html::script_element@L9 "
     },
     {
-      "id": "symbol:web/src/App.tsx::function_declaration@L13",
+      "id": "symbol:web/src/App.tsx#web/src/App.tsx::App",
       "kind": "Symbol",
-      "reference": "web/src/App.tsx::function_declaration@L13",
-      "text": "web/src/App.tsx::function_declaration@L13 "
+      "reference": "web/src/App.tsx::App",
+      "text": "web/src/App.tsx::App "
     },
     {
       "id": "symbol:web/src/App.tsx::type_alias_declaration@L3",

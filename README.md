@@ -17,6 +17,11 @@ Running `lithograph init <repo>` creates:
 - `docs/lithograph/*.md`: repository overview, quickstart, architecture,
   workflow, boundary, configuration, and module pages.
 - `.lithograph/graph.json`: deterministic semantic graph export.
+- `.lithograph/graph/ladybug.lbug`: durable LadybugDB projection (with JSON
+  snapshots retained for compatibility and portable exports).
+
+Operational indexing, migration, query, troubleshooting, and validation
+workflows are documented in [Ladybug graph operations](docs/dev/ladybug-operations.md).
 - `.lithograph/manifest.json`: page/task manifest with dependencies, evidence,
   prompt versions, context schema versions, input hashes, and output hashes.
 - `.lithograph/research/*.json`: deterministic research summaries used by

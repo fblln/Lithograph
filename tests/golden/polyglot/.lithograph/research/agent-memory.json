@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "input_hash": "8a4172089667c5bac172899ca822c73cb4e3b315f943e9d1f4fe06f00e985bc3",
+  "input_hash": "019400dd08fb5cd25140b608d228e9c0358bf149202601332ddce07e95192c7b",
   "produced_by_stage": "Research",
   "report_keys": [
     "system-context",
@@ -12,7 +12,7 @@
     "deployment"
   ],
   "system_context": {
-    "project_summary": "Repository contains 23 artifact(s), 129 graph node(s), 140 graph relation(s), and 11 documentation module(s).",
+    "project_summary": "Repository contains 23 artifact(s), 132 graph node(s), 152 graph relation(s), and 11 documentation module(s).",
     "included_components": [
       "Configuration (Configuration)",
       "assets (Directory)",
@@ -42,11 +42,11 @@
       "/usr/local/bin/worker",
       "/var/cache/ridgeline",
       "App",
+      "None",
       "React",
       "RouteSummary",
       "assets/",
-      "body",
-      "charset"
+      "body"
     ],
     "evidence": [
       {
@@ -109,11 +109,12 @@
       {
         "name": "generated",
         "kind": "Directory",
-        "member_count": 3,
+        "member_count": 4,
         "evidence": [
           "artifact:generated/client.py",
           "module:generated.client",
-          "symbol:generated/client.py#generated.client::call_route_api"
+          "symbol:generated/client.py#generated.client::call_route_api",
+          "unresolved:str"
         ]
       },
       {
@@ -171,7 +172,7 @@
       {
         "name": "python_app",
         "kind": "PythonPackage",
-        "member_count": 16,
+        "member_count": 19,
         "evidence": [
           "artifact:src/python_app/__init__.py",
           "artifact:src/python_app/service.py",
@@ -372,7 +373,7 @@
         "language": "tsx",
         "tier": "SyntaxIndexed",
         "target_tier": "HybridResolved",
-        "resolver_strategy": "syntax-indexed-treesitter",
+        "resolver_strategy": "typescript-deep-syntax",
         "artifact_count": 1
       },
       {
@@ -524,7 +525,7 @@
       }
     ],
     "architecture_facts": [
-      "knowledge graph schema: 129 node(s), 140 relation(s)",
+      "knowledge graph schema: 132 node(s), 152 relation(s)",
       "container/component candidate: Configuration (Configuration)",
       "container/component candidate: assets (Directory)",
       "container/component candidate: data (Directory)",
@@ -538,13 +539,13 @@
     ],
     "hotspots": [
       "web (Directory) score 66",
+      "python_app (PythonPackage) score 53",
       "Configuration (Configuration) score 50",
       "Documentation (Documentation) score 44",
       "Infrastructure (Infrastructure) score 42",
-      "python_app (PythonPackage) score 38",
       "fixture-worker (RustCrate) score 32",
       "root (Directory) score 14",
-      "generated (Directory) score 6",
+      "generated (Directory) score 11",
       "assets (Directory) score 5",
       "data (Directory) score 2"
     ],
@@ -685,11 +686,13 @@
       "unresolved reference: /usr/local/bin/worker",
       "unresolved reference: /var/cache/ridgeline",
       "unresolved reference: App",
+      "unresolved reference: None",
       "unresolved reference: React",
       "unresolved reference: RouteSummary",
       "unresolved reference: assets/",
       "unresolved reference: body",
       "unresolved reference: charset",
+      "unresolved reference: dict[str, object]",
       "unresolved reference: div",
       "unresolved reference: fixture_worker::bake_route",
       "unresolved reference: ghcr.io/example/route-api:dev",
@@ -704,9 +707,7 @@
       "unresolved reference: meta",
       "unresolved reference: p",
       "unresolved reference: route",
-      "unresolved reference: rust/",
-      "unresolved reference: script",
-      "unresolved reference: src"
+      "unresolved reference: rust/"
     ],
     "evidence": [
       {
@@ -751,13 +752,13 @@
   "key_modules": {
     "modules": [
       "web (Directory) score 66",
+      "python_app (PythonPackage) score 53",
       "Configuration (Configuration) score 50",
       "Documentation (Documentation) score 44",
       "Infrastructure (Infrastructure) score 42",
-      "python_app (PythonPackage) score 38",
       "fixture-worker (RustCrate) score 32",
       "root (Directory) score 14",
-      "generated (Directory) score 6",
+      "generated (Directory) score 11",
       "assets (Directory) score 5",
       "data (Directory) score 2"
     ],

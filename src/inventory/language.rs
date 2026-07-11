@@ -59,6 +59,43 @@ impl LanguageRegistryEntry {
             AnalyzerSelectionTemplate::Opaque => AnalyzerSelection::Opaque,
         }
     }
+
+    /// Reports the parser binding selected by the production registry.
+    pub fn parser_availability(&self) -> ParserAvailability {
+        match self.analyzer {
+            AnalyzerSelectionTemplate::SyntaxIndexed
+                if crate::analysis::SyntaxIndexedLanguage::from_registry_id(self.id).is_some() =>
+            {
+                ParserAvailability::TreeSitter
+            }
+            AnalyzerSelectionTemplate::SyntaxIndexed => ParserAvailability::Missing,
+            AnalyzerSelectionTemplate::GenericText | AnalyzerSelectionTemplate::Opaque => {
+                ParserAvailability::Missing
+            }
+            AnalyzerSelectionTemplate::Specialized | AnalyzerSelectionTemplate::Structured => {
+                ParserAvailability::Dedicated
+            }
+        }
+    }
+
+    /// Reports capabilities without exposing builder-specific dispatch rules.
+    pub fn extraction_capabilities(&self) -> ExtractionCapabilities {
+        let available = self.parser_availability() != ParserAvailability::Missing;
+        ExtractionCapabilities {
+            declarations: available,
+            imports: available,
+            symbols: available,
+            syntax: available,
+        }
+    }
+
+    /// Safe fallback for parser-missing entries.
+    pub fn fallback(&self) -> ExtractionFallback {
+        match self.analyzer {
+            AnalyzerSelectionTemplate::Opaque => ExtractionFallback::ArtifactOnly,
+            _ => ExtractionFallback::GenericText,
+        }
+    }
 }
 
 /// Serializable-free analyzer template used by static registry entries.
@@ -74,6 +111,39 @@ pub enum AnalyzerSelectionTemplate {
     GenericText,
     /// Opaque metadata-only analyzer.
     Opaque,
+}
+
+/// Whether the registry entry has a parser available in this build.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParserAvailability {
+    /// A dedicated production analyzer owns this language or format.
+    Dedicated,
+    /// A generic tree-sitter adapter is wired for the registry id.
+    TreeSitter,
+    /// The entry is known for inventory purposes but has no parser binding.
+    Missing,
+}
+
+/// Facts a production extractor can safely emit for a registry entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExtractionCapabilities {
+    /// Declaration-like syntax facts are available.
+    pub declarations: bool,
+    /// Import/include/use facts are available.
+    pub imports: bool,
+    /// Identifier/symbol facts are available.
+    pub symbols: bool,
+    /// Comments and syntax diagnostics are available.
+    pub syntax: bool,
+}
+
+/// Safe behavior when the selected parser cannot produce facts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExtractionFallback {
+    /// Preserve the artifact node and use generic text findings when safe.
+    GenericText,
+    /// Preserve only the structured artifact node.
+    ArtifactOnly,
 }
 
 /// Registry covering Lithograph's current support plus codebase-memory's
@@ -92,8 +162,8 @@ pub static LANGUAGE_REGISTRY: LazyLock<Vec<LanguageRegistryEntry>> = LazyLock::n
 const CODEBASE_MEMORY_REGISTRY: &[LanguageRegistryEntry] = &[
     hybrid_current("python", &["py"]),
     hybrid_current("rust", &["rs"]),
-    syntax_indexed_hybrid_target("typescript", &["ts", "mts", "cts"]),
-    syntax_indexed_hybrid_target("tsx", &["tsx"]),
+    deep_syntax_indexed_hybrid_target("typescript", &["ts", "mts", "cts"]),
+    deep_syntax_indexed_hybrid_target("tsx", &["tsx"]),
     syntax_indexed_hybrid_target("javascript", &["js", "jsx", "mjs", "cjs"]),
     syntax_indexed_hybrid_target("go", &["go"]),
     syntax_indexed_hybrid_target("java", &["java"]),
@@ -780,6 +850,25 @@ const fn syntax_indexed_hybrid_target_with_id(
     }
 }
 
+/// A language with a specialized declaration analyzer but whose cross-file
+/// resolution remains a syntax-indexed target until its resolver ships.
+const fn deep_syntax_indexed_hybrid_target(
+    name: &'static str,
+    extensions: &'static [&'static str],
+) -> LanguageRegistryEntry {
+    LanguageRegistryEntry {
+        id: name,
+        name,
+        category: ArtifactCategory::SourceCode,
+        support_tier: SupportTier::DeepLanguage,
+        current_tier: RegistryIndexTier::SyntaxIndexed,
+        target_tier: RegistryIndexTier::HybridResolved,
+        analyzer: AnalyzerSelectionTemplate::Specialized,
+        resolver_strategy: "typescript-deep-syntax",
+        extensions,
+    }
+}
+
 /// A structured/query format with a wired
 /// [`TreeSitterParserAdapter`](crate::analysis::TreeSitterParserAdapter) and
 /// no further hybrid-resolution target (`current_tier` ==  `target_tier` ==
@@ -895,8 +984,8 @@ pub fn by_extension(extension: &str) -> Option<&'static LanguageRegistryEntry> {
 #[cfg(test)]
 mod tests {
     use super::{
-        CODEBASE_MEMORY_GRAMMAR_IDS, LANGUAGE_REGISTRY, RegistryIndexTier, by_extension, by_id,
-        by_name,
+        CODEBASE_MEMORY_GRAMMAR_IDS, ExtractionFallback, LANGUAGE_REGISTRY, ParserAvailability,
+        RegistryIndexTier, by_extension, by_id, by_name,
     };
     use crate::domain::{AnalyzerSelection, ArtifactCategory, SupportTier};
     use std::collections::{BTreeMap, BTreeSet};
@@ -968,6 +1057,24 @@ mod tests {
         assert_eq!(sql.current_tier, RegistryIndexTier::SyntaxIndexed);
         assert_eq!(sql.target_tier, RegistryIndexTier::SyntaxIndexed);
 
+        Ok(())
+    }
+
+    #[test]
+    fn registry_reports_parser_capabilities_and_safe_fallbacks()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let rust = by_name("rust").ok_or("missing rust")?;
+        assert_eq!(rust.parser_availability(), ParserAvailability::Dedicated);
+        assert!(rust.extraction_capabilities().declarations);
+
+        let go = by_name("go").ok_or("missing go")?;
+        assert_eq!(go.parser_availability(), ParserAvailability::TreeSitter);
+        assert!(go.extraction_capabilities().imports);
+
+        let prisma = by_name("prisma").ok_or("missing prisma")?;
+        assert_eq!(prisma.parser_availability(), ParserAvailability::Missing);
+        assert_eq!(prisma.fallback(), ExtractionFallback::GenericText);
+        assert!(!prisma.extraction_capabilities().syntax);
         Ok(())
     }
 

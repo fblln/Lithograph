@@ -499,6 +499,11 @@ mod tests {
             AnalyzerSelection::Specialized("rust".to_owned())
         );
         assert_eq!(typescript.detected_format.as_deref(), Some("typescript"));
+        assert_eq!(typescript.support_tier, SupportTier::DeepLanguage);
+        assert_eq!(
+            typescript.analyzer,
+            AnalyzerSelection::Specialized("typescript".to_owned())
+        );
         assert_eq!(javascript.detected_format.as_deref(), Some("javascript"));
         assert_eq!(toml.category, ArtifactCategory::Configuration);
         assert_eq!(script.category, ArtifactCategory::Script);
@@ -518,12 +523,6 @@ mod tests {
         // from the display name for c_sharp) rather than a generic-text
         // fallback.
         let cases = [
-            (
-                "web/src/app.tsx",
-                "tsx",
-                "tsx",
-                ArtifactCategory::SourceCode,
-            ),
             (
                 "web/src/component.jsx",
                 "javascript",
@@ -568,6 +567,15 @@ mod tests {
                 ArtifactCategory::StaticAsset,
             ),
         ];
+
+        let tsx = classify("web/src/app.tsx", TextStatus::Text, Some(""))?;
+        assert_eq!(tsx.detected_format.as_deref(), Some("tsx"));
+        assert_eq!(tsx.category, ArtifactCategory::SourceCode);
+        assert_eq!(tsx.support_tier, SupportTier::DeepLanguage);
+        assert_eq!(
+            tsx.analyzer,
+            AnalyzerSelection::Specialized("tsx".to_owned())
+        );
 
         for (path, format, registry_id, category) in cases {
             let classification = classify(path, TextStatus::Text, Some(""))?;

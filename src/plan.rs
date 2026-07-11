@@ -895,10 +895,10 @@ mod tests {
         Ok(())
     }
 
-    /// The `vendor` module's member count dropped from 3 to 1 under
-    /// LIT-23.4: `vendor/example/lib.rs` is now classified opaque (no
-    /// analyzer runs over vendored source), so only its bare Artifact node
-    /// remains reachable -- its own Symbol nodes no longer exist.
+    /// LIT-24's typed extraction adds one generated-file fact and three
+    /// Python symbols to this fixture. The `vendor` module remains at one:
+    /// `vendor/example/lib.rs` is opaque, so only its Artifact node is
+    /// reachable and it contributes no source-derived symbols.
     #[test]
     fn module_plan_fixture_snapshot() -> Result<(), Box<dyn std::error::Error>> {
         let root = fixture_root();
@@ -927,13 +927,13 @@ mod tests {
 module-plan:configuration:configuration|Configuration|Configuration|23|295
 module-plan:directory:assets|Directory|assets|2|64
 module-plan:directory:data|Directory|data|1|9
-module-plan:directory:generated|Directory|generated|3|37
+module-plan:directory:generated|Directory|generated|4|37
 module-plan:directory:root|Directory|root|6|78
 module-plan:directory:vendor|Directory|vendor|1|18
 module-plan:directory:web|Directory|web|33|151
 module-plan:documentation:documentation|Documentation|Documentation|13|1081
 module-plan:infrastructure:infrastructure|Infrastructure|Infrastructure|19|384
-module-plan:python-package:python-app|PythonPackage|python_app|16|333
+module-plan:python-package:python-app|PythonPackage|python_app|19|333
 module-plan:rust-crate:fixture-worker|RustCrate|fixture-worker|14|365"
         );
 

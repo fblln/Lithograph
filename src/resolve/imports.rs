@@ -27,6 +27,45 @@ pub fn extract_import_reference(language: &str, raw_text: &str) -> Option<String
     }
 }
 
+/// Extracts named TypeScript import bindings as `(exported, local)` pairs.
+/// Namespace and default imports deliberately stay out of this small parser:
+/// resolving those requires member/constructor semantics rather than the
+/// direct named-call contract this resolver can prove safely.
+pub(crate) fn extract_typescript_import_bindings(raw_text: &str) -> Vec<(String, String)> {
+    let Some(after_import) = raw_text.trim().strip_prefix("import") else {
+        return Vec::new();
+    };
+    let clause = after_import
+        .split_once(" from ")
+        .map_or(after_import, |(clause, _)| clause)
+        .trim();
+    let clause = clause.strip_prefix("type ").unwrap_or(clause);
+    let Some(open) = clause.find('{') else {
+        return Vec::new();
+    };
+    let Some(close) = clause[open + 1..].find('}') else {
+        return Vec::new();
+    };
+    clause[open + 1..open + 1 + close]
+        .split(',')
+        .filter_map(|binding| {
+            let binding = binding
+                .trim()
+                .strip_prefix("type ")
+                .unwrap_or(binding.trim());
+            let mut parts = binding.split_whitespace();
+            let exported = parts.next()?;
+            let local = match (parts.next(), parts.next()) {
+                (Some("as"), Some(local)) => local,
+                (None, None) => exported,
+                _ => return None,
+            };
+            (!exported.is_empty() && !local.is_empty())
+                .then(|| (exported.to_owned(), local.to_owned()))
+        })
+        .collect()
+}
+
 /// File extensions worth appending to a relative-import candidate path for
 /// `language`, in preference order. Only languages whose import syntax is
 /// itself extension-less (JS/TS's `from "./util"`) need this; the rest
@@ -177,7 +216,22 @@ impl Resolver for LanguageImportResolver {
 
 #[cfg(test)]
 mod tests {
-    use super::extract_import_reference;
+    use super::{extract_import_reference, extract_typescript_import_bindings};
+
+    #[test]
+    fn extracts_named_typescript_import_bindings_without_guessing_defaults() {
+        assert_eq!(
+            extract_typescript_import_bindings(
+                "import type { Service, start as run, type Config } from \"./service\";"
+            ),
+            vec![
+                ("Service".to_owned(), "Service".to_owned()),
+                ("start".to_owned(), "run".to_owned()),
+                ("Config".to_owned(), "Config".to_owned()),
+            ]
+        );
+        assert!(extract_typescript_import_bindings("import App from \"./App\";").is_empty());
+    }
 
     #[test]
     fn extracts_typescript_javascript_and_go_quoted_specifiers() {

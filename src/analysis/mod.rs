@@ -4,6 +4,7 @@ pub mod cache;
 pub mod dockerfile;
 pub mod external_symbols;
 pub mod generic_text;
+pub mod ir;
 pub mod markdown;
 pub mod packages;
 pub mod profiles;
@@ -13,6 +14,7 @@ pub mod rust_metadata;
 pub mod rust_source;
 pub mod structured;
 pub mod tree_sitter_adapter;
+pub mod typescript;
 
 pub use cache::{ANALYSIS_CACHE_VERSION, AnalysisCache, AnalyzerKind, AnalyzerOutput};
 pub use dockerfile::{
@@ -22,6 +24,10 @@ pub use dockerfile::{
 };
 pub use external_symbols::{is_python_stdlib_module, is_rust_prelude_type, rust_std_crate};
 pub use generic_text::{FindingConfidence, GenericTextExtractor, TextFinding, TextFindingKind};
+pub use ir::{
+    ExtractionIr, IrDeclaration, IrDetail, IrEdgeCandidate, IrEdgeKind, IrFile, IrLanguage,
+    IrModule, IrNodeKind, IrTarget,
+};
 pub use markdown::{
     CodeFence, DriftKind, LinkKind, MarkdownAnalysis, MarkdownAnalyzer, MarkdownCommand,
     MarkdownDrift, MarkdownHeading, MarkdownLink, MarkdownPathReference,
@@ -59,4 +65,8 @@ pub use tree_sitter_adapter::{
     SyntaxIndexedLanguage, TreeSitterAdapterOutput, TreeSitterComment, TreeSitterParseStatus,
     TreeSitterParserAdapter, TreeSitterSyntaxError, TreeSitterSyntaxFact,
     parse_with_optional_adapter,
+};
+pub use typescript::{
+    TypeScriptAnalysis, TypeScriptAnalyzer, TypeScriptCall, TypeScriptClass, TypeScriptFunction,
+    TypeScriptLanguage,
 };

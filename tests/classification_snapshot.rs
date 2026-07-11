@@ -44,7 +44,7 @@ src/python_app/service.py|SourceCode|python|DeepLanguage|Text|Specialized(python
 vendor/example/lib.rs|SourceCode|rust|Opaque|Text|Opaque|ExcerptOnly|0|100
 web/index.html|Template|html|StructuredFormat|Text|SyntaxIndexed(html)|Allowed|0|0
 web/package.json|PackageManifest|npm|StructuredFormat|Text|Specialized(npm)|Allowed|0|0
-web/src/App.tsx|SourceCode|tsx|StructuredFormat|Text|SyntaxIndexed(tsx)|Allowed|0|0"
+web/src/App.tsx|SourceCode|tsx|DeepLanguage|Text|Specialized(tsx)|Allowed|0|0"
     );
 
     Ok(())
