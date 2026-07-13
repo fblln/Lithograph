@@ -1,0 +1,353 @@
+{
+    "clusters": [
+        {
+            "cohesion": 0.35714285714285715,
+            "edge_types": [
+                "Calls",
+                "Contains",
+                "DataFlows",
+                "Imports",
+                "UsesType"
+            ],
+            "id": "cluster:artifact:src/python_app/service.py",
+            "members": [
+                "artifact:src/python_app/service.py",
+                "package:__future__",
+                "package:json",
+                "package:os",
+                "package:pathlib",
+                "package:subprocess",
+                "symbol:src/python_app/service.py#src.python_app.service::run_worker",
+                "unresolved:str"
+            ],
+            "packages": [
+                "__future__",
+                "json",
+                "os",
+                "pathlib",
+                "subprocess"
+            ],
+            "top_nodes": [
+                {
+                    "file_path": "src/python_app/service.py",
+                    "id": "artifact:src/python_app/service.py",
+                    "in_degree": 1,
+                    "label": "Artifact",
+                    "name": "src/python_app/service.py",
+                    "out_degree": 13
+                },
+                {
+                    "file_path": "src/python_app/service.py",
+                    "id": "symbol:src/python_app/service.py#src.python_app.service::run_worker",
+                    "in_degree": 3,
+                    "label": "Symbol",
+                    "name": "src.python_app.service::run_worker",
+                    "out_degree": 1
+                },
+                {
+                    "file_path": null,
+                    "id": "unresolved:str",
+                    "in_degree": 4,
+                    "label": "Unresolved",
+                    "name": "str",
+                    "out_degree": 0
+                },
+                {
+                    "file_path": null,
+                    "id": "package:__future__",
+                    "in_degree": 1,
+                    "label": "Package",
+                    "name": "__future__",
+                    "out_degree": 0
+                },
+                {
+                    "file_path": null,
+                    "id": "package:json",
+                    "in_degree": 1,
+                    "label": "Package",
+                    "name": "json",
+                    "out_degree": 0
+                }
+            ]
+        },
+        {
+            "cohesion": 0.4,
+            "edge_types": [
+                "BelongsToPackage",
+                "DependsOnPackage"
+            ],
+            "id": "cluster:artifact:pyproject.toml",
+            "members": [
+                "artifact:pyproject.toml",
+                "artifact:requirements.txt",
+                "package:polyglot-fixture",
+                "package:pydantic",
+                "package:pytest"
+            ],
+            "packages": [
+                "polyglot-fixture",
+                "pydantic",
+                "pytest"
+            ],
+            "top_nodes": [
+                {
+                    "file_path": "pyproject.toml",
+                    "id": "artifact:pyproject.toml",
+                    "in_degree": 1,
+                    "label": "Artifact",
+                    "name": "pyproject.toml",
+                    "out_degree": 1
+                },
+                {
+                    "file_path": "requirements.txt",
+                    "id": "artifact:requirements.txt",
+                    "in_degree": 0,
+                    "label": "Artifact",
+                    "name": "requirements.txt",
+                    "out_degree": 2
+                },
+                {
+                    "file_path": null,
+                    "id": "package:polyglot-fixture",
+                    "in_degree": 1,
+                    "label": "Package",
+                    "name": "polyglot-fixture",
+                    "out_degree": 1
+                },
+                {
+                    "file_path": null,
+                    "id": "package:pydantic",
+                    "in_degree": 2,
+                    "label": "Package",
+                    "name": "pydantic",
+                    "out_degree": 0
+                },
+                {
+                    "file_path": null,
+                    "id": "package:pytest",
+                    "in_degree": 1,
+                    "label": "Package",
+                    "name": "pytest",
+                    "out_degree": 0
+                }
+            ]
+        },
+        {
+            "cohesion": 0.5,
+            "edge_types": [
+                "DependsOnPackage"
+            ],
+            "id": "cluster:artifact:web/package.json",
+            "members": [
+                "artifact:web/package.json",
+                "package:@vitejs/plugin-react",
+                "package:typescript",
+                "package:vite"
+            ],
+            "packages": [
+                "@vitejs/plugin-react",
+                "typescript",
+                "vite"
+            ],
+            "top_nodes": [
+                {
+                    "file_path": "web/package.json",
+                    "id": "artifact:web/package.json",
+                    "in_degree": 0,
+                    "label": "Artifact",
+                    "name": "web/package.json",
+                    "out_degree": 3
+                },
+                {
+                    "file_path": null,
+                    "id": "package:@vitejs/plugin-react",
+                    "in_degree": 1,
+                    "label": "Package",
+                    "name": "@vitejs/plugin-react",
+                    "out_degree": 0
+                },
+                {
+                    "file_path": null,
+                    "id": "package:typescript",
+                    "in_degree": 1,
+                    "label": "Package",
+                    "name": "typescript",
+                    "out_degree": 0
+                },
+                {
+                    "file_path": null,
+                    "id": "package:vite",
+                    "in_degree": 1,
+                    "label": "Package",
+                    "name": "vite",
+                    "out_degree": 0
+                }
+            ]
+        },
+        {
+            "cohesion": 0.6666666666666666,
+            "edge_types": [
+                "BelongsToPackage",
+                "DependsOnPackage"
+            ],
+            "id": "cluster:artifact:rust/Cargo.toml",
+            "members": [
+                "artifact:rust/Cargo.toml",
+                "package:anyhow",
+                "package:fixture-worker"
+            ],
+            "packages": [
+                "anyhow",
+                "fixture-worker"
+            ],
+            "top_nodes": [
+                {
+                    "file_path": "rust/Cargo.toml",
+                    "id": "artifact:rust/Cargo.toml",
+                    "in_degree": 3,
+                    "label": "Artifact",
+                    "name": "rust/Cargo.toml",
+                    "out_degree": 1
+                },
+                {
+                    "file_path": null,
+                    "id": "package:fixture-worker",
+                    "in_degree": 1,
+                    "label": "Package",
+                    "name": "fixture-worker",
+                    "out_degree": 1
+                },
+                {
+                    "file_path": null,
+                    "id": "package:anyhow",
+                    "in_degree": 1,
+                    "label": "Package",
+                    "name": "anyhow",
+                    "out_degree": 0
+                }
+            ]
+        },
+        {
+            "cohesion": 1.0,
+            "edge_types": [
+                "Imports"
+            ],
+            "id": "cluster:artifact:rust/src/bin/worker.rs",
+            "members": [
+                "artifact:rust/src/bin/worker.rs",
+                "unresolved:fixture_worker::bake_route"
+            ],
+            "packages": [],
+            "top_nodes": [
+                {
+                    "file_path": "rust/src/bin/worker.rs",
+                    "id": "artifact:rust/src/bin/worker.rs",
+                    "in_degree": 1,
+                    "label": "Artifact",
+                    "name": "rust/src/bin/worker.rs",
+                    "out_degree": 3
+                },
+                {
+                    "file_path": null,
+                    "id": "unresolved:fixture_worker::bake_route",
+                    "in_degree": 1,
+                    "label": "Unresolved",
+                    "name": "fixture_worker::bake_route",
+                    "out_degree": 0
+                }
+            ]
+        },
+        {
+            "cohesion": 1.0,
+            "edge_types": [
+                "Imports"
+            ],
+            "id": "cluster:artifact:rust/src/lib.rs",
+            "members": [
+                "artifact:rust/src/lib.rs",
+                "package:std"
+            ],
+            "packages": [
+                "std"
+            ],
+            "top_nodes": [
+                {
+                    "file_path": "rust/src/lib.rs",
+                    "id": "artifact:rust/src/lib.rs",
+                    "in_degree": 1,
+                    "label": "Artifact",
+                    "name": "rust/src/lib.rs",
+                    "out_degree": 6
+                },
+                {
+                    "file_path": null,
+                    "id": "package:std",
+                    "in_degree": 1,
+                    "label": "Package",
+                    "name": "std",
+                    "out_degree": 0
+                }
+            ]
+        },
+        {
+            "cohesion": 1.0,
+            "edge_types": [
+                "Imports"
+            ],
+            "id": "cluster:artifact:src/python_app/__init__.py",
+            "members": [
+                "artifact:src/python_app/__init__.py",
+                "module:src.python_app.service"
+            ],
+            "packages": [],
+            "top_nodes": [
+                {
+                    "file_path": "src/python_app/__init__.py",
+                    "id": "artifact:src/python_app/__init__.py",
+                    "in_degree": 1,
+                    "label": "Artifact",
+                    "name": "src/python_app/__init__.py",
+                    "out_degree": 2
+                },
+                {
+                    "file_path": "src/python_app/service.py",
+                    "id": "module:src.python_app.service",
+                    "in_degree": 2,
+                    "label": "Module",
+                    "name": "src.python_app.service",
+                    "out_degree": 0
+                }
+            ]
+        },
+        {
+            "cohesion": 1.0,
+            "edge_types": [
+                "Imports"
+            ],
+            "id": "cluster:artifact:web/src/App.tsx",
+            "members": [
+                "artifact:web/src/App.tsx",
+                "unresolved:import React from \"react\";"
+            ],
+            "packages": [],
+            "top_nodes": [
+                {
+                    "file_path": "web/src/App.tsx",
+                    "id": "artifact:web/src/App.tsx",
+                    "in_degree": 1,
+                    "label": "Artifact",
+                    "name": "web/src/App.tsx",
+                    "out_degree": 11
+                },
+                {
+                    "file_path": null,
+                    "id": "unresolved:import React from \"react\";",
+                    "in_degree": 1,
+                    "label": "Unresolved",
+                    "name": "import React from \"react\";",
+                    "out_degree": 0
+                }
+            ]
+        }
+    ]
+}

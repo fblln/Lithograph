@@ -44,6 +44,9 @@ pub enum Command {
     McpServer(McpServerArgs),
     /// Generate a lightweight static viewer for generated docs.
     Viewer(ViewerArgs),
+    /// Serve the graph explorer UI and read-only graph APIs locally.
+    /// Binds `127.0.0.1` only; never reachable from another machine.
+    Serve(ServeArgs),
     /// Export or import team-shareable graph artifacts.
     Graph(GraphCommand),
     /// Create, read, update, delete, and list architecture decision records.
@@ -309,6 +312,22 @@ pub struct ViewerArgs {
     pub output_dir: PathBuf,
 }
 
+/// Arguments for `serve`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct ServeArgs {
+    /// Repository path with generated Lithograph docs.
+    pub path: PathBuf,
+    /// Directory of static UI assets to serve, e.g. a built graph explorer
+    /// bundle. Relative paths are resolved against `path`. Missing
+    /// directories are tolerated: the graph API still serves, but static
+    /// routes 404.
+    #[arg(long, default_value = ".lithograph/viewer")]
+    pub assets: PathBuf,
+    /// Local TCP port to bind. `0` picks an OS-assigned ephemeral port.
+    #[arg(long, default_value_t = 4317)]
+    pub port: u16,
+}
+
 /// Arguments for `drift`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
 pub struct DriftArgs {
@@ -504,7 +523,8 @@ mod tests {
         Cli, Command, DriftArgs, GoldenArgs, GraphCommand, GraphExportArgs, GraphImportArgs,
         GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectDsmArgs,
         InspectEnvArgs, InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs,
-        McpExportArgs, McpServerArgs, OutputFormat, QualityArgs, ValidateMermaidArgs, ViewerArgs,
+        McpExportArgs, McpServerArgs, OutputFormat, QualityArgs, ServeArgs, ValidateMermaidArgs,
+        ViewerArgs,
     };
     use std::path::PathBuf;
 
@@ -925,6 +945,31 @@ mod tests {
             Some(Command::Viewer(ViewerArgs {
                 path: PathBuf::from("fixtures/polyglot"),
                 output_dir: PathBuf::from("viewer"),
+            }))
+        );
+        assert_eq!(
+            Cli::parse_from_args(["lithograph", "serve", "fixtures/polyglot"]).command,
+            Some(Command::Serve(ServeArgs {
+                path: PathBuf::from("fixtures/polyglot"),
+                assets: PathBuf::from(".lithograph/viewer"),
+                port: 4317,
+            }))
+        );
+        assert_eq!(
+            Cli::parse_from_args([
+                "lithograph",
+                "serve",
+                "fixtures/polyglot",
+                "--assets",
+                "ui/dist",
+                "--port",
+                "0",
+            ])
+            .command,
+            Some(Command::Serve(ServeArgs {
+                path: PathBuf::from("fixtures/polyglot"),
+                assets: PathBuf::from("ui/dist"),
+                port: 0,
             }))
         );
     }

@@ -1,0 +1,2625 @@
+{
+    "algorithm_version": 1,
+    "budget": {
+        "edge_budget": 2000,
+        "edges_available": 178,
+        "edges_returned": 178,
+        "edges_truncated": false,
+        "node_budget": 500,
+        "nodes_available": 156,
+        "nodes_returned": 156,
+        "nodes_truncated": false
+    },
+    "center_node": null,
+    "edges": [
+        {
+            "kind": "Contains",
+            "source": "artifact:.github/workflows/ci.yml",
+            "target": "config:.github/workflows/ci.yml#jobs.checks"
+        },
+        {
+            "kind": "ReadsEnv",
+            "source": "artifact:Dockerfile",
+            "target": "env:RIDGELINE_WORKER"
+        },
+        {
+            "kind": "DefinesEnv",
+            "source": "artifact:Dockerfile",
+            "target": "env:RIDGELINE_WORKER"
+        },
+        {
+            "kind": "RunsCommand",
+            "source": "artifact:Dockerfile",
+            "target": "command:Dockerfile#14"
+        },
+        {
+            "kind": "RunsCommand",
+            "source": "artifact:Dockerfile",
+            "target": "command:Dockerfile#4"
+        },
+        {
+            "kind": "RunsCommand",
+            "source": "artifact:Dockerfile",
+            "target": "command:Dockerfile#9"
+        },
+        {
+            "kind": "UsesImage",
+            "source": "artifact:Dockerfile",
+            "target": "image:python:3.13-slim"
+        },
+        {
+            "kind": "UsesImage",
+            "source": "artifact:Dockerfile",
+            "target": "image:rust:1.96"
+        },
+        {
+            "kind": "RunsCommand",
+            "source": "artifact:Makefile",
+            "target": "command:Makefile#12"
+        },
+        {
+            "kind": "RunsCommand",
+            "source": "artifact:Makefile",
+            "target": "command:Makefile#15"
+        },
+        {
+            "kind": "RunsCommand",
+            "source": "artifact:Makefile",
+            "target": "command:Makefile#6"
+        },
+        {
+            "kind": "RunsCommand",
+            "source": "artifact:Makefile",
+            "target": "command:Makefile#9"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:Makefile",
+            "target": "artifact:rust/Cargo.toml"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:Makefile",
+            "target": "unresolved:ghcr.io/example/route-api:dev"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:Makefile",
+            "target": "unresolved:ghcr.io/example/route-api:dev"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:README.md",
+            "target": "doc:README.md#1"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:README.md",
+            "target": "doc:README.md#13"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:README.md",
+            "target": "doc:README.md#40"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:.github/workflows/ci.yml"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:Dockerfile"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:Makefile"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:README.md"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:assets/logo.svg"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:config/schema.json"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:config/settings.yaml"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:data/sample.bin"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:docker-compose.yml"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:docs/architecture.md"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:generated/client.py"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:pyproject.toml"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:rust/Cargo.toml"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:rust/src/bin/worker.rs"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:rust/src/lib.rs"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:src/python_app/__init__.py"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:src/python_app/service.py"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:vendor/example/lib.rs"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:web/index.html"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:README.md",
+            "target": "artifact:web/src/App.tsx"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:assets/logo.svg",
+            "target": "unresolved:xmlns=\"http://www.w3.org/2000/svg"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:assets/logo.svg",
+            "target": "unresolved:xmlns=\"http://www.w3.org/2000/svg"
+        },
+        {
+            "kind": "UsesImage",
+            "source": "artifact:config/schema.json",
+            "target": "image:ghcr.io/example/worker:1.0"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:config/schema.json",
+            "target": "unresolved:https://json-schema.org/draft/2020-12/schema"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/schema.json",
+            "target": "config-key:properties"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/schema.json",
+            "target": "config-key:properties.route.file"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/schema.json",
+            "target": "config-key:properties.route.file.description"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/schema.json",
+            "target": "config-key:properties.route.file.type"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/schema.json",
+            "target": "config-key:properties.worker.image"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/schema.json",
+            "target": "config-key:properties.worker.image.default"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/schema.json",
+            "target": "config-key:properties.worker.image.type"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/schema.json",
+            "target": "config-key:required"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/schema.json",
+            "target": "config-key:required.0"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/schema.json",
+            "target": "config-key:schema"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/schema.json",
+            "target": "config-key:title"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/schema.json",
+            "target": "config-key:type"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:config/settings.yaml",
+            "target": "config:config/settings.yaml#service.name"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:config/settings.yaml",
+            "target": "config:config/settings.yaml#service.port"
+        },
+        {
+            "kind": "ReadsEnv",
+            "source": "artifact:config/settings.yaml",
+            "target": "env:RIDGELINE_CACHE_DIR"
+        },
+        {
+            "kind": "ReadsEnv",
+            "source": "artifact:config/settings.yaml",
+            "target": "env:RIDGELINE_WORKER"
+        },
+        {
+            "kind": "ReadsEnv",
+            "source": "artifact:config/settings.yaml",
+            "target": "env:VERSION"
+        },
+        {
+            "kind": "RunsCommand",
+            "source": "artifact:config/settings.yaml",
+            "target": "command:config/settings.yaml#service.command"
+        },
+        {
+            "kind": "UsesImage",
+            "source": "artifact:config/settings.yaml",
+            "target": "image:ghcr.io/example/route-api:${VERSION}"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:config/settings.yaml",
+            "target": "artifact:config/schema.json"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:config/settings.yaml",
+            "target": "unresolved:/usr/local/bin/worker"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:config/settings.yaml",
+            "target": "unresolved:/var/cache/ridgeline"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:config/settings.yaml",
+            "target": "unresolved:assets/"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/settings.yaml",
+            "target": "config-key:paths"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/settings.yaml",
+            "target": "config-key:paths.schema"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/settings.yaml",
+            "target": "config-key:paths.static.assets"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/settings.yaml",
+            "target": "config-key:service"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/settings.yaml",
+            "target": "config-key:service.command"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/settings.yaml",
+            "target": "config-key:service.env"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/settings.yaml",
+            "target": "config-key:service.env.ridgeline.cache.dir"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/settings.yaml",
+            "target": "config-key:service.env.ridgeline.worker"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/settings.yaml",
+            "target": "config-key:service.image"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/settings.yaml",
+            "target": "config-key:service.name"
+        },
+        {
+            "kind": "BindsConfig",
+            "source": "artifact:config/settings.yaml",
+            "target": "config-key:service.port"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:docker-compose.yml",
+            "target": "config:docker-compose.yml#services.api"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:docker-compose.yml",
+            "target": "config:docker-compose.yml#services.web"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:docs/architecture.md",
+            "target": "doc:docs/architecture.md#1"
+        },
+        {
+            "kind": "RunsCommand",
+            "source": "artifact:docs/architecture.md",
+            "target": "command:docs/architecture.md#21"
+        },
+        {
+            "kind": "RunsCommand",
+            "source": "artifact:docs/architecture.md",
+            "target": "command:docs/architecture.md#22"
+        },
+        {
+            "kind": "RunsCommand",
+            "source": "artifact:docs/architecture.md",
+            "target": "command:docs/architecture.md#23"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:docs/architecture.md",
+            "target": "artifact:rust/Cargo.toml"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:docs/architecture.md",
+            "target": "unresolved:rust/"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:docs/architecture.md",
+            "target": "unresolved:src/python_app/"
+        },
+        {
+            "kind": "References",
+            "source": "artifact:docs/architecture.md",
+            "target": "unresolved:web/"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:generated/client.py",
+            "target": "symbol:generated/client.py#generated.client::call_route_api"
+        },
+        {
+            "kind": "BelongsToModule",
+            "source": "artifact:generated/client.py",
+            "target": "module:generated.client"
+        },
+        {
+            "kind": "BelongsToPackage",
+            "source": "artifact:pyproject.toml",
+            "target": "package:polyglot-fixture"
+        },
+        {
+            "kind": "DependsOnPackage",
+            "source": "artifact:requirements.txt",
+            "target": "package:pydantic"
+        },
+        {
+            "kind": "DependsOnPackage",
+            "source": "artifact:requirements.txt",
+            "target": "package:pytest"
+        },
+        {
+            "kind": "BelongsToPackage",
+            "source": "artifact:rust/Cargo.toml",
+            "target": "package:fixture-worker"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:rust/src/bin/worker.rs",
+            "target": "symbol:rust/src/bin/worker.rs#worker::main"
+        },
+        {
+            "kind": "BelongsToModule",
+            "source": "artifact:rust/src/bin/worker.rs",
+            "target": "module:worker"
+        },
+        {
+            "kind": "Imports",
+            "source": "artifact:rust/src/bin/worker.rs",
+            "target": "unresolved:fixture_worker::bake_route"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:rust/src/lib.rs",
+            "target": "symbol:rust/src/lib.rs#::RouteBake"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:rust/src/lib.rs",
+            "target": "symbol:rust/src/lib.rs#::RouteBaker"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:rust/src/lib.rs",
+            "target": "symbol:rust/src/lib.rs#::bake_route"
+        },
+        {
+            "kind": "BelongsToModule",
+            "source": "artifact:rust/src/lib.rs",
+            "target": "module:"
+        },
+        {
+            "kind": "Imports",
+            "source": "artifact:rust/src/lib.rs",
+            "target": "package:std"
+        },
+        {
+            "kind": "ReadsEnv",
+            "source": "artifact:rust/src/lib.rs",
+            "target": "env:RIDGELINE_CACHE_DIR"
+        },
+        {
+            "kind": "BelongsToModule",
+            "source": "artifact:src/python_app/__init__.py",
+            "target": "module:src.python_app"
+        },
+        {
+            "kind": "Imports",
+            "source": "artifact:src/python_app/__init__.py",
+            "target": "module:src.python_app.service"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:src/python_app/service.py",
+            "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:src/python_app/service.py",
+            "target": "symbol:src/python_app/service.py#src.python_app.service::run_worker"
+        },
+        {
+            "kind": "BelongsToModule",
+            "source": "artifact:src/python_app/service.py",
+            "target": "module:src.python_app.service"
+        },
+        {
+            "kind": "Imports",
+            "source": "artifact:src/python_app/service.py",
+            "target": "package:__future__"
+        },
+        {
+            "kind": "Imports",
+            "source": "artifact:src/python_app/service.py",
+            "target": "package:json"
+        },
+        {
+            "kind": "Imports",
+            "source": "artifact:src/python_app/service.py",
+            "target": "package:os"
+        },
+        {
+            "kind": "Imports",
+            "source": "artifact:src/python_app/service.py",
+            "target": "package:pathlib"
+        },
+        {
+            "kind": "Imports",
+            "source": "artifact:src/python_app/service.py",
+            "target": "package:subprocess"
+        },
+        {
+            "kind": "Calls",
+            "source": "artifact:src/python_app/service.py",
+            "target": "symbol:src/python_app/service.py#src.python_app.service::run_worker"
+        },
+        {
+            "kind": "Calls",
+            "source": "artifact:src/python_app/service.py",
+            "target": "unresolved:str"
+        },
+        {
+            "kind": "ReadsEnv",
+            "source": "artifact:src/python_app/service.py",
+            "target": "env:RIDGELINE_WORKER"
+        },
+        {
+            "kind": "RunsCommand",
+            "source": "artifact:src/python_app/service.py",
+            "target": "command:src/python_app/service.py#29"
+        },
+        {
+            "kind": "DataFlows",
+            "source": "artifact:src/python_app/service.py",
+            "target": "symbol:src/python_app/service.py#src.python_app.service::run_worker"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:web/index.html",
+            "target": "symbol:web/index.html::element@L2"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:web/index.html",
+            "target": "symbol:web/index.html::element@L3"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:web/index.html",
+            "target": "symbol:web/index.html::element@L4"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:web/index.html",
+            "target": "symbol:web/index.html::element@L5"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:web/index.html",
+            "target": "symbol:web/index.html::element@L7"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:web/index.html",
+            "target": "symbol:web/index.html::element@L8"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:web/index.html",
+            "target": "symbol:web/index.html::script_element@L9"
+        },
+        {
+            "kind": "BelongsToModule",
+            "source": "artifact:web/index.html",
+            "target": "module:web/index.html"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/index.html",
+            "target": "unresolved:body"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/index.html",
+            "target": "unresolved:charset"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/index.html",
+            "target": "unresolved:div"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/index.html",
+            "target": "unresolved:head"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/index.html",
+            "target": "unresolved:html"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/index.html",
+            "target": "unresolved:id"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/index.html",
+            "target": "unresolved:lang"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/index.html",
+            "target": "unresolved:meta"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/index.html",
+            "target": "unresolved:script"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/index.html",
+            "target": "unresolved:src"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/index.html",
+            "target": "unresolved:title"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/index.html",
+            "target": "unresolved:type"
+        },
+        {
+            "kind": "DependsOnPackage",
+            "source": "artifact:web/package.json",
+            "target": "package:@vitejs/plugin-react"
+        },
+        {
+            "kind": "DependsOnPackage",
+            "source": "artifact:web/package.json",
+            "target": "package:typescript"
+        },
+        {
+            "kind": "DependsOnPackage",
+            "source": "artifact:web/package.json",
+            "target": "package:vite"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:web/src/App.tsx",
+            "target": "symbol:web/src/App.tsx#web/src/App.tsx::App"
+        },
+        {
+            "kind": "Contains",
+            "source": "artifact:web/src/App.tsx",
+            "target": "symbol:web/src/App.tsx::type_alias_declaration@L3"
+        },
+        {
+            "kind": "BelongsToModule",
+            "source": "artifact:web/src/App.tsx",
+            "target": "module:web/src/App.tsx"
+        },
+        {
+            "kind": "Imports",
+            "source": "artifact:web/src/App.tsx",
+            "target": "unresolved:import React from \"react\";"
+        },
+        {
+            "kind": "TypeRefs",
+            "source": "artifact:web/src/App.tsx",
+            "target": "unresolved:RouteSummary"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/src/App.tsx",
+            "target": "unresolved:App"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/src/App.tsx",
+            "target": "unresolved:React"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/src/App.tsx",
+            "target": "unresolved:h1"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/src/App.tsx",
+            "target": "unresolved:main"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/src/App.tsx",
+            "target": "unresolved:p"
+        },
+        {
+            "kind": "Usages",
+            "source": "artifact:web/src/App.tsx",
+            "target": "unresolved:route"
+        },
+        {
+            "kind": "RunsCommand",
+            "source": "config:.github/workflows/ci.yml#jobs.checks",
+            "target": "command:.github/workflows/ci.yml#jobs.checks.steps[1]"
+        },
+        {
+            "kind": "RunsCommand",
+            "source": "config:.github/workflows/ci.yml#jobs.checks",
+            "target": "command:.github/workflows/ci.yml#jobs.checks.steps[2]"
+        },
+        {
+            "kind": "RunsCommand",
+            "source": "config:.github/workflows/ci.yml#jobs.checks",
+            "target": "command:.github/workflows/ci.yml#jobs.checks.steps[3]"
+        },
+        {
+            "kind": "RunsCommand",
+            "source": "config:.github/workflows/ci.yml#jobs.checks",
+            "target": "command:.github/workflows/ci.yml#jobs.checks.steps[4]"
+        },
+        {
+            "kind": "BuildsImage",
+            "source": "config:.github/workflows/ci.yml#jobs.checks",
+            "target": "image:ghcr.io/example/route-api:${{"
+        },
+        {
+            "kind": "ReadsEnv",
+            "source": "config:docker-compose.yml#services.api",
+            "target": "env:RIDGELINE_WORKER"
+        },
+        {
+            "kind": "DefinesEnv",
+            "source": "config:docker-compose.yml#services.api",
+            "target": "env:RIDGELINE_WORKER"
+        },
+        {
+            "kind": "UsesImage",
+            "source": "config:docker-compose.yml#services.api",
+            "target": "image:ghcr.io/example/route-api:${VERSION:-dev}"
+        },
+        {
+            "kind": "References",
+            "source": "config:docker-compose.yml#services.api",
+            "target": "config:docker-compose.yml#services.web"
+        },
+        {
+            "kind": "UsesImage",
+            "source": "config:docker-compose.yml#services.web",
+            "target": "image:node:24-alpine"
+        },
+        {
+            "kind": "DependsOnPackage",
+            "source": "package:fixture-worker",
+            "target": "package:anyhow"
+        },
+        {
+            "kind": "DependsOnPackage",
+            "source": "package:polyglot-fixture",
+            "target": "package:pydantic"
+        },
+        {
+            "kind": "UsesType",
+            "source": "symbol:generated/client.py#generated.client::call_route_api",
+            "target": "unresolved:str"
+        },
+        {
+            "kind": "Implements",
+            "source": "symbol:rust/src/lib.rs#::RouteBaker",
+            "target": "symbol:rust/src/lib.rs#::RouteBake"
+        },
+        {
+            "kind": "Contains",
+            "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
+            "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__"
+        },
+        {
+            "kind": "Contains",
+            "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
+            "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route"
+        },
+        {
+            "kind": "Contains",
+            "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
+            "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService::load_settings"
+        },
+        {
+            "kind": "HasMethod",
+            "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
+            "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__"
+        },
+        {
+            "kind": "HasMethod",
+            "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
+            "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route"
+        },
+        {
+            "kind": "HasMethod",
+            "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
+            "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService::load_settings"
+        },
+        {
+            "kind": "ReadsEnv",
+            "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
+            "target": "env:RIDGELINE_WORKER"
+        },
+        {
+            "kind": "MemberOf",
+            "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
+            "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService"
+        },
+        {
+            "kind": "UsesType",
+            "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
+            "target": "unresolved:None"
+        },
+        {
+            "kind": "MemberOf",
+            "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
+            "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService"
+        },
+        {
+            "kind": "UsesType",
+            "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
+            "target": "unresolved:str"
+        },
+        {
+            "kind": "MemberOf",
+            "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService::load_settings",
+            "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService"
+        },
+        {
+            "kind": "UsesType",
+            "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService::load_settings",
+            "target": "unresolved:dict[str, object]"
+        },
+        {
+            "kind": "UsesType",
+            "source": "symbol:src/python_app/service.py#src.python_app.service::run_worker",
+            "target": "unresolved:str"
+        }
+    ],
+    "graph_snapshot_id": "blake3:50350647f30ba7b92590982b6b7b2b6b7debaa68a729348a6b1df92618d2ae6a",
+    "nodes": [
+        {
+            "file_path": "README.md",
+            "hop": 0,
+            "id": "artifact:README.md",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "README.md",
+            "out_degree": 23,
+            "x": 0.0,
+            "y": 0.0
+        },
+        {
+            "file_path": "config/settings.yaml",
+            "hop": 1,
+            "id": "artifact:config/settings.yaml",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "config/settings.yaml",
+            "out_degree": 22,
+            "x": 17.077780592794213,
+            "y": 118.77857302571192
+        },
+        {
+            "file_path": "web/index.html",
+            "hop": 1,
+            "id": "artifact:web/index.html",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "web/index.html",
+            "out_degree": 20,
+            "x": 17.077780592794184,
+            "y": -118.77857302571194
+        },
+        {
+            "file_path": "config/schema.json",
+            "hop": 1,
+            "id": "artifact:config/schema.json",
+            "in_degree": 2,
+            "label": "Artifact",
+            "name": "config/schema.json",
+            "out_degree": 14,
+            "x": 49.849801560226375,
+            "y": 109.1558394425422
+        },
+        {
+            "file_path": "src/python_app/service.py",
+            "hop": 1,
+            "id": "artifact:src/python_app/service.py",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "src/python_app/service.py",
+            "out_degree": 13,
+            "x": -49.84980156022646,
+            "y": -109.15583944254216
+        },
+        {
+            "file_path": "web/src/App.tsx",
+            "hop": 1,
+            "id": "artifact:web/src/App.tsx",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "web/src/App.tsx",
+            "out_degree": 11,
+            "x": 49.849801560226325,
+            "y": -109.15583944254223
+        },
+        {
+            "file_path": "docs/architecture.md",
+            "hop": 1,
+            "id": "artifact:docs/architecture.md",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "docs/architecture.md",
+            "out_degree": 8,
+            "x": -78.58328807343422,
+            "y": 90.689948922511
+        },
+        {
+            "file_path": "Dockerfile",
+            "hop": 1,
+            "id": "artifact:Dockerfile",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "Dockerfile",
+            "out_degree": 7,
+            "x": 115.13915683373969,
+            "y": 33.80790682097156
+        },
+        {
+            "file_path": "Makefile",
+            "hop": 1,
+            "id": "artifact:Makefile",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "Makefile",
+            "out_degree": 7,
+            "x": 100.95042393974174,
+            "y": 64.8768980946717
+        },
+        {
+            "file_path": "rust/src/lib.rs",
+            "hop": 1,
+            "id": "artifact:rust/src/lib.rs",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "rust/src/lib.rs",
+            "out_degree": 6,
+            "x": -100.95042393974174,
+            "y": -64.8768980946717
+        },
+        {
+            "file_path": "rust/Cargo.toml",
+            "hop": 1,
+            "id": "artifact:rust/Cargo.toml",
+            "in_degree": 3,
+            "label": "Artifact",
+            "name": "rust/Cargo.toml",
+            "out_degree": 1,
+            "x": -120.0,
+            "y": 6.798646677177576e-14
+        },
+        {
+            "file_path": "rust/src/bin/worker.rs",
+            "hop": 1,
+            "id": "artifact:rust/src/bin/worker.rs",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "rust/src/bin/worker.rs",
+            "out_degree": 3,
+            "x": -115.13915683373969,
+            "y": -33.807906820971525
+        },
+        {
+            "file_path": "assets/logo.svg",
+            "hop": 1,
+            "id": "artifact:assets/logo.svg",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "assets/logo.svg",
+            "out_degree": 2,
+            "x": 78.58328807343422,
+            "y": 90.689948922511
+        },
+        {
+            "file_path": "docker-compose.yml",
+            "hop": 1,
+            "id": "artifact:docker-compose.yml",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "docker-compose.yml",
+            "out_degree": 2,
+            "x": -49.84980156022636,
+            "y": 109.15583944254222
+        },
+        {
+            "file_path": "generated/client.py",
+            "hop": 1,
+            "id": "artifact:generated/client.py",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "generated/client.py",
+            "out_degree": 2,
+            "x": -100.95042393974171,
+            "y": 64.87689809467173
+        },
+        {
+            "file_path": "src/python_app/__init__.py",
+            "hop": 1,
+            "id": "artifact:src/python_app/__init__.py",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "src/python_app/__init__.py",
+            "out_degree": 2,
+            "x": -78.58328807343423,
+            "y": -90.68994892251098
+        },
+        {
+            "file_path": ".github/workflows/ci.yml",
+            "hop": 1,
+            "id": "artifact:.github/workflows/ci.yml",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": ".github/workflows/ci.yml",
+            "out_degree": 1,
+            "x": 120.0,
+            "y": 0.0
+        },
+        {
+            "file_path": "pyproject.toml",
+            "hop": 1,
+            "id": "artifact:pyproject.toml",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "pyproject.toml",
+            "out_degree": 1,
+            "x": -115.13915683373969,
+            "y": 33.80790682097156
+        },
+        {
+            "file_path": "data/sample.bin",
+            "hop": 1,
+            "id": "artifact:data/sample.bin",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "data/sample.bin",
+            "out_degree": 0,
+            "x": -17.077780592794202,
+            "y": 118.77857302571194
+        },
+        {
+            "file_path": "vendor/example/lib.rs",
+            "hop": 1,
+            "id": "artifact:vendor/example/lib.rs",
+            "in_degree": 1,
+            "label": "Artifact",
+            "name": "vendor/example/lib.rs",
+            "out_degree": 0,
+            "x": -17.077780592794227,
+            "y": -118.77857302571192
+        },
+        {
+            "file_path": "README.md",
+            "hop": 1,
+            "id": "doc:README.md#1",
+            "in_degree": 1,
+            "label": "Documentation",
+            "name": "Polyglot Fixture",
+            "out_degree": 0,
+            "x": 78.58328807343416,
+            "y": -90.68994892251105
+        },
+        {
+            "file_path": "README.md",
+            "hop": 1,
+            "id": "doc:README.md#13",
+            "in_degree": 1,
+            "label": "Documentation",
+            "name": "Expected Artifact Categories",
+            "out_degree": 0,
+            "x": 100.95042393974174,
+            "y": -64.8768980946717
+        },
+        {
+            "file_path": "README.md",
+            "hop": 1,
+            "id": "doc:README.md#40",
+            "in_degree": 1,
+            "label": "Documentation",
+            "name": "Offline Guarantees",
+            "out_degree": 0,
+            "x": 115.13915683373969,
+            "y": -33.807906820971574
+        },
+        {
+            "file_path": "src/python_app/service.py",
+            "hop": 2,
+            "id": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
+            "in_degree": 4,
+            "label": "Symbol",
+            "name": "src.python_app.service::RouteService",
+            "out_degree": 6,
+            "x": -176.81787309033717,
+            "y": -162.28197606576467
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "env:RIDGELINE_WORKER",
+            "in_degree": 7,
+            "label": "EnvVar",
+            "name": "RIDGELINE_WORKER",
+            "out_degree": 0,
+            "x": -176.8178730903372,
+            "y": 162.28197606576464
+        },
+        {
+            "file_path": ".github/workflows/ci.yml",
+            "hop": 2,
+            "id": "config:.github/workflows/ci.yml#jobs.checks",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "checks",
+            "out_degree": 5,
+            "x": -99.69960312045272,
+            "y": 218.31167888508443
+        },
+        {
+            "file_path": "docker-compose.yml",
+            "hop": 2,
+            "id": "config:docker-compose.yml#services.api",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "api",
+            "out_degree": 4,
+            "x": -135.46637252802455,
+            "y": 198.11325527106578
+        },
+        {
+            "file_path": "src/python_app/service.py",
+            "hop": 2,
+            "id": "symbol:src/python_app/service.py#src.python_app.service::run_worker",
+            "in_degree": 3,
+            "label": "Symbol",
+            "name": "src.python_app.service::run_worker",
+            "out_degree": 1,
+            "x": -167.26501647727045,
+            "y": -172.11163314215122
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:str",
+            "in_degree": 4,
+            "label": "Unresolved",
+            "name": "str",
+            "out_degree": 0,
+            "x": 230.27831366747938,
+            "y": -67.61581364194315
+        },
+        {
+            "file_path": "docker-compose.yml",
+            "hop": 2,
+            "id": "config:docker-compose.yml#services.web",
+            "in_degree": 2,
+            "label": "Config",
+            "name": "web",
+            "out_degree": 1,
+            "x": -146.55549111250508,
+            "y": 190.05653902134608
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "env:RIDGELINE_CACHE_DIR",
+            "in_degree": 2,
+            "label": "EnvVar",
+            "name": "RIDGELINE_CACHE_DIR",
+            "out_degree": 0,
+            "x": -167.2650164772704,
+            "y": 172.11163314215125
+        },
+        {
+            "file_path": "src/python_app/service.py",
+            "hop": 2,
+            "id": "module:src.python_app.service",
+            "in_degree": 2,
+            "label": "Module",
+            "name": "src.python_app.service",
+            "out_degree": 0,
+            "x": -233.76286006616004,
+            "y": 54.35922418218347
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "package:fixture-worker",
+            "in_degree": 1,
+            "label": "Package",
+            "name": "fixture-worker",
+            "out_degree": 1,
+            "x": -239.60858494227256,
+            "y": -13.701314607064257
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "package:polyglot-fixture",
+            "in_degree": 1,
+            "label": "Package",
+            "name": "polyglot-fixture",
+            "out_degree": 1,
+            "x": -230.27831366747938,
+            "y": -67.61581364194305
+        },
+        {
+            "file_path": "generated/client.py",
+            "hop": 2,
+            "id": "symbol:generated/client.py#generated.client::call_route_api",
+            "in_degree": 1,
+            "label": "Symbol",
+            "name": "generated.client::call_route_api",
+            "out_degree": 1,
+            "x": -215.375622885926,
+            "y": -105.89306429837316
+        },
+        {
+            "file_path": "rust/src/lib.rs",
+            "hop": 2,
+            "id": "symbol:rust/src/lib.rs#::RouteBake",
+            "in_degree": 2,
+            "label": "Symbol",
+            "name": "::RouteBake",
+            "out_degree": 0,
+            "x": -201.90084787948354,
+            "y": -129.75379618934335
+        },
+        {
+            "file_path": "rust/src/lib.rs",
+            "hop": 2,
+            "id": "symbol:rust/src/lib.rs#::RouteBaker",
+            "in_degree": 1,
+            "label": "Symbol",
+            "name": "::RouteBaker",
+            "out_degree": 1,
+            "x": -194.1640786499874,
+            "y": -141.06846055019352
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:ghcr.io/example/route-api:dev",
+            "in_degree": 2,
+            "label": "Unresolved",
+            "name": "ghcr.io/example/route-api:dev",
+            "out_degree": 0,
+            "x": 87.07384928415387,
+            "y": -223.64736701074855
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:xmlns=\"http://www.w3.org/2000/svg",
+            "in_degree": 2,
+            "label": "Unresolved",
+            "name": "xmlns=\"http://www.w3.org/2000/svg",
+            "out_degree": 0,
+            "x": 239.60858494227256,
+            "y": -13.701314607064452
+        },
+        {
+            "file_path": "Dockerfile",
+            "hop": 2,
+            "id": "command:Dockerfile#14",
+            "in_degree": 1,
+            "label": "Command",
+            "name": "[\"python\", \"-m\", \"python_app.service\"]",
+            "out_degree": 0,
+            "x": 240.0,
+            "y": 0.0
+        },
+        {
+            "file_path": "Dockerfile",
+            "hop": 2,
+            "id": "command:Dockerfile#4",
+            "in_degree": 1,
+            "label": "Command",
+            "name": "cargo build --manifest-path rust/Cargo.toml --release",
+            "out_degree": 0,
+            "x": 239.60858494227256,
+            "y": 13.701314607064315
+        },
+        {
+            "file_path": "Dockerfile",
+            "hop": 2,
+            "id": "command:Dockerfile#9",
+            "in_degree": 1,
+            "label": "Command",
+            "name": "pip install --no-cache-dir -r requirements.txt",
+            "out_degree": 0,
+            "x": 238.43561648365204,
+            "y": 27.35793837372975
+        },
+        {
+            "file_path": "Makefile",
+            "hop": 2,
+            "id": "command:Makefile#12",
+            "in_degree": 1,
+            "label": "Command",
+            "name": "npm --prefix web run lint",
+            "out_degree": 0,
+            "x": 236.4849206034463,
+            "y": 40.92532623182971
+        },
+        {
+            "file_path": "Makefile",
+            "hop": 2,
+            "id": "command:Makefile#15",
+            "in_degree": 1,
+            "label": "Command",
+            "name": "docker build -t ghcr.io/example/route-api:dev .",
+            "out_degree": 0,
+            "x": 233.76286006616004,
+            "y": 54.359224182183446
+        },
+        {
+            "file_path": "Makefile",
+            "hop": 2,
+            "id": "command:Makefile#6",
+            "in_degree": 1,
+            "label": "Command",
+            "name": "python -m pytest",
+            "out_degree": 0,
+            "x": 230.27831366747938,
+            "y": 67.61581364194312
+        },
+        {
+            "file_path": "Makefile",
+            "hop": 2,
+            "id": "command:Makefile#9",
+            "in_degree": 1,
+            "label": "Command",
+            "name": "cargo test --manifest-path rust/Cargo.toml",
+            "out_degree": 0,
+            "x": 226.04264727348593,
+            "y": 80.65185437170322
+        },
+        {
+            "file_path": "config/settings.yaml",
+            "hop": 2,
+            "id": "command:config/settings.yaml#service.command",
+            "in_degree": 1,
+            "label": "Command",
+            "name": "python -m python_app.service",
+            "out_degree": 0,
+            "x": 221.06967674756402,
+            "y": 93.42482551617395
+        },
+        {
+            "file_path": "docs/architecture.md",
+            "hop": 2,
+            "id": "command:docs/architecture.md#21",
+            "in_degree": 1,
+            "label": "Command",
+            "name": "make test",
+            "out_degree": 0,
+            "x": 215.37562288592602,
+            "y": 105.8930642983731
+        },
+        {
+            "file_path": "docs/architecture.md",
+            "hop": 2,
+            "id": "command:docs/architecture.md#22",
+            "in_degree": 1,
+            "label": "Command",
+            "name": "cargo test --manifest-path rust/Cargo.toml",
+            "out_degree": 0,
+            "x": 208.9790585087465,
+            "y": 118.0159019149449
+        },
+        {
+            "file_path": "docs/architecture.md",
+            "hop": 2,
+            "id": "command:docs/architecture.md#23",
+            "in_degree": 1,
+            "label": "Command",
+            "name": "python -m pytest",
+            "out_degree": 0,
+            "x": 201.90084787948348,
+            "y": 129.7537961893434
+        },
+        {
+            "file_path": "src/python_app/service.py",
+            "hop": 2,
+            "id": "command:src/python_app/service.py#29",
+            "in_degree": 1,
+            "label": "Command",
+            "name": "[worker_path, \"--route\", str(route_file)]",
+            "out_degree": 0,
+            "x": 194.1640786499874,
+            "y": 141.06846055019352
+        },
+        {
+            "file_path": "config/settings.yaml",
+            "hop": 2,
+            "id": "config-key:paths",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "paths",
+            "out_degree": 0,
+            "x": 185.7939865533798,
+            "y": 151.9229889141289
+        },
+        {
+            "file_path": "config/settings.yaml",
+            "hop": 2,
+            "id": "config-key:paths.schema",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "paths.schema",
+            "out_degree": 0,
+            "x": 176.81787309033717,
+            "y": 162.28197606576467
+        },
+        {
+            "file_path": "config/settings.yaml",
+            "hop": 2,
+            "id": "config-key:paths.static.assets",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "paths.static.assets",
+            "out_degree": 0,
+            "x": 167.26501647727042,
+            "y": 172.11163314215122
+        },
+        {
+            "file_path": "config/schema.json",
+            "hop": 2,
+            "id": "config-key:properties",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "properties",
+            "out_degree": 0,
+            "x": 157.16657614686844,
+            "y": 181.379897845022
+        },
+        {
+            "file_path": "config/schema.json",
+            "hop": 2,
+            "id": "config-key:properties.route.file",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "properties.route.file",
+            "out_degree": 0,
+            "x": 146.55549111250517,
+            "y": 190.05653902134603
+        },
+        {
+            "file_path": "config/schema.json",
+            "hop": 2,
+            "id": "config-key:properties.route.file.description",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "properties.route.file.description",
+            "out_degree": 0,
+            "x": 135.4663725280246,
+            "y": 198.11325527106575
+        },
+        {
+            "file_path": "config/schema.json",
+            "hop": 2,
+            "id": "config-key:properties.route.file.type",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "properties.route.file.type",
+            "out_degree": 0,
+            "x": 123.93539079335086,
+            "y": 205.52376726038133
+        },
+        {
+            "file_path": "config/schema.json",
+            "hop": 2,
+            "id": "config-key:properties.worker.image",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "properties.worker.image",
+            "out_degree": 0,
+            "x": 112.00015757416172,
+            "y": 212.26390343947543
+        },
+        {
+            "file_path": "config/schema.json",
+            "hop": 2,
+            "id": "config-key:properties.worker.image.default",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "properties.worker.image.default",
+            "out_degree": 0,
+            "x": 99.69960312045275,
+            "y": 218.3116788850844
+        },
+        {
+            "file_path": "config/schema.json",
+            "hop": 2,
+            "id": "config-key:properties.worker.image.type",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "properties.worker.image.type",
+            "out_degree": 0,
+            "x": 87.07384928415382,
+            "y": 223.64736701074858
+        },
+        {
+            "file_path": "config/schema.json",
+            "hop": 2,
+            "id": "config-key:required",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "required",
+            "out_degree": 0,
+            "x": 74.16407864998745,
+            "y": 228.25356391083685
+        },
+        {
+            "file_path": "config/schema.json",
+            "hop": 2,
+            "id": "config-key:required.0",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "required.0",
+            "out_degree": 0,
+            "x": 61.01240020643691,
+            "y": 232.1152451284697
+        },
+        {
+            "file_path": "config/schema.json",
+            "hop": 2,
+            "id": "config-key:schema",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "schema",
+            "out_degree": 0,
+            "x": 47.66171199497893,
+            "y": 235.21981466217443
+        },
+        {
+            "file_path": "config/settings.yaml",
+            "hop": 2,
+            "id": "config-key:service",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "service",
+            "out_degree": 0,
+            "x": 34.155561185588425,
+            "y": 237.55714605142384
+        },
+        {
+            "file_path": "config/settings.yaml",
+            "hop": 2,
+            "id": "config-key:service.command",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "service.command",
+            "out_degree": 0,
+            "x": 20.538002034921508,
+            "y": 239.11961540704596
+        },
+        {
+            "file_path": "config/settings.yaml",
+            "hop": 2,
+            "id": "config-key:service.env",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "service.env",
+            "out_degree": 0,
+            "x": 6.853452190487154,
+            "y": 239.90212627876542
+        },
+        {
+            "file_path": "config/settings.yaml",
+            "hop": 2,
+            "id": "config-key:service.env.ridgeline.cache.dir",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "service.env.ridgeline.cache.dir",
+            "out_degree": 0,
+            "x": -6.853452190487072,
+            "y": 239.90212627876542
+        },
+        {
+            "file_path": "config/settings.yaml",
+            "hop": 2,
+            "id": "config-key:service.env.ridgeline.worker",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "service.env.ridgeline.worker",
+            "out_degree": 0,
+            "x": -20.538002034921533,
+            "y": 239.11961540704596
+        },
+        {
+            "file_path": "config/settings.yaml",
+            "hop": 2,
+            "id": "config-key:service.image",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "service.image",
+            "out_degree": 0,
+            "x": -34.155561185588404,
+            "y": 237.55714605142387
+        },
+        {
+            "file_path": "config/settings.yaml",
+            "hop": 2,
+            "id": "config-key:service.name",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "service.name",
+            "out_degree": 0,
+            "x": -47.6617119949789,
+            "y": 235.21981466217443
+        },
+        {
+            "file_path": "config/settings.yaml",
+            "hop": 2,
+            "id": "config-key:service.port",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "service.port",
+            "out_degree": 0,
+            "x": -61.01240020643682,
+            "y": 232.11524512846972
+        },
+        {
+            "file_path": "config/schema.json",
+            "hop": 2,
+            "id": "config-key:title",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "title",
+            "out_degree": 0,
+            "x": -74.16407864998736,
+            "y": 228.25356391083687
+        },
+        {
+            "file_path": "config/schema.json",
+            "hop": 2,
+            "id": "config-key:type",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "type",
+            "out_degree": 0,
+            "x": -87.07384928415385,
+            "y": 223.64736701074855
+        },
+        {
+            "file_path": "config/settings.yaml",
+            "hop": 2,
+            "id": "config:config/settings.yaml#service.name",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "route-api",
+            "out_degree": 0,
+            "x": -112.00015757416169,
+            "y": 212.26390343947543
+        },
+        {
+            "file_path": "config/settings.yaml",
+            "hop": 2,
+            "id": "config:config/settings.yaml#service.port",
+            "in_degree": 1,
+            "label": "Config",
+            "name": "8080",
+            "out_degree": 0,
+            "x": -123.93539079335083,
+            "y": 205.52376726038136
+        },
+        {
+            "file_path": "docs/architecture.md",
+            "hop": 2,
+            "id": "doc:docs/architecture.md#1",
+            "in_degree": 1,
+            "label": "Documentation",
+            "name": "Architecture Notes",
+            "out_degree": 0,
+            "x": -157.16657614686844,
+            "y": 181.379897845022
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "env:VERSION",
+            "in_degree": 1,
+            "label": "EnvVar",
+            "name": "VERSION",
+            "out_degree": 0,
+            "x": -185.7939865533798,
+            "y": 151.9229889141289
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "image:ghcr.io/example/route-api:${VERSION}",
+            "in_degree": 1,
+            "label": "Container",
+            "name": "ghcr.io/example/route-api:${VERSION}",
+            "out_degree": 0,
+            "x": -194.16407864998732,
+            "y": 141.06846055019366
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "image:ghcr.io/example/worker:1.0",
+            "in_degree": 1,
+            "label": "Container",
+            "name": "ghcr.io/example/worker:1.0",
+            "out_degree": 0,
+            "x": -201.90084787948342,
+            "y": 129.75379618934346
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "image:python:3.13-slim",
+            "in_degree": 1,
+            "label": "Container",
+            "name": "python:3.13-slim",
+            "out_degree": 0,
+            "x": -208.97905850874648,
+            "y": 118.01590191494498
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "image:rust:1.96",
+            "in_degree": 1,
+            "label": "Container",
+            "name": "rust:1.96",
+            "out_degree": 0,
+            "x": -215.37562288592602,
+            "y": 105.89306429837312
+        },
+        {
+            "file_path": "rust/src/lib.rs",
+            "hop": 2,
+            "id": "module:",
+            "in_degree": 1,
+            "label": "Module",
+            "name": "",
+            "out_degree": 0,
+            "x": -221.06967674756402,
+            "y": 93.42482551617398
+        },
+        {
+            "file_path": "generated/client.py",
+            "hop": 2,
+            "id": "module:generated.client",
+            "in_degree": 1,
+            "label": "Module",
+            "name": "generated.client",
+            "out_degree": 0,
+            "x": -226.0426472734859,
+            "y": 80.6518543717033
+        },
+        {
+            "file_path": "src/python_app/__init__.py",
+            "hop": 2,
+            "id": "module:src.python_app",
+            "in_degree": 1,
+            "label": "Module",
+            "name": "src.python_app",
+            "out_degree": 0,
+            "x": -230.27831366747938,
+            "y": 67.61581364194312
+        },
+        {
+            "file_path": "web/index.html",
+            "hop": 2,
+            "id": "module:web/index.html",
+            "in_degree": 1,
+            "label": "Module",
+            "name": "web/index.html",
+            "out_degree": 0,
+            "x": -236.48492060344634,
+            "y": 40.92532623182965
+        },
+        {
+            "file_path": "web/src/App.tsx",
+            "hop": 2,
+            "id": "module:web/src/App.tsx",
+            "in_degree": 1,
+            "label": "Module",
+            "name": "web/src/App.tsx",
+            "out_degree": 0,
+            "x": -238.43561648365204,
+            "y": 27.35793837372972
+        },
+        {
+            "file_path": "rust/src/bin/worker.rs",
+            "hop": 2,
+            "id": "module:worker",
+            "in_degree": 1,
+            "label": "Module",
+            "name": "worker",
+            "out_degree": 0,
+            "x": -239.60858494227256,
+            "y": 13.701314607064422
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "package:__future__",
+            "in_degree": 1,
+            "label": "Package",
+            "name": "__future__",
+            "out_degree": 0,
+            "x": -240.0,
+            "y": 2.939152317953648e-14
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "package:json",
+            "in_degree": 1,
+            "label": "Package",
+            "name": "json",
+            "out_degree": 0,
+            "x": -238.43561648365204,
+            "y": -27.35793837372966
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "package:os",
+            "in_degree": 1,
+            "label": "Package",
+            "name": "os",
+            "out_degree": 0,
+            "x": -236.4849206034463,
+            "y": -40.9253262318297
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "package:pathlib",
+            "in_degree": 1,
+            "label": "Package",
+            "name": "pathlib",
+            "out_degree": 0,
+            "x": -233.76286006616004,
+            "y": -54.35922418218341
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "package:std",
+            "in_degree": 1,
+            "label": "Package",
+            "name": "std",
+            "out_degree": 0,
+            "x": -226.04264727348593,
+            "y": -80.65185437170324
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "package:subprocess",
+            "in_degree": 1,
+            "label": "Package",
+            "name": "subprocess",
+            "out_degree": 0,
+            "x": -221.06967674756402,
+            "y": -93.42482551617394
+        },
+        {
+            "file_path": "rust/src/bin/worker.rs",
+            "hop": 2,
+            "id": "symbol:rust/src/bin/worker.rs#worker::main",
+            "in_degree": 1,
+            "label": "Symbol",
+            "name": "worker::main",
+            "out_degree": 0,
+            "x": -208.97905850874656,
+            "y": -118.01590191494483
+        },
+        {
+            "file_path": "rust/src/lib.rs",
+            "hop": 2,
+            "id": "symbol:rust/src/lib.rs#::bake_route",
+            "in_degree": 1,
+            "label": "Symbol",
+            "name": "::bake_route",
+            "out_degree": 0,
+            "x": -185.79398655337982,
+            "y": -151.92298891412884
+        },
+        {
+            "file_path": "web/index.html",
+            "hop": 2,
+            "id": "symbol:web/index.html::element@L2",
+            "in_degree": 1,
+            "label": "Symbol",
+            "name": "web/index.html::element@L2",
+            "out_degree": 0,
+            "x": -157.16657614686847,
+            "y": -181.37989784502196
+        },
+        {
+            "file_path": "web/index.html",
+            "hop": 2,
+            "id": "symbol:web/index.html::element@L3",
+            "in_degree": 1,
+            "label": "Symbol",
+            "name": "web/index.html::element@L3",
+            "out_degree": 0,
+            "x": -146.55549111250522,
+            "y": -190.05653902134597
+        },
+        {
+            "file_path": "web/index.html",
+            "hop": 2,
+            "id": "symbol:web/index.html::element@L4",
+            "in_degree": 1,
+            "label": "Symbol",
+            "name": "web/index.html::element@L4",
+            "out_degree": 0,
+            "x": -135.4663725280246,
+            "y": -198.11325527106575
+        },
+        {
+            "file_path": "web/index.html",
+            "hop": 2,
+            "id": "symbol:web/index.html::element@L5",
+            "in_degree": 1,
+            "label": "Symbol",
+            "name": "web/index.html::element@L5",
+            "out_degree": 0,
+            "x": -123.93539079335098,
+            "y": -205.52376726038128
+        },
+        {
+            "file_path": "web/index.html",
+            "hop": 2,
+            "id": "symbol:web/index.html::element@L7",
+            "in_degree": 1,
+            "label": "Symbol",
+            "name": "web/index.html::element@L7",
+            "out_degree": 0,
+            "x": -112.00015757416175,
+            "y": -212.2639034394754
+        },
+        {
+            "file_path": "web/index.html",
+            "hop": 2,
+            "id": "symbol:web/index.html::element@L8",
+            "in_degree": 1,
+            "label": "Symbol",
+            "name": "web/index.html::element@L8",
+            "out_degree": 0,
+            "x": -99.69960312045274,
+            "y": -218.31167888508443
+        },
+        {
+            "file_path": "web/index.html",
+            "hop": 2,
+            "id": "symbol:web/index.html::script_element@L9",
+            "in_degree": 1,
+            "label": "Symbol",
+            "name": "web/index.html::script_element@L9",
+            "out_degree": 0,
+            "x": -87.07384928415395,
+            "y": -223.64736701074852
+        },
+        {
+            "file_path": "web/src/App.tsx",
+            "hop": 2,
+            "id": "symbol:web/src/App.tsx#web/src/App.tsx::App",
+            "in_degree": 1,
+            "label": "Symbol",
+            "name": "web/src/App.tsx::App",
+            "out_degree": 0,
+            "x": -74.16407864998742,
+            "y": -228.25356391083685
+        },
+        {
+            "file_path": "web/src/App.tsx",
+            "hop": 2,
+            "id": "symbol:web/src/App.tsx::type_alias_declaration@L3",
+            "in_degree": 1,
+            "label": "Symbol",
+            "name": "web/src/App.tsx::type_alias_declaration@L3",
+            "out_degree": 0,
+            "x": -61.012400206437036,
+            "y": -232.11524512846967
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:/usr/local/bin/worker",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "/usr/local/bin/worker",
+            "out_degree": 0,
+            "x": -47.66171199497901,
+            "y": -235.2198146621744
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:/var/cache/ridgeline",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "/var/cache/ridgeline",
+            "out_degree": 0,
+            "x": -34.155561185588454,
+            "y": -237.55714605142384
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:App",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "App",
+            "out_degree": 0,
+            "x": -20.538002034921696,
+            "y": -239.11961540704593
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:React",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "React",
+            "out_degree": 0,
+            "x": -6.853452190487183,
+            "y": -239.90212627876542
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:RouteSummary",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "RouteSummary",
+            "out_degree": 0,
+            "x": 6.853452190487095,
+            "y": -239.90212627876542
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:assets/",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "assets/",
+            "out_degree": 0,
+            "x": 20.53800203492161,
+            "y": -239.11961540704593
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:body",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "body",
+            "out_degree": 0,
+            "x": 34.15556118558837,
+            "y": -237.55714605142387
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:charset",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "charset",
+            "out_degree": 0,
+            "x": 47.66171199497892,
+            "y": -235.21981466217443
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:div",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "div",
+            "out_degree": 0,
+            "x": 61.012400206436745,
+            "y": -232.11524512846975
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:fixture_worker::bake_route",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "fixture_worker::bake_route",
+            "out_degree": 0,
+            "x": 74.16407864998713,
+            "y": -228.25356391083693
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:h1",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "h1",
+            "out_degree": 0,
+            "x": 99.69960312045265,
+            "y": -218.31167888508446
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:head",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "head",
+            "out_degree": 0,
+            "x": 112.00015757416166,
+            "y": -212.26390343947546
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:html",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "html",
+            "out_degree": 0,
+            "x": 123.93539079335073,
+            "y": -205.52376726038145
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:https://json-schema.org/draft/2020-12/schema",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "https://json-schema.org/draft/2020-12/schema",
+            "out_degree": 0,
+            "x": 135.46637252802452,
+            "y": -198.11325527106578
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:id",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "id",
+            "out_degree": 0,
+            "x": 146.55549111250514,
+            "y": -190.05653902134603
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:import React from \"react\";",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "import React from \"react\";",
+            "out_degree": 0,
+            "x": 157.16657614686847,
+            "y": -181.37989784502196
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:lang",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "lang",
+            "out_degree": 0,
+            "x": 167.26501647727036,
+            "y": -172.11163314215128
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:main",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "main",
+            "out_degree": 0,
+            "x": 176.81787309033717,
+            "y": -162.28197606576464
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:meta",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "meta",
+            "out_degree": 0,
+            "x": 185.7939865533797,
+            "y": -151.922988914129
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:p",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "p",
+            "out_degree": 0,
+            "x": 194.16407864998746,
+            "y": -141.0684605501934
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:route",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "route",
+            "out_degree": 0,
+            "x": 201.90084787948348,
+            "y": -129.7537961893434
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:rust/",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "rust/",
+            "out_degree": 0,
+            "x": 208.97905850874645,
+            "y": -118.015901914945
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:script",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "script",
+            "out_degree": 0,
+            "x": 215.375622885926,
+            "y": -105.89306429837315
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:src",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "src",
+            "out_degree": 0,
+            "x": 221.06967674756396,
+            "y": -93.42482551617412
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:src/python_app/",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "src/python_app/",
+            "out_degree": 0,
+            "x": 226.04264727348595,
+            "y": -80.65185437170311
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:title",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "title",
+            "out_degree": 0,
+            "x": 233.76286006616004,
+            "y": -54.35922418218339
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:type",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "type",
+            "out_degree": 0,
+            "x": 236.4849206034463,
+            "y": -40.925326231829786
+        },
+        {
+            "file_path": null,
+            "hop": 2,
+            "id": "unresolved:web/",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "web/",
+            "out_degree": 0,
+            "x": 238.43561648365204,
+            "y": -27.35793837372996
+        },
+        {
+            "file_path": "src/python_app/service.py",
+            "hop": 3,
+            "id": "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
+            "in_degree": 2,
+            "label": "Symbol",
+            "name": "src.python_app.service::RouteService::__init__",
+            "out_degree": 3,
+            "x": -6.613092715395707e-14,
+            "y": -360.0
+        },
+        {
+            "file_path": "src/python_app/service.py",
+            "hop": 3,
+            "id": "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
+            "in_degree": 2,
+            "label": "Symbol",
+            "name": "src.python_app.service::RouteService::bake_route",
+            "out_degree": 2,
+            "x": 180.00000000000003,
+            "y": -311.7691453623979
+        },
+        {
+            "file_path": "src/python_app/service.py",
+            "hop": 3,
+            "id": "symbol:src/python_app/service.py#src.python_app.service::RouteService::load_settings",
+            "in_degree": 2,
+            "label": "Symbol",
+            "name": "src.python_app.service::RouteService::load_settings",
+            "out_degree": 2,
+            "x": 311.7691453623978,
+            "y": -180.00000000000017
+        },
+        {
+            "file_path": null,
+            "hop": 3,
+            "id": "package:pydantic",
+            "in_degree": 2,
+            "label": "Package",
+            "name": "pydantic",
+            "out_degree": 0,
+            "x": -180.00000000000017,
+            "y": -311.7691453623978
+        },
+        {
+            "file_path": ".github/workflows/ci.yml",
+            "hop": 3,
+            "id": "command:.github/workflows/ci.yml#jobs.checks.steps[1]",
+            "in_degree": 1,
+            "label": "Command",
+            "name": "python -m pytest",
+            "out_degree": 0,
+            "x": 360.0,
+            "y": 0.0
+        },
+        {
+            "file_path": ".github/workflows/ci.yml",
+            "hop": 3,
+            "id": "command:.github/workflows/ci.yml#jobs.checks.steps[2]",
+            "in_degree": 1,
+            "label": "Command",
+            "name": "cargo test --manifest-path rust/Cargo.toml",
+            "out_degree": 0,
+            "x": 311.7691453623979,
+            "y": 179.99999999999997
+        },
+        {
+            "file_path": ".github/workflows/ci.yml",
+            "hop": 3,
+            "id": "command:.github/workflows/ci.yml#jobs.checks.steps[3]",
+            "in_degree": 1,
+            "label": "Command",
+            "name": "npm --prefix web run lint",
+            "out_degree": 0,
+            "x": 180.00000000000003,
+            "y": 311.7691453623979
+        },
+        {
+            "file_path": ".github/workflows/ci.yml",
+            "hop": 3,
+            "id": "command:.github/workflows/ci.yml#jobs.checks.steps[4]",
+            "in_degree": 1,
+            "label": "Command",
+            "name": "docker build -t ghcr.io/example/route-api:${{ github.sha }} .",
+            "out_degree": 0,
+            "x": 2.2043642384652358e-14,
+            "y": 360.0
+        },
+        {
+            "file_path": null,
+            "hop": 3,
+            "id": "image:ghcr.io/example/route-api:${VERSION:-dev}",
+            "in_degree": 1,
+            "label": "Container",
+            "name": "ghcr.io/example/route-api:${VERSION:-dev}",
+            "out_degree": 0,
+            "x": -179.99999999999994,
+            "y": 311.7691453623979
+        },
+        {
+            "file_path": null,
+            "hop": 3,
+            "id": "image:ghcr.io/example/route-api:${{",
+            "in_degree": 1,
+            "label": "Container",
+            "name": "ghcr.io/example/route-api:${{",
+            "out_degree": 0,
+            "x": -311.7691453623979,
+            "y": 179.99999999999997
+        },
+        {
+            "file_path": null,
+            "hop": 3,
+            "id": "image:node:24-alpine",
+            "in_degree": 1,
+            "label": "Container",
+            "name": "node:24-alpine",
+            "out_degree": 0,
+            "x": -360.0,
+            "y": 4.4087284769304716e-14
+        },
+        {
+            "file_path": null,
+            "hop": 3,
+            "id": "package:anyhow",
+            "in_degree": 1,
+            "label": "Package",
+            "name": "anyhow",
+            "out_degree": 0,
+            "x": -311.769145362398,
+            "y": -179.99999999999991
+        },
+        {
+            "file_path": "requirements.txt",
+            "hop": 4,
+            "id": "artifact:requirements.txt",
+            "in_degree": 0,
+            "label": "Artifact",
+            "name": "requirements.txt",
+            "out_degree": 2,
+            "x": 480.0,
+            "y": 0.0
+        },
+        {
+            "file_path": null,
+            "hop": 4,
+            "id": "unresolved:None",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "None",
+            "out_degree": 0,
+            "x": -239.99999999999991,
+            "y": 415.69219381653056
+        },
+        {
+            "file_path": null,
+            "hop": 4,
+            "id": "unresolved:dict[str, object]",
+            "in_degree": 1,
+            "label": "Unresolved",
+            "name": "dict[str, object]",
+            "out_degree": 0,
+            "x": -240.00000000000023,
+            "y": -415.69219381653045
+        },
+        {
+            "file_path": null,
+            "hop": 5,
+            "id": "package:pytest",
+            "in_degree": 1,
+            "label": "Package",
+            "name": "pytest",
+            "out_degree": 0,
+            "x": 600.0,
+            "y": 0.0
+        },
+        {
+            "file_path": "web/package.json",
+            "hop": 6,
+            "id": "artifact:web/package.json",
+            "in_degree": 0,
+            "label": "Artifact",
+            "name": "web/package.json",
+            "out_degree": 3,
+            "x": -160.21507244854632,
+            "y": 701.948096770913
+        },
+        {
+            "file_path": null,
+            "hop": 6,
+            "id": "package:@vitejs/plugin-react",
+            "in_degree": 1,
+            "label": "Package",
+            "name": "@vitejs/plugin-react",
+            "out_degree": 0,
+            "x": -648.6975848897417,
+            "y": -312.39629216464175
+        },
+        {
+            "file_path": null,
+            "hop": 6,
+            "id": "package:typescript",
+            "in_degree": 1,
+            "label": "Package",
+            "name": "typescript",
+            "out_degree": 0,
+            "x": -160.2150724485465,
+            "y": -701.948096770913
+        },
+        {
+            "file_path": null,
+            "hop": 6,
+            "id": "package:vite",
+            "in_degree": 1,
+            "label": "Package",
+            "name": "vite",
+            "out_degree": 0,
+            "x": 448.912657338288,
+            "y": -562.9186673769815
+        },
+        {
+            "file_path": "LICENSE",
+            "hop": 6,
+            "id": "artifact:LICENSE",
+            "in_degree": 0,
+            "label": "Artifact",
+            "name": "LICENSE",
+            "out_degree": 0,
+            "x": 720.0,
+            "y": 0.0
+        },
+        {
+            "file_path": "init.log",
+            "hop": 6,
+            "id": "artifact:init.log",
+            "in_degree": 0,
+            "label": "Artifact",
+            "name": "init.log",
+            "out_degree": 0,
+            "x": 448.91265733828817,
+            "y": 562.9186673769815
+        },
+        {
+            "file_path": "vendor/example/lib.rs",
+            "hop": 6,
+            "id": "module:vendor::example",
+            "in_degree": 0,
+            "label": "Module",
+            "name": "vendor::example",
+            "out_degree": 0,
+            "x": -648.6975848897417,
+            "y": 312.3962921646419
+        }
+    ]
+}

@@ -50,7 +50,8 @@ Everything Lithograph writes stays inside the target repository:
   documents its own output.
 
 Nothing is written outside the target repository. Lithograph has no daemon,
-no telemetry, and no home-directory or system-wide state.
+no telemetry, and no home-directory or system-wide state, with one explicit,
+user-invoked exception: `serve` (see below).
 
 ## Opt-in Config Writes
 
@@ -74,6 +75,34 @@ and all three are explicit, single-purpose, and idempotent:
 
 No other command writes outside the target repository, and none of these
 three ever run unless the corresponding command or flag is invoked directly.
+
+## Local Graph Explorer Server (`serve`)
+
+`serve` is the one command that starts a listening process, and it only
+runs when invoked directly -- no other command starts it implicitly.
+
+- **Binds `127.0.0.1` only.** There is no `--host` flag; the bind address
+  is not configurable, so the server can never be made reachable from
+  another machine.
+- **Rejects non-loopback `Host` and `Origin` headers.** Every request is
+  checked before reaching a handler: a `Host` header that doesn't name
+  `127.0.0.1`/`localhost` is rejected with `403`, which defeats DNS
+  rebinding (a public hostname resolved to `127.0.0.1` after a browser's
+  initial same-origin check passes); an `Origin` header on a genuine
+  cross-origin request is rejected the same way.
+- **Sends a strict `Content-Security-Policy`** on every response
+  (`default-src 'self'`, no external or inline script/style sources, no
+  framing) plus `X-Content-Type-Options: nosniff` and
+  `X-Frame-Options: DENY`.
+- **Serves two things only**: read-only graph queries at `POST /rpc`
+  (translated to/from the existing MCP tool handlers in `src/mcp.rs` --
+  same read-only guarantees as `mcp-server`) and static UI asset files
+  from a configured local directory. It writes nothing.
+- **Every request is bounded to a fixed time budget** (30s); a handler
+  that exceeds it is cancelled and the client gets `504` rather than a
+  hung connection.
+- Runs until `Ctrl-C`, exactly like `watch` without `--once`. It is not a
+  background/system service and does not persist across invocations.
 
 ## Tests Stay Offline and Deterministic
 

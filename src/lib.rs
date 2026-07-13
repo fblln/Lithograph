@@ -32,6 +32,7 @@ pub mod resolve;
 pub mod run;
 pub mod search;
 pub mod semantic_search;
+pub mod serve;
 pub mod storage;
 pub mod subsystem_docs;
 pub mod viewer;

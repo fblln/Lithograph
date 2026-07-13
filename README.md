@@ -219,11 +219,12 @@ Serve deterministic JSON-line requests over stdin/stdout:
 cargo run -- mcp-server /path/to/repo
 ```
 
-`mcp-server` exposes 25 tools spanning wiki access, graph queries and schema
-introspection, all three search modes, tag/taxonomy lookups, trace-path and
-impact analysis, dead-code detection, change detection, drift detection,
-architecture layer reporting, ADR CRUD, subsystem document generation and
-refinement, and run metrics. See `src/mcp.rs` for the full list.
+`mcp-server` exposes 35 tools spanning wiki access, graph queries and schema
+introspection, budgeted/positioned graph layout, all three search modes,
+tag/taxonomy lookups, trace-path and impact analysis, dead-code detection,
+change detection, drift detection, architecture layer reporting, ADR CRUD,
+subsystem document generation and refinement, and run metrics. See
+`src/mcp.rs` for the full list.
 
 Generate a lightweight static viewer with navigation, local search, and
 Mermaid-ready code blocks:
@@ -231,6 +232,21 @@ Mermaid-ready code blocks:
 ```sh
 cargo run -- viewer /path/to/repo
 ```
+
+Serve the graph explorer UI and read-only graph API locally (binds
+`127.0.0.1` only; see `docs/dev/security.md` for the full threat model):
+
+```sh
+cd ui && npm install && npm run build && cd ..
+cargo run -- serve /path/to/repo --assets ui/dist
+```
+
+The explorer (`ui/`, React + TypeScript + react-three-fiber -- see
+`ui/README.md`) renders the live graph in 3D with radial and matrix layout
+modes, drag-persisted node positions, cluster convex-hull overlays, and
+node-kind/edge-kind filtering and stats, all backed by the real
+`get_graph_layout`/`get_architecture` APIs above. Bookmarkable via URL
+state (focused node, layout mode, node budget).
 
 ## Agent Integration
 
@@ -405,9 +421,15 @@ with bounded, evidence-scoped excerpts — never a whole-repo dump. See
 
 Lithograph's local CLI, C4-oriented generated wiki, durable LadybugDB graph,
 incremental update path with content-addressed caching, three search modes,
-graph query language, ADR store, drift/quality checks, 25-tool MCP server,
-and per-agent integration are implemented and covered by 500+ tests, but the
-project is still evolving quickly — most notably a browser-based graph
-explorer UI (tracked under the LIT-24 backlog epic) is in active design and
-not yet built. Prefer `just check-all` before handoff and keep generated
-output changes reviewable with `golden`, `quality`, and `validate-mermaid`.
+graph query language, ADR store, drift/quality checks, 35-tool MCP server,
+a local embedded server (`serve`) with a budgeted/cached graph layout API,
+and per-agent integration are implemented and covered by 540+ Rust tests.
+The browser graph explorer frontend (`ui/`, tracked under the LIT-24
+backlog epic) renders the live graph in 3D with radial/matrix layout
+modes, drag-persisted positions, cluster hulls, filtering, and URL state,
+covered by 65+ frontend tests; still missing a project switcher (no
+multi-project concept exists server-side yet) and several planned
+overlays (analytics, saved investigations, query workbench, tag explorer,
+docs workspace). Prefer `just check-all` (Rust) and `npm run check-all`
+(`ui/`) before handoff, and keep generated output changes reviewable with
+`golden`, `quality`, and `validate-mermaid`.
