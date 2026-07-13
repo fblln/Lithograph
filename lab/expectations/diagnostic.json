@@ -1,0 +1,64 @@
+{
+  "schema_version": 2,
+  "expectations": [
+    { "kind": "graph_valid", "id": "graph-valid" },
+    { "kind": "artifact", "id": "classify-python", "path": "app/service.py", "category": "SourceCode", "format": "python" },
+    { "kind": "artifact", "id": "classify-yaml", "path": "config/settings.yaml", "category": "Configuration", "format": "yaml" },
+    { "kind": "artifact_absent", "id": "exclude-git-internals", "path": ".git/config" },
+    { "kind": "relation", "id": "controller-imports-service", "source_contains": "controller.py", "target_contains": "app.service", "relation": "Imports", "present": true },
+    { "kind": "clone_pair", "id": "known-clone", "left_contains": "normalize_primary", "right_contains": "normalize_secondary", "similar": true },
+    { "kind": "clone_pair", "id": "known-non-clone", "left_contains": "normalize_primary", "right_contains": "unrelated_total", "similar": false },
+    { "kind": "community_pair", "id": "service-method-community", "left_contains": "PaymentService", "right_contains": "PaymentService::charge", "together": true },
+    { "kind": "community_pair", "id": "service-repository-boundary", "left_contains": "PaymentService::charge", "right_contains": "PaymentRepository::save", "together": false },
+    { "kind": "semantic_rank", "id": "payment-controller-role", "query": "payment controller", "node_contains": "PaymentController", "max_rank": 1 },
+    { "kind": "semantic_rank", "id": "payment-persistence-role", "query": "payment persistence adapter", "node_contains": "PaymentRepository", "max_rank": 3 }
+  ],
+  "scenarios": [
+    {
+      "id": "unrelated-file",
+      "description": "Adding an unrelated source file preserves existing graph facts",
+      "operation": { "kind": "add_file", "path": "app/unrelated.py", "content": "def ping():\n    return 'pong'\n" }
+    },
+    {
+      "id": "comment-only",
+      "description": "A comment-only edit preserves semantic expectations",
+      "operation": { "kind": "append_comment", "path": "app/controller.py", "text": "# semantic no-op" }
+    },
+    {
+      "id": "safe-symbol-rename",
+      "description": "A safe authored-fixture rename remains valid and incrementally equivalent",
+      "preserve_expectations": false,
+      "operation": { "kind": "replace_text", "path": "app/clones.py", "from": "unrelated_total", "to": "independent_total" }
+    },
+    {
+      "id": "module-file-move",
+      "description": "Moving a module and rewriting its import remains valid",
+      "preserve_expectations": false,
+      "operation": { "kind": "move_file_and_replace", "from": "app/service.py", "to": "app/services/payment.py", "update_path": "app/controller.py", "old": "from app.service", "new": "from app.services.payment" }
+    },
+    {
+      "id": "import-alias",
+      "description": "Introducing an equivalent import alias remains valid",
+      "preserve_expectations": false,
+      "operation": { "kind": "rewrite_file", "path": "app/controller.py", "content": "\"\"\"HTTP-facing payment controller.\"\"\"\n\nfrom app.service import PaymentService as Service\n\n\nclass PaymentController:\n    \"\"\"Controller for payment requests.\"\"\"\n\n    def __init__(self, service: Service):\n        self.service = service\n\n    def create_payment(self, payment_id: str) -> str:\n        return self.service.charge(payment_id)\n" }
+    },
+    {
+      "id": "declaration-reorder",
+      "description": "Reordering independent class declarations remains valid",
+      "preserve_expectations": false,
+      "operation": { "kind": "rewrite_file", "path": "app/service.py", "content": "\"\"\"Payment service and persistence boundary.\"\"\"\n\n\nclass PaymentRepository:\n    \"\"\"Persist completed charges.\"\"\"\n\n    def save(self, payment_id: str) -> str:\n        return payment_id\n\n\nclass PaymentService:\n    \"\"\"Coordinate payment operations.\"\"\"\n\n    def charge(self, payment_id: str) -> str:\n        return self.repository.save(payment_id)\n\n    def __init__(self, repository: PaymentRepository):\n        self.repository = repository\n" }
+    },
+    {
+      "id": "injected-clone",
+      "description": "Adding an intentional clone remains valid and reproducible",
+      "preserve_expectations": false,
+      "operation": { "kind": "add_file", "path": "app/injected_clone.py", "content": "def normalize_injected(value: str) -> str:\n    cleaned = value.strip()\n    lowered = cleaned.lower()\n    return lowered.replace('-', '_')\n" }
+    },
+    {
+      "id": "edited-clone",
+      "description": "Editing one clone across the threshold remains valid and reproducible",
+      "preserve_expectations": false,
+      "operation": { "kind": "replace_text", "path": "app/clones.py", "from": "def normalize_secondary(value: str) -> str:\n    cleaned = value.strip()\n    lowered = cleaned.lower()\n    return lowered.replace(\"-\", \"_\")", "to": "def normalize_secondary(value: str) -> str:\n    payload = value.encode(\"utf-8\")\n    digest = payload.hex()\n    return digest[::-1]" }
+    }
+  ]
+}

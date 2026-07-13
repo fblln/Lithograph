@@ -23,9 +23,11 @@ pub mod validate;
 pub use analytics::{MetricSnapshot, MetricSnapshotStore, NodeMetric};
 pub use builder::GraphBuilder;
 pub use communities::{
-    CommunityScope, CommunitySnapshot, CommunitySnapshotStore, CommunitySummary, CommunityTopic,
-    LEIDEN_ALGORITHM_VERSION, TOPIC_ALGORITHM_VERSION, TopicSnapshot, TopicSnapshotStore,
+    CommunityAnalysis, CommunityDiagnostics, CommunityScope, CommunitySnapshot,
+    CommunitySnapshotStore, CommunitySummary, CommunityTopic, LEIDEN_ALGORITHM_VERSION,
+    TOPIC_ALGORITHM_VERSION, TopicSnapshot, TopicSnapshotStore, analyze_communities,
     environment_aware_scope, label_topic_snapshot, leiden_communities,
+    leiden_communities_with_diagnostics,
 };
 pub use enrichment::{ENRICHMENT_ALGORITHM_VERSION, EnrichmentOverlay, derive_enrichment};
 pub use health::{HealthFinding, HealthRule, HealthSeverity, HealthThresholds, detect_health};
@@ -50,8 +52,9 @@ pub use model::{
 };
 pub use parity_benchmark::{ParityBenchmark, measure as measure_parity_benchmark};
 pub use pipeline::{
-    GRAPH_BUILD_PASS_ORDER, GRAPH_BUILD_PIPELINE_VERSION, GraphBuildOutput, GraphBuildPass,
-    GraphBuildPassResult,
+    GRAPH_BUILD_PASS_ORDER, GRAPH_BUILD_PIPELINE_VERSION, GRAPH_BUILD_TRACE_VERSION,
+    GraphBuildOutput, GraphBuildPass, GraphBuildPassResult, GraphBuildStageTrace, GraphBuildTrace,
+    GraphBuildTraceConfig, GraphBuildTraceDetail, GraphDecisionTrace,
 };
 pub use query_api::{LadybugQueryApi, NeighborhoodQuery, RawQueryAccess};
 pub use semantic::{

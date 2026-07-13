@@ -1,0 +1,28 @@
+{
+  "schema_version": 2,
+  "expectations": [
+    { "kind": "graph_valid", "id": "graph-valid" },
+    { "kind": "artifact", "id": "nest-application-typescript", "path": "packages/core/nest-application.ts", "category": "SourceCode", "format": "typescript" },
+    { "kind": "relation", "id": "nest-application-contained", "source_contains": "artifact:packages/core/nest-application.ts", "target_contains": "NestApplication", "relation": "Contains", "present": true },
+    { "kind": "relation", "id": "nest-no-phantom-application", "source_contains": "artifact:packages/core/nest-application.ts", "target_contains": "DefinitelyMissingApplication", "relation": "Contains", "present": false },
+    { "kind": "clone_pair", "id": "nest-negative-clone", "left_contains": "NestApplication", "right_contains": "DefinitelyMissingApplication", "similar": false }
+  ],
+  "truth_pack": { "reviewer": "Lithograph maintainers", "provenance": "NestJS 11.1.24 pinned source and reviewed LIT-33 corpus sample", "unlabeled": ["decorator-expanded relations", "community ground truth", "semantic role ranking"] },
+  "known_failures": [
+    {
+      "assertion_id": "graph-valid",
+      "backlog": ["LIT-29"],
+      "expires": "2026-08-13",
+      "issue_count": 26,
+      "signatures": [
+        { "contains": "of kind Calls targets package:express", "count": 14 },
+        { "contains": "of kind Calls targets package:uid", "count": 7 },
+        { "contains": "of kind Calls targets package:cors", "count": 1 },
+        { "contains": "of kind Calls targets package:fastify", "count": 1 },
+        { "contains": "of kind Calls targets package:reusify", "count": 1 },
+        { "contains": "of kind Calls targets package:delay", "count": 1 },
+        { "contains": "of kind Calls targets package:autocannon", "count": 1 }
+      ]
+    }
+  ]
+}

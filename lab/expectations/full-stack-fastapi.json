@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "expectations": [
+    { "kind": "graph_valid", "id": "graph-valid" },
+    { "kind": "artifact", "id": "backend-python", "path": "backend/app/main.py", "category": "SourceCode", "format": "python" },
+    { "kind": "artifact", "id": "frontend-typescript", "path": "frontend/src/main.tsx", "category": "SourceCode", "format": "tsx" },
+    { "kind": "relation", "id": "backend-main-contains-id-generator", "source_contains": "artifact:backend/app/main.py", "target_contains": "custom_generate_unique_id", "relation": "Contains", "present": true },
+    { "kind": "relation", "id": "backend-main-no-phantom", "source_contains": "artifact:backend/app/main.py", "target_contains": "definitely_missing_generator", "relation": "Contains", "present": false },
+    { "kind": "clone_pair", "id": "template-negative-clone", "left_contains": "custom_generate_unique_id", "right_contains": "main.tsx", "similar": false }
+  ],
+  "truth_pack": { "reviewer": "Lithograph maintainers", "provenance": "Full Stack FastAPI 0.6.0 pinned source and reviewed LIT-33 corpus sample", "unlabeled": ["frontend-backend route recall", "community ground truth", "semantic role ranking"] },
+  "known_failures": [
+    {
+      "assertion_id": "graph-valid",
+      "backlog": ["LIT-29"],
+      "expires": "2026-08-13",
+      "issue_count": 1,
+      "signatures": [
+        { "contains": "of kind Calls targets package:react", "count": 1 }
+      ]
+    }
+  ]
+}

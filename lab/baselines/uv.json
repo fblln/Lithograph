@@ -1,0 +1,25 @@
+{
+  "schema_version": 2,
+  "case_id": "uv",
+  "source_revision": "135a3636789bb6886e0a7876f58cb4dbb270ba6d",
+  "graph_hash": "0596887696948557002031e6e83282c6805a8b20370112bdb08cd4e9e9167738",
+  "stage_hashes": {
+    "analytics": "d5e50dd335187a95b9bed16000b324aeef96f5f74721d8b7fcf268677c1bbf56",
+    "definitions_and_imports": "c5d0dcd5a73a06ef0b792851d7c345289be1b8fb4c4572a77b8bb4c56de209a8",
+    "enrichment": "937cbe69c941cb2ed31cd638a9bbd5056c6ed5a661667679e7995aed33da073b",
+    "finalize": "d5e50dd335187a95b9bed16000b324aeef96f5f74721d8b7fcf268677c1bbf56",
+    "persistence": "d5e50dd335187a95b9bed16000b324aeef96f5f74721d8b7fcf268677c1bbf56",
+    "resolution": "d5e50dd335187a95b9bed16000b324aeef96f5f74721d8b7fcf268677c1bbf56",
+    "structure": "b71b1c49e3ef6a0ebafaf41167b57902faff748b8eb632b7d8afe689790cc894"
+  },
+  "assertions": {
+    "graph-valid": true,
+    "uv-main-contained": true,
+    "uv-negative-clone": true,
+    "uv-no-phantom-main": true,
+    "uv-rust": true
+  },
+  "reason": "Reviewed final LIT-32 normalized clone candidate pairs on uv",
+  "previous_graph_hash": "18d29c9a496615bea4904ed3145b3a23af2bf37b7235508f366d23b9a29415e5",
+  "previous_reason": "Reviewed LIT-33 uv truth pack cargo differential and workspace package fix"
+}

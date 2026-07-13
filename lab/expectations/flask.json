@@ -1,0 +1,25 @@
+{
+  "schema_version": 2,
+  "expectations": [
+    { "kind": "graph_valid", "id": "graph-valid" },
+    { "kind": "artifact", "id": "flask-app-python", "path": "src/flask/app.py", "category": "SourceCode", "format": "python" },
+    { "kind": "relation", "id": "flask-app-contains-class", "source_contains": "artifact:src/flask/app.py", "target_contains": "src.flask.app::Flask", "relation": "Contains", "present": true },
+    { "kind": "relation", "id": "flask-no-phantom-class", "source_contains": "artifact:src/flask/app.py", "target_contains": "DefinitelyMissingFlaskClass", "relation": "Contains", "present": false },
+    { "kind": "clone_pair", "id": "flask-negative-clone", "left_contains": "Flask::__call__", "right_contains": "_make_timedelta", "similar": false },
+    { "kind": "community_pair", "id": "flask-class-method-community", "left_contains": "src.flask.app::Flask", "right_contains": "Flask::__call__", "together": true },
+    { "kind": "semantic_rank", "id": "flask-application-role", "query": "flask application", "node_contains": "src.flask.app::Flask", "max_rank": 10 }
+  ],
+  "truth_pack": { "reviewer": "Lithograph maintainers", "provenance": "Flask 3.1.2 pinned source and reviewed LIT-33 corpus sample", "unlabeled": ["complete call graph", "full clone-family census"] },
+  "known_failures": [
+    {
+      "assertion_id": "graph-valid",
+      "backlog": ["LIT-29", "LIT-30"],
+      "expires": "2026-08-13",
+      "issue_count": 7,
+      "signatures": [
+        { "contains": "of kind UsesType targets package:Flask", "count": 5 },
+        { "contains": "evidence for examples/tutorial/flaskr/templates/blog/index.html spans lines 25-29", "count": 2 }
+      ]
+    }
+  ]
+}

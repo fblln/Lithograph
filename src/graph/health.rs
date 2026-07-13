@@ -1,7 +1,7 @@
 //! Conservative, deterministic graph code-health findings.
 
 use crate::domain::Confidence;
-use crate::graph::{CommunityScope, Graph, GraphNodeId, RelationKind, leiden_communities};
+use crate::graph::{CommunityScope, Graph, GraphNodeId, RelationKind, analyze_communities};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -169,7 +169,10 @@ pub fn detect_health(graph: &Graph, thresholds: &HealthThresholds) -> Vec<Health
             ));
         }
     }
-    for community in leiden_communities(graph, &CommunityScope::Combined) {
+    let communities = analyze_communities(graph, &CommunityScope::Combined, None)
+        .map(|analysis| analysis.communities)
+        .unwrap_or_default();
+    for community in communities {
         let cohesion = (community.cohesion * 100.0) as usize;
         if cohesion <= thresholds.low_cohesion_percent as usize {
             findings.push(finding(

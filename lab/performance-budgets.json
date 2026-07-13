@@ -1,0 +1,101 @@
+{
+  "schema_version": 2,
+  "budgets": [
+    {
+      "case_id": "nestjs",
+      "mode": "warm_cache",
+      "metric": "graph_ms",
+      "max_relative_increase": 0.2
+    },
+    {
+      "case_id": "uv",
+      "mode": "warm_cache",
+      "metric": "graph_ms",
+      "max_relative_increase": 0.2
+    },
+    {
+      "case_id": "nestjs",
+      "mode": "warm_cache",
+      "metric": "peak_rss_kib",
+      "max_relative_increase": 0.15
+    },
+    {
+      "case_id": "uv",
+      "mode": "warm_cache",
+      "metric": "peak_rss_kib",
+      "max_relative_increase": 0.15
+    },
+    {
+      "case_id": "nestjs",
+      "mode": "warm_cache",
+      "metric": "community_adjacency_us",
+      "max_relative_increase": 0.2
+    },
+    {
+      "case_id": "nestjs",
+      "mode": "warm_cache",
+      "metric": "community_movement_us",
+      "max_relative_increase": 0.2
+    },
+    {
+      "case_id": "nestjs",
+      "mode": "warm_cache",
+      "metric": "community_summary_us",
+      "max_relative_increase": 0.2
+    },
+    {
+      "case_id": "uv",
+      "mode": "warm_cache",
+      "metric": "community_adjacency_us",
+      "max_relative_increase": 0.2
+    },
+    {
+      "case_id": "uv",
+      "mode": "warm_cache",
+      "metric": "community_movement_us",
+      "max_relative_increase": 0.2
+    },
+    {
+      "case_id": "uv",
+      "mode": "warm_cache",
+      "metric": "community_summary_us",
+      "max_relative_increase": 0.2
+    },
+    {
+      "case_id": "nestjs",
+      "mode": "community_only",
+      "metric": "community_adjacency_us",
+      "max_relative_increase": 0.2
+    },
+    {
+      "case_id": "nestjs",
+      "mode": "community_only",
+      "metric": "community_movement_us",
+      "max_relative_increase": 0.2
+    },
+    {
+      "case_id": "nestjs",
+      "mode": "community_only",
+      "metric": "community_summary_us",
+      "max_relative_increase": 0.2
+    },
+    {
+      "case_id": "uv",
+      "mode": "community_only",
+      "metric": "community_adjacency_us",
+      "max_relative_increase": 0.2
+    },
+    {
+      "case_id": "uv",
+      "mode": "community_only",
+      "metric": "community_movement_us",
+      "max_relative_increase": 0.2
+    },
+    {
+      "case_id": "uv",
+      "mode": "community_only",
+      "metric": "community_summary_us",
+      "max_relative_increase": 0.2
+    }
+  ]
+}

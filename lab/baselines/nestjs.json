@@ -1,0 +1,25 @@
+{
+  "schema_version": 2,
+  "case_id": "nestjs",
+  "source_revision": "d8a0ab829ddd8291b75109c9ac4fc4c7d070fc9e",
+  "graph_hash": "2c09e5238197392376f47e4204a7fb5da3cc83767bbf9b61c1a4ef4775113afd",
+  "stage_hashes": {
+    "analytics": "acf98210b08621e4b8fc326f0cb356bdc91a67543cb08ce9a4a945c0b8b30bcd",
+    "definitions_and_imports": "0a9f57dad25b6047e2bb95fbb5401d4576e5c9ffc9a24cbb361e2064b9dcd528",
+    "enrichment": "c1830d201f737d7e16d7b0fb009d7bbc4f5f10c17e2fd48d07d159e2da93cd9f",
+    "finalize": "acf98210b08621e4b8fc326f0cb356bdc91a67543cb08ce9a4a945c0b8b30bcd",
+    "persistence": "acf98210b08621e4b8fc326f0cb356bdc91a67543cb08ce9a4a945c0b8b30bcd",
+    "resolution": "acf98210b08621e4b8fc326f0cb356bdc91a67543cb08ce9a4a945c0b8b30bcd",
+    "structure": "041ddf70f8f4203d4e3df72c226fe0760ed42e86ed662d17c59faa9d1a8d18c9"
+  },
+  "assertions": {
+    "graph-valid": true,
+    "nest-application-contained": true,
+    "nest-application-typescript": true,
+    "nest-negative-clone": true,
+    "nest-no-phantom-application": true
+  },
+  "reason": "Reviewed final LIT-32 normalized clone candidate pairs on NestJS",
+  "previous_graph_hash": "1367fcc05ad2bd2ba7cf96ee17f015c83c8371df8a1b708254f3d23e02986db4",
+  "previous_reason": "Reviewed LIT-33 NestJS truth pack and clone pruning trace"
+}
