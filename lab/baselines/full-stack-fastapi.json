@@ -1,0 +1,26 @@
+{
+  "schema_version": 2,
+  "case_id": "full-stack-fastapi",
+  "source_revision": "1b8b78415f0b2397bbd10b73caaf44c01299b969",
+  "graph_hash": "ed461db8df6f3a5b95ddbacf3707ff0be75608a9edd9b0746ea424a74ceab40c",
+  "stage_hashes": {
+    "analytics": "66eddcebec963c1243742b5b480824d2aa78be73a2e74869df302bb8699eed13",
+    "definitions_and_imports": "2efac49388e07d0bd9d1a869229d0ec3ca16bed10685409e1b871933d64996e2",
+    "enrichment": "a93b2bcf24ec75308f958915ddece4afb55a1706348e37ec12a819fd0c4e9ddf",
+    "finalize": "66eddcebec963c1243742b5b480824d2aa78be73a2e74869df302bb8699eed13",
+    "persistence": "66eddcebec963c1243742b5b480824d2aa78be73a2e74869df302bb8699eed13",
+    "resolution": "66eddcebec963c1243742b5b480824d2aa78be73a2e74869df302bb8699eed13",
+    "structure": "65b16cf3c2062628b6a7a5cbe9d21449322871dc1ecee52fe1849f760db8593f"
+  },
+  "assertions": {
+    "backend-main-contains-id-generator": true,
+    "backend-main-no-phantom": true,
+    "backend-python": true,
+    "frontend-typescript": true,
+    "graph-valid": true,
+    "template-negative-clone": true
+  },
+  "reason": "Reviewed LIT-33 Full Stack FastAPI truth pack",
+  "previous_graph_hash": "ed461db8df6f3a5b95ddbacf3707ff0be75608a9edd9b0746ea424a74ceab40c",
+  "previous_reason": "Pinned Full Stack FastAPI 0.6.0 corpus baseline; exact graph-valid failure tracked by LIT-29 until 2026-08-13"
+}

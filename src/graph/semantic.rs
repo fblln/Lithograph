@@ -153,7 +153,7 @@ pub fn filter_classes(graph: &Graph, query: &str) -> Vec<SemanticClassMatch> {
                 .count() as f64;
             let taxonomy = role_tokens(query)
                 .iter()
-                .filter(|token| haystack.contains(**token))
+                .filter(|token| haystack.contains(token.as_str()))
                 .count() as f64;
             let graph_proximity =
                 (profile.imports.len() + profile.calls.len() + profile.packages.len()) as f64
@@ -218,18 +218,27 @@ fn profile_text(profile: &SemanticClassProfile) -> String {
         profile.calls.join(" ")
     )
 }
-fn role_tokens(query: &str) -> &'static [&'static str] {
-    if query.contains("payment") {
-        &["payment", "service", "charge"]
-    } else if query.contains("controller") {
-        &["controller", "route", "handler"]
-    } else if query.contains("persistence") {
-        &["repository", "adapter", "store", "database"]
-    } else if query.contains("test") {
-        &["test", "fixture", "mock", "util"]
-    } else {
-        &[]
+fn role_tokens(query: &str) -> Vec<String> {
+    let query = query.to_ascii_lowercase();
+    let mut tokens = Vec::new();
+    if query.contains("controller") {
+        tokens.extend(["controller", "route", "handler"]);
     }
+    if query.contains("persistence") {
+        tokens.extend(["repository", "adapter", "store", "database"]);
+    }
+    if query.contains("test") {
+        tokens.extend(["test", "fixture", "mock", "util"]);
+    }
+    if query.contains("payment") {
+        tokens.push("payment");
+        if tokens.len() == 1 {
+            tokens.extend(["service", "charge"]);
+        }
+    }
+    tokens.sort_unstable();
+    tokens.dedup();
+    tokens.into_iter().map(str::to_owned).collect()
 }
 
 #[cfg(test)]

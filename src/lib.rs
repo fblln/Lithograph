@@ -19,6 +19,7 @@ pub mod graph;
 pub mod graph_docs;
 pub mod inventory;
 pub mod knowledge_agent;
+pub mod lab;
 pub mod manifest;
 pub mod mcp;
 pub mod mcp_targets;

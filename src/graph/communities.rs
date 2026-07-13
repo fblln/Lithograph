@@ -4,9 +4,10 @@ use crate::graph::{Graph, GraphNode, GraphNodeId, RelationKind};
 use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Instant;
 
 /// Version of the deterministic local-moving Leiden phase implemented here.
-pub const LEIDEN_ALGORITHM_VERSION: u32 = 1;
+pub const LEIDEN_ALGORITHM_VERSION: u32 = 3;
 
 /// Edge scope used while detecting communities.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,6 +18,47 @@ pub enum CommunityScope {
     RelationKinds(Vec<RelationKind>),
     /// Consider relation kinds with explicit positive integer weights.
     WeightedRelationKinds(BTreeMap<RelationKind, u32>),
+}
+
+/// Deterministic work counters plus non-canonical phase timings.
+///
+/// Counts can be compared across machines. Durations are deliberately kept
+/// outside [`CommunitySummary`] so correctness hashes never depend on a clock.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommunityDiagnostics {
+    /// Nodes incident to at least one selected relation.
+    pub participating_nodes: u64,
+    /// Relations admitted by the selected scope.
+    pub selected_edges: u64,
+    /// Deterministic movement work expressed as bounded active-queue sweeps.
+    pub iterations: u64,
+    /// Number of active nodes whose candidate labels were evaluated.
+    pub nodes_reconsidered: u64,
+    /// Number of strictly beneficial label changes.
+    pub successful_moves: u64,
+    /// Weighted neighbour-label observations made by movement.
+    pub neighbour_label_evaluations: u64,
+    /// Selected relations visited while constructing summaries.
+    pub summary_edge_visits: u64,
+    /// Whether the deterministic movement safety bound was reached.
+    pub safety_bound_reached: bool,
+    /// Wall-clock adjacency construction time; excluded from correctness data.
+    pub adjacency_us: u64,
+    /// Wall-clock local-movement time; excluded from correctness data.
+    pub movement_us: u64,
+    /// Wall-clock summary construction time; excluded from correctness data.
+    pub summary_us: u64,
+}
+
+/// Community result with diagnostics suitable for lab and health consumers.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CommunityAnalysis {
+    /// Stable community summaries.
+    pub communities: Vec<CommunitySummary>,
+    /// Phase-level work and timing observations.
+    pub diagnostics: CommunityDiagnostics,
+    /// Whether summaries came from an exact versioned cache entry.
+    pub cache_hit: bool,
 }
 
 /// Scope preset that keeps code, configuration, and environment neighborhoods
@@ -85,7 +127,10 @@ impl CommunitySnapshotStore {
     pub fn save(&self, snapshot: &CommunitySnapshot) -> std::io::Result<bool> {
         let payload = serde_json::to_string(snapshot).map_err(std::io::Error::other)?;
         let path = self.path(snapshot);
-        if JsonStore.read::<String>(&path)?.as_deref() == Some(payload.as_str()) {
+        if matches!(
+            JsonStore.read::<String>(&path),
+            Ok(Some(existing)) if existing == payload
+        ) {
             return Ok(false);
         }
         JsonStore.write(&path, &payload)?;
@@ -94,18 +139,43 @@ impl CommunitySnapshotStore {
 
     /// Loads the exact persisted snapshot when present.
     pub fn load(&self, snapshot: &CommunitySnapshot) -> std::io::Result<Option<CommunitySnapshot>> {
-        let Some(payload): Option<String> = JsonStore.read(&self.path(snapshot))? else {
+        self.load_exact(&snapshot.graph_snapshot_id, &snapshot.scope)
+    }
+
+    /// Loads an exact graph/scope/version entry. Invalid payloads are treated
+    /// as misses so callers can safely recompute and replace them.
+    pub fn load_exact(
+        &self,
+        graph_snapshot_id: &str,
+        scope: &CommunityScope,
+    ) -> std::io::Result<Option<CommunitySnapshot>> {
+        let expected_scope = normalized_scope(scope);
+        let path = self.path_for(graph_snapshot_id, &expected_scope);
+        let Some(payload): Option<String> = JsonStore.read(&path).ok().flatten() else {
             return Ok(None);
         };
-        serde_json::from_str(&payload)
-            .map(Some)
-            .map_err(std::io::Error::other)
+        let Ok(snapshot) = serde_json::from_str::<CommunitySnapshot>(&payload) else {
+            return Ok(None);
+        };
+        if snapshot.graph_snapshot_id != graph_snapshot_id
+            || snapshot.algorithm_version != LEIDEN_ALGORITHM_VERSION
+            || normalized_scope(&snapshot.scope) != expected_scope
+        {
+            return Ok(None);
+        }
+        Ok(Some(snapshot))
     }
 
     fn path(&self, snapshot: &CommunitySnapshot) -> std::path::PathBuf {
+        self.path_for(&snapshot.graph_snapshot_id, &snapshot.scope)
+    }
+
+    fn path_for(&self, graph_snapshot_id: &str, scope: &CommunityScope) -> std::path::PathBuf {
         let key = format!(
             "{}:{}:{:?}",
-            snapshot.graph_snapshot_id, snapshot.algorithm_version, snapshot.scope
+            graph_snapshot_id,
+            LEIDEN_ALGORITHM_VERSION,
+            normalized_scope(scope)
         );
         self.root
             .join(format!("{}.json", blake3::hash(key.as_bytes()).to_hex()))
@@ -255,91 +325,164 @@ pub fn label_topic_snapshot(
 /// visit in sorted-id order and ties select the smallest label, eliminating
 /// random ordering from the usual Leiden implementation.
 pub fn leiden_communities(graph: &Graph, scope: &CommunityScope) -> Vec<CommunitySummary> {
-    let mut adjacency = BTreeMap::<GraphNodeId, BTreeSet<GraphNodeId>>::new();
+    leiden_communities_with_diagnostics(graph, scope).communities
+}
+
+/// Shared cache-aware entry point for lab, health, and query consumers.
+pub fn analyze_communities(
+    graph: &Graph,
+    scope: &CommunityScope,
+    store: Option<&CommunitySnapshotStore>,
+) -> std::io::Result<CommunityAnalysis> {
+    let normalized_scope = normalized_scope(scope);
+    let graph_payload = graph.to_json().map_err(std::io::Error::other)?;
+    let graph_snapshot_id = blake3::hash(graph_payload.as_bytes()).to_hex().to_string();
+    if let Some(snapshot) = store.and_then(|store| {
+        store
+            .load_exact(&graph_snapshot_id, &normalized_scope)
+            .ok()
+            .flatten()
+    }) {
+        return Ok(CommunityAnalysis {
+            communities: snapshot.communities,
+            diagnostics: CommunityDiagnostics::default(),
+            cache_hit: true,
+        });
+    }
+    let analysis = leiden_communities_with_diagnostics(graph, &normalized_scope);
+    if let Some(store) = store {
+        store.save(&CommunitySnapshot {
+            graph_snapshot_id,
+            algorithm_version: LEIDEN_ALGORITHM_VERSION,
+            scope: normalized_scope,
+            communities: analysis.communities.clone(),
+        })?;
+    }
+    Ok(analysis)
+}
+
+/// Detects communities and reports deterministic work plus per-phase timings.
+pub fn leiden_communities_with_diagnostics(
+    graph: &Graph,
+    scope: &CommunityScope,
+) -> CommunityAnalysis {
+    let adjacency_start = Instant::now();
     let selected: Vec<_> = graph
         .relations
         .iter()
         .filter(|edge| in_scope(edge.kind, scope))
         .collect();
-    let mut edge_weights = BTreeMap::<(GraphNodeId, GraphNodeId), u32>::new();
-    for edge in &selected {
-        adjacency
-            .entry(edge.source.clone())
-            .or_default()
-            .insert(edge.target.clone());
-        adjacency
-            .entry(edge.target.clone())
-            .or_default()
-            .insert(edge.source.clone());
-        let weight = relation_weight(edge.kind, scope);
-        *edge_weights
-            .entry((edge.source.clone(), edge.target.clone()))
-            .or_default() += weight;
-        *edge_weights
-            .entry((edge.target.clone(), edge.source.clone()))
-            .or_default() += weight;
-    }
-    let mut labels: BTreeMap<_, _> = adjacency
-        .keys()
-        .cloned()
-        .map(|id| (id.clone(), id))
+    let node_ids: Vec<_> = selected
+        .iter()
+        .flat_map(|edge| [edge.source.clone(), edge.target.clone()])
+        .collect::<BTreeSet<_>>()
+        .into_iter()
         .collect();
-    let total_degree = adjacency
+    let node_indices: BTreeMap<_, _> = node_ids
         .iter()
-        .map(|(node, neighbors)| {
-            neighbors
-                .iter()
-                .map(|neighbor| edge_weights[&(node.clone(), neighbor.clone())])
-                .sum::<u32>()
-        })
-        .sum::<u32>() as f64;
-    let mut volumes: BTreeMap<_, u32> = adjacency
+        .cloned()
+        .enumerate()
+        .map(|(index, id)| (id, index))
+        .collect();
+    let indexed_edges: Vec<_> = selected
         .iter()
-        .map(|(node, neighbors)| {
+        .map(|edge| {
             (
-                node.clone(),
-                neighbors
-                    .iter()
-                    .map(|neighbor| edge_weights[&(node.clone(), neighbor.clone())])
-                    .sum(),
+                node_indices[&edge.source],
+                node_indices[&edge.target],
+                *edge,
             )
         })
         .collect();
-    for _ in 0..adjacency.len().max(1) {
-        let mut moved = false;
-        for node in adjacency.keys() {
-            let degree: u32 = adjacency[node]
-                .iter()
-                .map(|neighbor| edge_weights[&(node.clone(), neighbor.clone())])
-                .sum();
-            let current = labels[node].clone();
-            *volumes.entry(current.clone()).or_default() -= degree;
-            let mut counts = BTreeMap::<GraphNodeId, u32>::new();
-            for neighbor in &adjacency[node] {
-                *counts.entry(labels[neighbor].clone()).or_default() +=
-                    edge_weights[&(node.clone(), neighbor.clone())];
-            }
-            let next = counts
-                .into_iter()
-                .max_by(|a, b| {
-                    let gain_a = a.1 as f64 - degree as f64 * volumes[&a.0] as f64 / total_degree;
-                    let gain_b = b.1 as f64 - degree as f64 * volumes[&b.0] as f64 / total_degree;
-                    gain_a.total_cmp(&gain_b).then_with(|| b.0.cmp(&a.0))
-                })
-                .map_or(current.clone(), |(label, _)| label);
-            if current != next {
-                labels.insert(node.clone(), next);
-                moved = true;
-            }
-            *volumes.entry(labels[node].clone()).or_default() += degree;
-        }
-        if !moved {
+
+    // Ordered maps are used only while aggregating parallel relations. The hot
+    // movement loop below operates exclusively on compact sorted vectors.
+    let mut adjacency_maps = vec![BTreeMap::<usize, u64>::new(); node_ids.len()];
+    for (source, target, edge) in &indexed_edges {
+        let weight = u64::from(relation_weight(edge.kind, scope));
+        *adjacency_maps[*source].entry(*target).or_default() += weight;
+        *adjacency_maps[*target].entry(*source).or_default() += weight;
+    }
+    let adjacency: Vec<Vec<(usize, u64)>> = adjacency_maps
+        .into_iter()
+        .map(|neighbors| neighbors.into_iter().collect())
+        .collect();
+    let degrees: Vec<u64> = adjacency
+        .iter()
+        .map(|neighbors| neighbors.iter().map(|(_, weight)| *weight).sum())
+        .collect();
+    let total_degree: u64 = degrees.iter().sum();
+    let adjacency_us = micros(adjacency_start.elapsed());
+
+    let movement_start = Instant::now();
+    let mut labels: Vec<usize> = (0..node_ids.len()).collect();
+    let mut volumes = degrees.clone();
+    let mut active: BTreeSet<usize> = (0..node_ids.len()).collect();
+    let mut label_weights = vec![0u64; node_ids.len()];
+    let mut touched = Vec::<usize>::new();
+    let mut nodes_reconsidered = 0u64;
+    let mut successful_moves = 0u64;
+    let mut neighbour_label_evaluations = 0u64;
+    let safety_bound = node_ids
+        .len()
+        .max(1)
+        .saturating_mul(indexed_edges.len().max(node_ids.len()).max(1));
+    while let Some(node) = active.pop_first() {
+        if nodes_reconsidered as usize >= safety_bound {
             break;
         }
+        nodes_reconsidered += 1;
+        let degree = degrees[node];
+        let current = labels[node];
+        volumes[current] = volumes[current].saturating_sub(degree);
+        for (neighbor, weight) in &adjacency[node] {
+            let label = labels[*neighbor];
+            if label_weights[label] == 0 {
+                touched.push(label);
+            }
+            label_weights[label] += *weight;
+            neighbour_label_evaluations += 1;
+        }
+        if label_weights[current] == 0 {
+            touched.push(current);
+        }
+        let score = |label: usize, internal_weight: u64| -> i128 {
+            i128::from(internal_weight) * i128::from(total_degree)
+                - i128::from(degree) * i128::from(volumes[label])
+        };
+        let staying_score = score(current, label_weights[current]);
+        let mut next = current;
+        let mut next_score = staying_score;
+        for label in touched.iter().copied() {
+            let candidate_score = score(label, label_weights[label]);
+            if is_better_candidate(label, candidate_score, next, next_score, staying_score) {
+                next = label;
+                next_score = candidate_score;
+            }
+        }
+        for label in touched.drain(..) {
+            label_weights[label] = 0;
+        }
+        if next != current && next_score > staying_score {
+            labels[node] = next;
+            successful_moves += 1;
+            for (neighbor, _) in &adjacency[node] {
+                active.insert(*neighbor);
+            }
+        }
+        volumes[labels[node]] += degree;
     }
-    let mut groups = BTreeMap::<GraphNodeId, BTreeSet<GraphNodeId>>::new();
-    for (node, label) in labels {
-        groups.entry(label).or_default().insert(node);
+    let safety_bound_reached = !active.is_empty();
+    let iterations = nodes_reconsidered
+        .saturating_add(node_ids.len().saturating_sub(1) as u64)
+        .checked_div(node_ids.len().max(1) as u64)
+        .unwrap_or(0);
+    let movement_us = micros(movement_start.elapsed());
+
+    let summary_start = Instant::now();
+    let mut groups = vec![Vec::<usize>::new(); node_ids.len()];
+    for (node, label) in labels.iter().copied().enumerate() {
+        groups[label].push(node);
     }
     let node_packages: BTreeMap<_, _> = graph
         .nodes
@@ -349,63 +492,120 @@ pub fn leiden_communities(graph: &Graph, scope: &CommunityScope) -> Vec<Communit
             _ => None,
         })
         .collect();
+    let retained: Vec<bool> = groups.iter().map(|members| members.len() >= 2).collect();
+    let mut intra_counts = vec![0usize; node_ids.len()];
+    let mut internal_degrees = vec![0usize; node_ids.len()];
+    let mut boundaries = vec![Vec::<String>::new(); node_ids.len()];
+    let mut bridges = vec![BTreeSet::<usize>::new(); node_ids.len()];
+    for (source, target, edge) in &indexed_edges {
+        let source_group = labels[*source];
+        let target_group = labels[*target];
+        if source_group == target_group {
+            if retained[source_group] {
+                intra_counts[source_group] += 1;
+                internal_degrees[*source] += 1;
+                internal_degrees[*target] += 1;
+            }
+        } else {
+            if retained[source_group] {
+                boundaries[source_group].push(edge.id.clone());
+                bridges[source_group].insert(*source);
+            }
+            if retained[target_group] {
+                boundaries[target_group].push(edge.id.clone());
+                bridges[target_group].insert(*target);
+            }
+        }
+    }
     let mut summaries: Vec<_> = groups
-        .into_values()
-        .filter(|group| group.len() >= 2)
-        .map(|members| {
-            let intra: Vec<_> = selected
-                .iter()
-                .filter(|edge| members.contains(&edge.source) && members.contains(&edge.target))
-                .collect();
-            let boundary: Vec<_> = selected
-                .iter()
-                .filter(|edge| members.contains(&edge.source) != members.contains(&edge.target))
-                .collect();
-            let mut internal_degree = BTreeMap::<GraphNodeId, usize>::new();
-            let mut bridges = BTreeSet::new();
-            for edge in &intra {
-                *internal_degree.entry(edge.source.clone()).or_default() += 1;
-                *internal_degree.entry(edge.target.clone()).or_default() += 1;
-            }
-            for edge in &boundary {
-                if members.contains(&edge.source) {
-                    bridges.insert(edge.source.clone());
-                }
-                if members.contains(&edge.target) {
-                    bridges.insert(edge.target.clone());
-                }
-            }
-            let mut representatives: Vec<_> = members.iter().cloned().collect();
-            representatives
-                .sort_by(|a, b| internal_degree[b].cmp(&internal_degree[a]).then(a.cmp(b)));
+        .into_iter()
+        .enumerate()
+        .filter(|(_, group)| group.len() >= 2)
+        .map(|(label, members)| {
+            let mut representatives = members.clone();
+            representatives.sort_by(|a, b| {
+                internal_degrees[*b]
+                    .cmp(&internal_degrees[*a])
+                    .then(node_ids[*a].cmp(&node_ids[*b]))
+            });
             // The preceding filter guarantees a non-empty set; retaining a
             // total fallback keeps the analytics path non-panicking if this
             // helper is ever reused with a different caller.
             let first = members
-                .iter()
-                .next()
-                .map(ToString::to_string)
+                .first()
+                .map(|index| node_ids[*index].to_string())
                 .unwrap_or_default();
             let n = members.len() as f64;
             CommunitySummary {
                 id: format!("leiden:{first}"),
                 label: format!("Community {first}"),
-                members: members.iter().cloned().collect(),
-                cohesion: (intra.len() as f64 / (n * (n - 1.0) / 2.0)).min(1.0),
-                conductance: boundary.len() as f64
-                    / (2.0 * intra.len() as f64 + boundary.len() as f64).max(1.0),
-                boundary_edges: boundary.iter().map(|edge| edge.id.clone()).collect(),
-                representative_nodes: representatives.into_iter().take(5).collect(),
+                members: members
+                    .iter()
+                    .map(|index| node_ids[*index].clone())
+                    .collect(),
+                cohesion: stable_ratio(intra_counts[label] as f64, n * (n - 1.0) / 2.0).min(1.0),
+                conductance: stable_ratio(
+                    boundaries[label].len() as f64,
+                    (2.0 * intra_counts[label] as f64 + boundaries[label].len() as f64).max(1.0),
+                ),
+                boundary_edges: std::mem::take(&mut boundaries[label]),
+                representative_nodes: representatives
+                    .into_iter()
+                    .take(5)
+                    .map(|index| node_ids[index].clone())
+                    .collect(),
                 dominant_packages: members
                     .iter()
-                    .filter_map(|id| node_packages.get(id).cloned())
+                    .filter_map(|index| node_packages.get(&node_ids[*index]).cloned())
                     .collect(),
-                bridge_nodes: bridges.into_iter().collect(),
+                bridge_nodes: std::mem::take(&mut bridges[label])
+                    .into_iter()
+                    .map(|index| node_ids[index].clone())
+                    .collect(),
             }
         })
         .collect();
     summaries.sort_by(|a, b| b.members.len().cmp(&a.members.len()).then(a.id.cmp(&b.id)));
-    summaries
+    let summary_us = micros(summary_start.elapsed());
+    CommunityAnalysis {
+        communities: summaries,
+        diagnostics: CommunityDiagnostics {
+            participating_nodes: node_ids.len() as u64,
+            selected_edges: selected.len() as u64,
+            iterations,
+            nodes_reconsidered,
+            successful_moves,
+            neighbour_label_evaluations,
+            summary_edge_visits: selected.len() as u64,
+            safety_bound_reached,
+            adjacency_us,
+            movement_us,
+            summary_us,
+        },
+        cache_hit: false,
+    }
+}
+
+fn micros(duration: std::time::Duration) -> u64 {
+    u64::try_from(duration.as_micros()).unwrap_or(u64::MAX)
+}
+
+fn stable_ratio(numerator: f64, denominator: f64) -> f64 {
+    const SCALE: f64 = 1_000_000_000_000.0;
+    ((numerator / denominator.max(1.0)) * SCALE).round() / SCALE
+}
+
+fn is_better_candidate(
+    candidate_label: usize,
+    candidate_score: i128,
+    best_label: usize,
+    best_score: i128,
+    staying_score: i128,
+) -> bool {
+    candidate_score > best_score
+        || (candidate_score == best_score
+            && candidate_label < best_label
+            && candidate_score > staying_score)
 }
 
 fn in_scope(kind: RelationKind, scope: &CommunityScope) -> bool {
@@ -417,6 +617,24 @@ fn relation_weight(kind: RelationKind, scope: &CommunityScope) -> u32 {
         CommunityScope::Combined => 1,
         CommunityScope::RelationKinds(kinds) => u32::from(kinds.contains(&kind)),
         CommunityScope::WeightedRelationKinds(weights) => weights.get(&kind).copied().unwrap_or(0),
+    }
+}
+
+fn normalized_scope(scope: &CommunityScope) -> CommunityScope {
+    match scope {
+        CommunityScope::Combined => CommunityScope::Combined,
+        CommunityScope::RelationKinds(kinds) => {
+            let mut kinds = kinds.clone();
+            kinds.sort();
+            kinds.dedup();
+            CommunityScope::RelationKinds(kinds)
+        }
+        CommunityScope::WeightedRelationKinds(weights) => CommunityScope::WeightedRelationKinds(
+            weights
+                .iter()
+                .filter_map(|(kind, weight)| (*weight > 0).then_some((*kind, *weight)))
+                .collect(),
+        ),
     }
 }
 
@@ -601,6 +819,107 @@ mod tests {
         assert!(store.save(&snapshot)?);
         assert!(!store.save(&snapshot)?);
         assert_eq!(store.load(&snapshot)?, Some(snapshot));
+        Ok(())
+    }
+
+    #[test]
+    fn diagnostics_count_active_movement_and_one_summary_edge_visit() {
+        let mut relations = Vec::new();
+        for index in 0..64 {
+            relations.push(edge(
+                &format!("edge-{index}"),
+                &format!("left-{index:03}"),
+                &format!("right-{index:03}"),
+                RelationKind::Calls,
+            ));
+        }
+        let analysis = leiden_communities_with_diagnostics(
+            &Graph {
+                nodes: vec![],
+                relations,
+            },
+            &CommunityScope::Combined,
+        );
+        assert_eq!(analysis.diagnostics.participating_nodes, 128);
+        assert_eq!(analysis.diagnostics.selected_edges, 64);
+        assert_eq!(analysis.diagnostics.summary_edge_visits, 64);
+        assert!(analysis.diagnostics.nodes_reconsidered >= 128);
+        assert!(analysis.diagnostics.neighbour_label_evaluations >= 128);
+        assert!(!analysis.diagnostics.safety_bound_reached);
+        assert_eq!(analysis.communities.len(), 64);
+    }
+
+    #[test]
+    fn movement_requires_strict_gain_and_converges_deterministically() {
+        let graph = Graph {
+            nodes: vec![],
+            relations: vec![
+                edge("aa", "a", "a", RelationKind::Calls),
+                edge("bc", "b", "c", RelationKind::Calls),
+                edge("bd", "b", "d", RelationKind::Calls),
+                edge("cd", "c", "d", RelationKind::Calls),
+            ],
+        };
+        let first = leiden_communities_with_diagnostics(&graph, &CommunityScope::Combined);
+        let second = leiden_communities_with_diagnostics(&graph, &CommunityScope::Combined);
+        assert_eq!(first.communities, second.communities);
+        assert_eq!(first.diagnostics.successful_moves, 2);
+        assert!(!first.diagnostics.safety_bound_reached);
+        assert!(first.communities.iter().any(|community| {
+            community.members
+                == vec![
+                    GraphNodeId::new("b"),
+                    GraphNodeId::new("c"),
+                    GraphNodeId::new("d"),
+                ]
+        }));
+    }
+
+    #[test]
+    fn movement_ties_choose_the_smallest_stable_label_only_above_staying() {
+        assert!(is_better_candidate(2, 11, 3, 11, 10));
+        assert!(!is_better_candidate(3, 11, 2, 11, 10));
+        assert!(!is_better_candidate(2, 10, 3, 10, 10));
+        assert!(!is_better_candidate(2, 9, 3, 10, 8));
+    }
+
+    #[test]
+    fn cache_identity_normalizes_scope_and_recovers_from_invalid_entries()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let graph = Graph {
+            nodes: vec![],
+            relations: vec![edge("ab", "a", "b", RelationKind::Calls)],
+        };
+        let temp = tempfile::TempDir::new()?;
+        let store = CommunitySnapshotStore::new(temp.path());
+        let reordered_scope =
+            CommunityScope::RelationKinds(vec![RelationKind::Calls, RelationKind::Calls]);
+        let first = analyze_communities(&graph, &reordered_scope, Some(&store))?;
+        assert!(!first.cache_hit);
+        let normalized_scope = CommunityScope::RelationKinds(vec![RelationKind::Calls]);
+        let second = analyze_communities(&graph, &normalized_scope, Some(&store))?;
+        assert!(second.cache_hit);
+        assert_eq!(first.communities, second.communities);
+        assert_eq!(second.diagnostics.nodes_reconsidered, 0);
+
+        let graph_id = blake3::hash(graph.to_json()?.as_bytes())
+            .to_hex()
+            .to_string();
+        let stale = CommunitySnapshot {
+            graph_snapshot_id: graph_id,
+            algorithm_version: LEIDEN_ALGORITHM_VERSION - 1,
+            scope: normalized_scope.clone(),
+            communities: Vec::new(),
+        };
+        assert!(store.save(&stale)?);
+        let recovered = analyze_communities(&graph, &normalized_scope, Some(&store))?;
+        assert!(!recovered.cache_hit);
+        assert_eq!(recovered.communities, first.communities);
+
+        std::fs::write(store.path(&stale), "not-json")?;
+        let recovered = analyze_communities(&graph, &normalized_scope, Some(&store))?;
+        assert!(!recovered.cache_hit);
+        assert_eq!(recovered.communities, first.communities);
         Ok(())
     }
 }

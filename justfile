@@ -54,6 +54,33 @@ coverage:
 # Run formatting, lint/static analysis, and tests.
 check-all: fmt-check lint test
 
+# Fetch and verify immutable external corpus repositories. Network is used only here.
+baseline-fetch suite="merge":
+    @{{cargo_env}} '{{cargo}}' run --quiet --bin lithograph-lab -- corpus fetch --suite '{{suite}}'
+
+# Run the hermetic, offline correctness baseline required on every pull request.
+baseline-pr:
+    @{{cargo_env}} '{{cargo}}' run --quiet --bin lithograph-lab -- check --suite pr
+
+# Run the offline fixture plus pinned medium-repository correctness baselines.
+baseline-merge:
+    @{{cargo_env}} '{{cargo}}' run --quiet --bin lithograph-lab -- check --suite merge
+
+# Run the full correctness corpus and five-sample machine-specific performance report.
+baseline-nightly:
+    @{{cargo_env}} '{{cargo}}' run --quiet --bin lithograph-lab -- check --suite nightly
+    @{{cargo_env}} '{{cargo}}' run --quiet --bin lithograph-lab -- benchmark --suite nightly --samples 5 --mode warm-cache --gate
+    @just baseline-community-nightly
+
+# Benchmark only community phases from verified persisted NestJS and uv graphs.
+baseline-community-nightly:
+    @{{cargo_env}} '{{cargo}}' run --quiet --bin lithograph-lab -- benchmark --suite nightly --case nestjs --samples 5 --mode community-only --gate
+    @{{cargo_env}} '{{cargo}}' run --quiet --bin lithograph-lab -- benchmark --suite nightly --case uv --samples 5 --mode community-only --gate
+
+# Replay one content-addressed diagnostic run.
+baseline-replay run:
+    @{{cargo_env}} '{{cargo}}' run --quiet --bin lithograph-lab -- replay '{{run}}'
+
 # Run the CLI help output.
 run:
     @{{cargo_env}} '{{cargo}}' run -- --help

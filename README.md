@@ -347,6 +347,7 @@ just test
 just unit-test
 just integration-test
 just check-all
+just baseline-pr
 ```
 
 `just check-all` is the default pre-handoff validation path. It runs
@@ -356,6 +357,19 @@ formatting checks, clippy with warnings denied, and the complete test suite
 ```sh
 just check-all
 ```
+
+The deterministic baseline lab adds deep graph, clustering, clone,
+classification, semantic-ranking, metamorphic, differential, and incremental
+regression coverage. `just baseline-pr` is hermetic and offline. Fetch pinned
+external repositories explicitly before the broader suites:
+
+```sh
+just baseline-fetch merge
+just baseline-merge
+```
+
+See [the baseline lab guide](docs/dev/baseline-lab.md) for run inspection,
+agent/MCP tools, replay, baseline governance, and nightly performance reports.
 
 Coverage is intentionally separate because it requires `cargo-llvm-cov`:
 
@@ -394,6 +408,8 @@ just coverage
 - `src/golden.rs`, `src/quality.rs`, `src/mermaid.rs`: validation and
   regression tools.
 - `fixtures/polyglot/`: representative fixture repository used by tests.
+- `fixtures/diagnostic/`, `lab/`: authored baseline truth, pinned corpus
+  configuration, curated expectations, and accepted summaries.
 - `tests/`: integration and snapshot coverage.
 - `docs/dev/`: design notes — parser spike decisions, prompt/context
   versioning, type-aware resolution, LadybugDB schema and operations, plus

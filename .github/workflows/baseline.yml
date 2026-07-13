@@ -1,0 +1,48 @@
+name: Baseline validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  pr-correctness:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: extractions/setup-just@v3
+      - run: just check-all
+      - run: just baseline-pr
+
+  merge-correctness:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: extractions/setup-just@v3
+      - uses: actions/cache@v4
+        with:
+          path: .lithograph-lab/corpus
+          key: lithograph-corpus-${{ hashFiles('lab/corpus.toml') }}
+      - run: just baseline-fetch merge
+      - run: just baseline-merge
+
+  nightly-performance:
+    if: github.event_name == 'schedule'
+    runs-on: [self-hosted, lithograph-benchmark]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: extractions/setup-just@v3
+      - run: just baseline-fetch nightly
+      - run: just baseline-nightly
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lithograph-performance
+          path: .lithograph-lab/performance/*.json

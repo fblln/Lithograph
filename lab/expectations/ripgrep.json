@@ -1,0 +1,11 @@
+{
+  "schema_version": 2,
+  "expectations": [
+    { "kind": "graph_valid", "id": "graph-valid" },
+    { "kind": "artifact", "id": "ripgrep-core-rust", "path": "crates/core/main.rs", "category": "SourceCode", "format": "rust" },
+    { "kind": "relation", "id": "ripgrep-main-contained", "source_contains": "artifact:crates/core/main.rs", "target_contains": "crates/core/main.rs#::main", "relation": "Contains", "present": true },
+    { "kind": "relation", "id": "ripgrep-no-phantom-main", "source_contains": "artifact:crates/core/main.rs", "target_contains": "definitely_missing_main", "relation": "Contains", "present": false },
+    { "kind": "clone_pair", "id": "ripgrep-negative-clone", "left_contains": "#::main", "right_contains": "#::print_stats", "similar": false }
+  ],
+  "truth_pack": { "reviewer": "Lithograph maintainers", "provenance": "ripgrep 14.1.1 pinned source and reviewed LIT-33 corpus sample", "unlabeled": ["complete macro-expanded calls", "community ground truth", "semantic role ranking"] }
+}

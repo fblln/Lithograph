@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "algorithm_version": 3,
+  "default_scope": "combined",
+  "candidate_scope": "environment_aware_v1",
+  "status": "retain_default",
+  "decision": "Combined remains the production default. The weighted candidate is measured on every lab case, but cannot replace Combined without reviewed external truth and baseline acceptance.",
+  "required_evidence": [
+    "selected_edge_count",
+    "runtime",
+    "ari",
+    "nmi",
+    "must_link_cannot_link_accuracy",
+    "mean_cohesion",
+    "mean_conductance"
+  ]
+}

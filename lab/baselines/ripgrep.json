@@ -1,0 +1,25 @@
+{
+  "schema_version": 2,
+  "case_id": "ripgrep",
+  "source_revision": "4649aa9700619f94cf9c66876e9549d83420e16c",
+  "graph_hash": "658693ab52458b96653f75d25ecc401b6d34ec4d839e731aadb3cde42e59f186",
+  "stage_hashes": {
+    "analytics": "3cf2ce384ff27f4cf797e6516813a12a3e625e8aecaedcc2fd8f2bd18c1f752f",
+    "definitions_and_imports": "7b47eea86586466f18f8157c96ba4c5f5f88a132bb6d35d5d5666542a0075229",
+    "enrichment": "dbb52a5d9d6f60bbe9c87d2cc6d092af8334bdd09ca0ef5d63b7f0f0fd022696",
+    "finalize": "3cf2ce384ff27f4cf797e6516813a12a3e625e8aecaedcc2fd8f2bd18c1f752f",
+    "persistence": "3cf2ce384ff27f4cf797e6516813a12a3e625e8aecaedcc2fd8f2bd18c1f752f",
+    "resolution": "3cf2ce384ff27f4cf797e6516813a12a3e625e8aecaedcc2fd8f2bd18c1f752f",
+    "structure": "0102e2ede2a63900cf7ebb83cd9d5f294482b038788b3b06acb7862f00d9a41c"
+  },
+  "assertions": {
+    "graph-valid": true,
+    "ripgrep-core-rust": true,
+    "ripgrep-main-contained": true,
+    "ripgrep-negative-clone": true,
+    "ripgrep-no-phantom-main": true
+  },
+  "reason": "Reviewed LIT-33 ripgrep truth pack and cargo metadata differential",
+  "previous_graph_hash": "a190c0966c719ef4a64ceba54b19d9ea9c447d5815450906ae9fb499e5beb9f4",
+  "previous_reason": "Pinned ripgrep 14.1.1 corpus baseline"
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "expectations": [
+    { "kind": "graph_valid", "id": "graph-valid" },
+    { "kind": "artifact", "id": "uv-rust", "path": "crates/uv/src/lib.rs", "category": "SourceCode", "format": "rust" },
+    { "kind": "relation", "id": "uv-main-contained", "source_contains": "artifact:crates/uv/src/lib.rs", "target_contains": "crates/uv/src/lib.rs#::main", "relation": "Contains", "present": true },
+    { "kind": "relation", "id": "uv-no-phantom-main", "source_contains": "artifact:crates/uv/src/lib.rs", "target_contains": "definitely_missing_main", "relation": "Contains", "present": false },
+    { "kind": "clone_pair", "id": "uv-negative-clone", "left_contains": "#::main", "right_contains": "#::required_version_error", "similar": false }
+  ],
+  "truth_pack": { "reviewer": "Lithograph maintainers", "provenance": "uv 0.11.16 pinned source and reviewed LIT-33 corpus sample", "unlabeled": ["macro-expanded calls", "community ground truth", "semantic role ranking"] },
+  "known_failures": [
+    {
+      "assertion_id": "graph-valid",
+      "backlog": ["LIT-29", "LIT-31"],
+      "expires": "2026-08-13",
+      "issue_count": 2,
+      "signatures": [
+        { "contains": "of kind Calls targets package:tqdm", "count": 1 },
+        { "contains": "evidence for test/packages/built-by-uv/src/built_by_uv/build-only.h spans lines 4-5", "count": 1 }
+      ]
+    }
+  ]
+}

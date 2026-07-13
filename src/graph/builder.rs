@@ -23,12 +23,35 @@ use crate::graph::model::{
     EnvVarNode, Graph, GraphNode, GraphNodeId, ModuleLanguage, ModuleNode, PackageNode, Relation,
     RelationKind, RelationProvenance, RelationResolution, SymbolKind, SymbolNode, UnresolvedNode,
 };
-use crate::graph::{GRAPH_BUILD_PIPELINE_VERSION, GraphBuildOutput, GraphBuildPass};
+use crate::graph::{
+    GRAPH_BUILD_PIPELINE_VERSION, GraphBuildOutput, GraphBuildPass, GraphBuildTraceConfig,
+    GraphBuildTraceDetail, GraphDecisionTrace,
+};
 use crate::inventory::language::by_name as registry_language;
 use crate::resolve::{ConfigFact, EnvFact, FactRole, FactSourceKind};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
+use std::time::Instant;
+
+#[derive(Debug, Default)]
+struct CloneDiagnostics {
+    candidate_count: u64,
+    comparison_count: u64,
+    emitted_count: u64,
+    rejected_near_threshold_count: u64,
+    pruned_count: u64,
+    decisions: Vec<GraphDecisionTrace>,
+}
+
+#[derive(Debug)]
+struct CloneCandidate {
+    id: GraphNodeId,
+    evidence: EvidenceRef,
+    tokens: BTreeSet<String>,
+    language: String,
+    size_band: u32,
+}
 
 /// Builds a typed semantic graph from repository artifacts.
 #[derive(Debug, Clone, Copy, Default)]
@@ -69,6 +92,29 @@ impl GraphBuilder {
         artifacts: &[Artifact],
         cache: Option<&AnalysisCache>,
     ) -> GraphBuildOutput {
+        self.build_with_optional_trace(repo_root, artifacts, cache, None)
+    }
+
+    /// Builds the same graph as [`Self::build_with_report`] while retaining
+    /// deterministic, inspectable state after every pipeline pass.
+    pub fn build_with_trace(
+        &self,
+        repo_root: &Path,
+        artifacts: &[Artifact],
+        cache: Option<&AnalysisCache>,
+        config: GraphBuildTraceConfig,
+    ) -> GraphBuildOutput {
+        self.build_with_optional_trace(repo_root, artifacts, cache, Some(config))
+    }
+
+    fn build_with_optional_trace(
+        &self,
+        repo_root: &Path,
+        artifacts: &[Artifact],
+        cache: Option<&AnalysisCache>,
+        trace_config: Option<GraphBuildTraceConfig>,
+    ) -> GraphBuildOutput {
+        let structure_started = Instant::now();
         let mut state = BuilderState::new(artifacts);
 
         // Resolve every Cargo manifest's real crate/target layout before
@@ -87,21 +133,18 @@ impl GraphBuilder {
             {
                 continue;
             }
-            let workspace = match cache.and_then(|cache| {
-                cache.get(artifact.content_hash.as_str(), AnalyzerKind::RustWorkspace)
-            }) {
-                Some(AnalyzerOutput::RustWorkspace(analysis)) => analysis,
-                _ => {
-                    let fresh = RustWorkspaceAnalyzer.analyze(artifact, repo_root);
-                    if let Some(cache) = cache {
-                        cache.put(
-                            artifact.content_hash.as_str(),
-                            &AnalyzerOutput::RustWorkspace(fresh.clone()),
-                        );
+            let cache_key = artifact_cache_key(artifact);
+            let workspace =
+                match cache.and_then(|cache| cache.get(&cache_key, AnalyzerKind::RustWorkspace)) {
+                    Some(AnalyzerOutput::RustWorkspace(analysis)) => analysis,
+                    _ => {
+                        let fresh = RustWorkspaceAnalyzer.analyze(artifact, repo_root);
+                        if let Some(cache) = cache {
+                            cache.put(&cache_key, &AnalyzerOutput::RustWorkspace(fresh.clone()));
+                        }
+                        fresh
                     }
-                    fresh
-                }
-            };
+                };
             state.register_rust_crate_roots(&workspace);
         }
 
@@ -117,10 +160,27 @@ impl GraphBuilder {
             },
             pipeline_version: GRAPH_BUILD_PIPELINE_VERSION,
             passes: Vec::new(),
+            trace: None,
         };
+        let trace_detail = trace_config
+            .as_ref()
+            .map_or(GraphBuildTraceDetail::Summary, |config| {
+                config.detail.clone()
+            });
+        if let Some(config) = &trace_config {
+            output.enable_trace(config);
+        }
         output.graph = state.snapshot();
         output.record(GraphBuildPass::Structure);
+        output.record_trace(
+            GraphBuildPass::Structure,
+            &trace_detail,
+            structure_started,
+            BTreeMap::new(),
+            Vec::new(),
+        );
 
+        let definitions_started = Instant::now();
         for artifact in artifacts {
             if artifact.text_status != TextStatus::Text
                 || artifact.model_policy == ModelExposurePolicy::Never
@@ -130,21 +190,21 @@ impl GraphBuilder {
             let Some(kind) = analyzer_kind(artifact) else {
                 continue;
             };
-            let mut output =
-                match cache.and_then(|cache| cache.get(artifact.content_hash.as_str(), kind)) {
-                    Some(cached) => cached,
-                    None => {
-                        let Ok(text) = fs::read_to_string(repo_root.join(artifact.path.as_str()))
-                        else {
-                            continue;
-                        };
-                        let fresh = compute_fresh(artifact, &text, repo_root, kind);
-                        if let Some(cache) = cache {
-                            cache.put(artifact.content_hash.as_str(), &fresh);
-                        }
-                        fresh
+            let cache_key = artifact_cache_key(artifact);
+            let mut output = match cache.and_then(|cache| cache.get(&cache_key, kind)) {
+                Some(cached) => cached,
+                None => {
+                    let Ok(text) = fs::read_to_string(repo_root.join(artifact.path.as_str()))
+                    else {
+                        continue;
+                    };
+                    let fresh = compute_fresh(artifact, &text, repo_root, kind);
+                    if let Some(cache) = cache {
+                        cache.put(&cache_key, &fresh);
                     }
-                };
+                    fresh
+                }
+            };
             // Existence depends on the whole repo's current file listing, not
             // this artifact's own bytes, so it must be refreshed whether
             // `output` came from cache or a fresh parse.
@@ -156,29 +216,227 @@ impl GraphBuilder {
 
         output.graph = state.snapshot();
         output.record(GraphBuildPass::DefinitionsAndImports);
+        output.record_trace(
+            GraphBuildPass::DefinitionsAndImports,
+            &trace_detail,
+            definitions_started,
+            BTreeMap::new(),
+            Vec::new(),
+        );
 
-        state.detect_near_clones(repo_root);
+        let enrichment_started = Instant::now();
+        let clone_started = Instant::now();
+        let clone_diagnostics = state.detect_near_clones(
+            repo_root,
+            &trace_detail,
+            trace_config
+                .as_ref()
+                .map_or(&[][..], |config| config.selectors.as_slice()),
+        );
+        let clone_duration_us = clone_started
+            .elapsed()
+            .as_micros()
+            .try_into()
+            .unwrap_or(u64::MAX);
         state.materialize_environment_facts();
         let mut graph = state.finish();
         output.graph = graph.clone();
         output.record(GraphBuildPass::Enrichment);
+        output.record_trace(
+            GraphBuildPass::Enrichment,
+            &trace_detail,
+            enrichment_started,
+            BTreeMap::from([
+                (
+                    "clone_candidates".to_owned(),
+                    clone_diagnostics.candidate_count,
+                ),
+                (
+                    "clone_comparisons".to_owned(),
+                    clone_diagnostics.comparison_count,
+                ),
+                ("clone_emitted".to_owned(), clone_diagnostics.emitted_count),
+                (
+                    "clone_rejected_near_threshold".to_owned(),
+                    clone_diagnostics.rejected_near_threshold_count,
+                ),
+                ("clone_pruned".to_owned(), clone_diagnostics.pruned_count),
+            ]),
+            clone_diagnostics.decisions,
+        );
+        output.record_component_duration(
+            GraphBuildPass::Enrichment,
+            "clone_detection",
+            clone_duration_us,
+        );
         // LIT-23.1: applies to every caller (init/update, inspect, MCP
         // tools, tests) uniformly, the same way detect_near_clones already
         // does -- a post-processing pass belongs here, not bolted onto one
         // caller, or callers would see inconsistently-resolved graphs.
+        let resolution_started = Instant::now();
+        let relations_before_resolution = graph.relations.clone();
         crate::resolve::HybridResolverPipeline::default_pipeline().resolve(&mut graph);
         crate::resolve::resolve_environment_links(&mut graph);
         prune_orphaned_unresolved_nodes(&mut graph);
+        let resolution_decisions = trace_decisions_for_relations(
+            &graph,
+            &relations_before_resolution,
+            &trace_detail,
+            trace_config
+                .as_ref()
+                .map_or(&[][..], |config| config.selectors.as_slice()),
+        );
         output.graph = graph;
         output.record(GraphBuildPass::Resolution);
+        output.record_trace(
+            GraphBuildPass::Resolution,
+            &trace_detail,
+            resolution_started,
+            BTreeMap::from([(
+                "resolved_relations".to_owned(),
+                resolution_decisions.len() as u64,
+            )]),
+            resolution_decisions,
+        );
         // Analytics and persistence have explicit contracts now. Their
         // topology-preserving implementations are added by their dedicated
         // graph-analytics/store tasks; recording them here keeps pass order
         // and invalidation stable for all callers in the interim.
+        let analytics_started = Instant::now();
         output.record(GraphBuildPass::Analytics);
+        output.record_trace(
+            GraphBuildPass::Analytics,
+            &trace_detail,
+            analytics_started,
+            BTreeMap::new(),
+            Vec::new(),
+        );
+        let persistence_started = Instant::now();
         output.record(GraphBuildPass::Persistence);
+        output.record_trace(
+            GraphBuildPass::Persistence,
+            &trace_detail,
+            persistence_started,
+            BTreeMap::new(),
+            Vec::new(),
+        );
+        let finalize_started = Instant::now();
         output.record(GraphBuildPass::Finalize);
+        output.record_trace(
+            GraphBuildPass::Finalize,
+            &trace_detail,
+            finalize_started,
+            BTreeMap::new(),
+            Vec::new(),
+        );
         output
+    }
+}
+
+fn artifact_cache_key(artifact: &Artifact) -> String {
+    blake3::hash(format!("{}\0{}", artifact.content_hash, artifact.path.as_str()).as_bytes())
+        .to_hex()
+        .to_string()
+}
+
+fn trace_decisions_for_relations(
+    graph: &Graph,
+    before: &[Relation],
+    detail: &GraphBuildTraceDetail,
+    selectors: &[String],
+) -> Vec<GraphDecisionTrace> {
+    graph
+        .relations
+        .iter()
+        .filter(|relation| {
+            relation.provenance.as_ref().is_some_and(|provenance| {
+                provenance.resolution == RelationResolution::HybridResolved
+            })
+        })
+        .filter(|relation| {
+            (*detail == GraphBuildTraceDetail::Full && selectors.is_empty())
+                || selectors.iter().any(|selector| {
+                    relation.source.as_str().contains(selector)
+                        || relation.target.as_str().contains(selector)
+                        || relation
+                            .evidence
+                            .iter()
+                            .any(|item| item.path.as_str().contains(selector))
+                })
+        })
+        .flat_map(|relation| {
+            let provenance = relation.provenance.as_ref();
+            let selected = GraphDecisionTrace {
+                kind: format!("{:?}", relation.kind).to_ascii_lowercase(),
+                source: relation.source.as_str().to_owned(),
+                target: relation.target.as_str().to_owned(),
+                strategy: provenance
+                    .map_or("unknown", |item| item.resolver_strategy.as_str())
+                    .to_owned(),
+                outcome: "selected".to_owned(),
+                score_millionths: match relation.confidence {
+                    Confidence::High => 1_000_000,
+                    Confidence::Low => 500_000,
+                },
+                evidence_paths: relation
+                    .evidence
+                    .iter()
+                    .map(|item| item.path.as_str().to_owned())
+                    .collect(),
+                reason: "candidate satisfied resolver kind, scope, and confidence filters"
+                    .to_owned(),
+            };
+            let mut decisions = vec![selected];
+            if let Some(original) = before.iter().find(|candidate| {
+                candidate.source == relation.source
+                    && candidate.kind == relation.kind
+                    && candidate.target != relation.target
+                    && candidate.evidence == relation.evidence
+            }) {
+                decisions.push(GraphDecisionTrace {
+                    kind: format!("{:?}", relation.kind).to_ascii_lowercase(),
+                    source: original.source.as_str().to_owned(),
+                    target: original.target.as_str().to_owned(),
+                    strategy: provenance
+                        .map_or("unknown", |item| item.resolver_strategy.as_str())
+                        .to_owned(),
+                    outcome: "rejected".to_owned(),
+                    score_millionths: 0,
+                    evidence_paths: original
+                        .evidence
+                        .iter()
+                        .map(|item| item.path.as_str().to_owned())
+                        .collect(),
+                    reason: "raw unresolved candidate was superseded by a typed resolver candidate"
+                        .to_owned(),
+                });
+            }
+            decisions
+        })
+        .collect()
+}
+
+fn clone_decision(
+    left: &GraphNodeId,
+    right: &GraphNodeId,
+    left_evidence: &EvidenceRef,
+    right_evidence: &EvidenceRef,
+    similarity: f64,
+    outcome: &str,
+    reason: &str,
+) -> GraphDecisionTrace {
+    GraphDecisionTrace {
+        kind: "near_clone".to_owned(),
+        source: left.as_str().to_owned(),
+        target: right.as_str().to_owned(),
+        strategy: "lexical_jaccard_similarity".to_owned(),
+        outcome: outcome.to_owned(),
+        score_millionths: (similarity * 1_000_000.0).round() as u32,
+        evidence_paths: vec![
+            left_evidence.path.as_str().to_owned(),
+            right_evidence.path.as_str().to_owned(),
+        ],
+        reason: reason.to_owned(),
     }
 }
 
@@ -386,6 +644,10 @@ impl BuilderState {
     /// Safe to call more than once for the same workspace (a `BTreeSet`).
     fn register_rust_crate_roots(&mut self, workspace: &RustWorkspaceAnalysis) {
         for package in &workspace.packages {
+            // Workspace roots do not have a `[package]` table, so the raw
+            // TOML pass cannot materialize their members. Cargo metadata is
+            // the authoritative source for every in-repository member.
+            self.package(&package.name, false);
             for target in &package.targets {
                 if let Some((root, _file_name)) = target.path.rsplit_once('/') {
                     self.rust_crate_roots.insert(root.to_owned());
@@ -628,8 +890,13 @@ impl BuilderState {
     }
 
     fn package(&mut self, name: &str, is_external: bool) -> GraphNodeId {
+        let id = GraphNodeId::new(format!("package:{name}"));
+        if !is_external && let Some(GraphNode::Package(existing)) = self.nodes.get_mut(&id) {
+            existing.is_external = false;
+            return id;
+        }
         self.insert(GraphNode::Package(PackageNode {
-            id: GraphNodeId::new(format!("package:{name}")),
+            id,
             name: name.to_owned(),
             is_external,
         }))
@@ -2404,13 +2671,19 @@ impl BuilderState {
     // symbol in the repo. Fine for a "minimum deterministic" baseline at
     // the scale this tool targets; if a very large repo makes this slow,
     // bucket candidates by token-count or line-count range first.
-    fn detect_near_clones(&mut self, repo_root: &Path) {
+    fn detect_near_clones(
+        &mut self,
+        repo_root: &Path,
+        detail: &GraphBuildTraceDetail,
+        selectors: &[String],
+    ) -> CloneDiagnostics {
         const MIN_BODY_LINES: u32 = 3;
         const SIMILAR_THRESHOLD: f64 = 0.6;
+        const TRACE_NEAR_THRESHOLD: f64 = 0.35;
         const HIGH_CONFIDENCE_THRESHOLD: f64 = 0.85;
 
         let mut file_cache: BTreeMap<String, Option<String>> = BTreeMap::new();
-        let mut candidates: Vec<(GraphNodeId, EvidenceRef, BTreeSet<String>)> = Vec::new();
+        let mut candidates = Vec::new();
         for node in self.nodes.values() {
             let GraphNode::Symbol(symbol) = node else {
                 continue;
@@ -2435,42 +2708,123 @@ impl BuilderState {
             if tokens.is_empty() {
                 continue;
             }
-            candidates.push((symbol.id.clone(), symbol.evidence.clone(), tokens));
+            let language = Path::new(symbol.evidence.path.as_str())
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .unwrap_or("unknown")
+                .to_ascii_lowercase();
+            let size_band = usize::BITS - tokens.len().max(1).leading_zeros() - 1;
+            candidates.push(CloneCandidate {
+                id: symbol.id.clone(),
+                evidence: symbol.evidence.clone(),
+                tokens,
+                language,
+                size_band,
+            });
         }
 
-        for i in 0..candidates.len() {
-            for j in (i + 1)..candidates.len() {
-                let (id_a, evidence_a, tokens_a) = &candidates[i];
-                let (id_b, evidence_b, tokens_b) = &candidates[j];
-                let similarity = jaccard_similarity(tokens_a, tokens_b);
-                if similarity < SIMILAR_THRESHOLD {
+        let mut diagnostics = CloneDiagnostics {
+            candidate_count: candidates.len() as u64,
+            ..CloneDiagnostics::default()
+        };
+        let total_pairs = candidates
+            .len()
+            .saturating_mul(candidates.len().saturating_sub(1))
+            / 2;
+        let mut buckets = BTreeMap::<(String, u32), Vec<usize>>::new();
+        for (index, candidate) in candidates.iter().enumerate() {
+            buckets
+                .entry((candidate.language.clone(), candidate.size_band))
+                .or_default()
+                .push(index);
+        }
+        let mut pairs = BTreeSet::new();
+        for ((language, band), left) in &buckets {
+            for candidate_band in [*band, band.saturating_add(1)] {
+                let Some(right) = buckets.get(&(language.clone(), candidate_band)) else {
                     continue;
+                };
+                for &i in left {
+                    for &j in right {
+                        if i == j {
+                            continue;
+                        }
+                        let smaller = candidates[i].tokens.len().min(candidates[j].tokens.len());
+                        let larger = candidates[i].tokens.len().max(candidates[j].tokens.len());
+                        if (smaller as f64) / (larger as f64) >= SIMILAR_THRESHOLD {
+                            pairs.insert((i.min(j), i.max(j)));
+                        }
+                    }
                 }
-                let confidence = if similarity >= HIGH_CONFIDENCE_THRESHOLD {
-                    Confidence::High
-                } else {
-                    Confidence::Low
-                };
-                let (source, target) = if id_a <= id_b {
-                    (id_a.clone(), id_b.clone())
-                } else {
-                    (id_b.clone(), id_a.clone())
-                };
-                self.relate_with_provenance(
-                    source,
-                    target,
-                    RelationKind::SimilarTo,
-                    confidence,
-                    vec![evidence_a.clone(), evidence_b.clone()],
-                    Some(RelationProvenance {
-                        language: None,
-                        resolver_strategy: "lexical-jaccard-similarity".to_owned(),
-                        resolution: RelationResolution::HybridResolved,
-                        confidence,
-                    }),
-                );
             }
         }
+        diagnostics.pruned_count = total_pairs.saturating_sub(pairs.len()) as u64;
+        for (i, j) in pairs {
+            diagnostics.comparison_count += 1;
+            let left = &candidates[i];
+            let right = &candidates[j];
+            let similarity = jaccard_similarity(&left.tokens, &right.tokens);
+            let should_trace = (*detail == GraphBuildTraceDetail::Full && selectors.is_empty())
+                || selectors.iter().any(|selector| {
+                    left.id.as_str().contains(selector)
+                        || right.id.as_str().contains(selector)
+                        || left.evidence.path.as_str().contains(selector)
+                        || right.evidence.path.as_str().contains(selector)
+                });
+            if similarity < SIMILAR_THRESHOLD {
+                if similarity >= TRACE_NEAR_THRESHOLD {
+                    diagnostics.rejected_near_threshold_count += 1;
+                    if should_trace {
+                        diagnostics.decisions.push(clone_decision(
+                            &left.id,
+                            &right.id,
+                            &left.evidence,
+                            &right.evidence,
+                            similarity,
+                            "rejected",
+                            "exact Jaccard score was below the configured emission threshold",
+                        ));
+                    }
+                }
+                continue;
+            }
+            diagnostics.emitted_count += 1;
+            if should_trace {
+                diagnostics.decisions.push(clone_decision(
+                    &left.id,
+                    &right.id,
+                    &left.evidence,
+                    &right.evidence,
+                    similarity,
+                    "emitted",
+                    "exact Jaccard score met the configured emission threshold",
+                ));
+            }
+            let confidence = if similarity >= HIGH_CONFIDENCE_THRESHOLD {
+                Confidence::High
+            } else {
+                Confidence::Low
+            };
+            let (source, target) = if left.id <= right.id {
+                (left.id.clone(), right.id.clone())
+            } else {
+                (right.id.clone(), left.id.clone())
+            };
+            self.relate_with_provenance(
+                source,
+                target,
+                RelationKind::SimilarTo,
+                confidence,
+                vec![left.evidence.clone(), right.evidence.clone()],
+                Some(RelationProvenance {
+                    language: None,
+                    resolver_strategy: "lexical-jaccard-similarity".to_owned(),
+                    resolution: RelationResolution::HybridResolved,
+                    confidence,
+                }),
+            );
+        }
+        diagnostics
     }
 
     /// Produces a deterministic read-only checkpoint without consuming state.
@@ -2640,7 +2994,8 @@ mod tests {
     use crate::domain::Confidence;
     use crate::graph::GraphValidator;
     use crate::graph::{
-        GRAPH_BUILD_PASS_ORDER, GRAPH_BUILD_PIPELINE_VERSION, GraphNode, Relation, RelationKind,
+        GRAPH_BUILD_PASS_ORDER, GRAPH_BUILD_PIPELINE_VERSION, GraphBuildPass,
+        GraphBuildTraceConfig, GraphBuildTraceDetail, GraphNode, Relation, RelationKind,
         RelationResolution, SymbolKind,
     };
     use crate::inventory::{RepositoryWalker, WalkOptions};
@@ -2708,8 +3063,200 @@ mod tests {
                 .collect::<Vec<_>>(),
             GRAPH_BUILD_PASS_ORDER
         );
-        assert_eq!(first, second);
+        assert_eq!(first.graph, second.graph);
+        assert_eq!(first.passes, second.passes);
+        assert_eq!(
+            first.trace.as_ref().map(|value| {
+                value
+                    .stages
+                    .iter()
+                    .map(|stage| {
+                        (
+                            stage.pass,
+                            &stage.graph_hash,
+                            &stage.counters,
+                            &stage.decisions,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            }),
+            second.trace.as_ref().map(|value| {
+                value
+                    .stages
+                    .iter()
+                    .map(|stage| {
+                        (
+                            stage.pass,
+                            &stage.graph_hash,
+                            &stage.counters,
+                            &stage.decisions,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            })
+        );
         assert_eq!(first.graph, GraphBuilder.build(&root, &artifacts));
+        Ok(())
+    }
+
+    #[test]
+    fn opt_in_trace_is_deterministic_and_does_not_change_graph_output()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let root = fixture_root();
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
+        let baseline = GraphBuilder.build(&root, &artifacts);
+        let config = GraphBuildTraceConfig {
+            detail: GraphBuildTraceDetail::Full,
+            selectors: vec!["service.py".to_owned(), "service.py".to_owned()],
+        };
+        let first = GraphBuilder.build_with_trace(&root, &artifacts, None, config.clone());
+        let second = GraphBuilder.build_with_trace(&root, &artifacts, None, config);
+        let trace = first.trace.as_ref().ok_or("missing trace")?;
+
+        assert_eq!(first.graph, baseline);
+        assert_eq!(first.graph, second.graph);
+        assert_eq!(first.passes, second.passes);
+        assert_eq!(
+            first.trace.as_ref().map(|value| {
+                value
+                    .stages
+                    .iter()
+                    .map(|stage| {
+                        (
+                            stage.pass,
+                            &stage.graph_hash,
+                            &stage.counters,
+                            &stage.decisions,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            }),
+            second.trace.as_ref().map(|value| {
+                value
+                    .stages
+                    .iter()
+                    .map(|stage| {
+                        (
+                            stage.pass,
+                            &stage.graph_hash,
+                            &stage.counters,
+                            &stage.decisions,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            })
+        );
+        assert_eq!(trace.selectors, vec!["service.py"]);
+        assert_eq!(trace.stages.len(), GRAPH_BUILD_PASS_ORDER.len());
+        assert_eq!(
+            trace
+                .stages
+                .iter()
+                .map(|stage| stage.pass)
+                .collect::<Vec<_>>(),
+            GRAPH_BUILD_PASS_ORDER
+        );
+        assert!(trace.stages.iter().all(|stage| stage.graph.is_some()));
+        let enrichment = trace
+            .stages
+            .iter()
+            .find(|stage| stage.pass == GraphBuildPass::Enrichment)
+            .ok_or("missing enrichment trace")?;
+        assert!(enrichment.counters.contains_key("clone_comparisons"));
+        let resolution = trace
+            .stages
+            .iter()
+            .find(|stage| stage.pass == GraphBuildPass::Resolution)
+            .ok_or("missing resolution trace")?;
+        assert!(resolution.decisions.iter().all(|decision| {
+            decision.source.contains("service.py")
+                || decision.target.contains("service.py")
+                || decision
+                    .evidence_paths
+                    .iter()
+                    .any(|path| path.contains("service.py"))
+        }));
+        assert!(
+            resolution
+                .decisions
+                .iter()
+                .any(|decision| decision.outcome == "selected")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn full_trace_explains_near_threshold_clone_rejection() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let repo = tempfile::TempDir::new()?;
+        std::fs::write(
+            repo.path().join("pairs.py"),
+            "def alpha(value):\n    total = value\n    clean = strip(total)\n    return clean\n\ndef beta(value):\n    total = value\n    dirty = encode(total)\n    return dirty\n",
+        )?;
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(repo.path())?;
+        let output = GraphBuilder.build_with_trace(
+            repo.path(),
+            &artifacts,
+            None,
+            GraphBuildTraceConfig {
+                detail: GraphBuildTraceDetail::Full,
+                selectors: Vec::new(),
+            },
+        );
+        let enrichment = output
+            .trace
+            .as_ref()
+            .and_then(|trace| {
+                trace
+                    .stages
+                    .iter()
+                    .find(|stage| stage.pass == GraphBuildPass::Enrichment)
+            })
+            .ok_or("missing enrichment trace")?;
+        assert!(
+            enrichment.decisions.iter().any(|decision| {
+                decision.kind == "near_clone" && decision.outcome == "rejected"
+            })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn clone_candidate_bands_prune_representative_pair_growth()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let repo = tempfile::TempDir::new()?;
+        let mut source = String::new();
+        for index in 0..64usize {
+            source.push_str(&format!(
+                "def generated_{index}(value):\n    total = value\n"
+            ));
+            for token in 0..(1usize << (index % 6)) {
+                source.push_str(&format!("    total += unique_{index}_{token}\n"));
+            }
+            source.push_str("    return total\n\n");
+        }
+        std::fs::write(repo.path().join("generated.py"), source)?;
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(repo.path())?;
+        let output = GraphBuilder.build_with_trace(
+            repo.path(),
+            &artifacts,
+            None,
+            GraphBuildTraceConfig::default(),
+        );
+        let enrichment = output
+            .trace
+            .as_ref()
+            .and_then(|trace| {
+                trace
+                    .stages
+                    .iter()
+                    .find(|stage| stage.pass == GraphBuildPass::Enrichment)
+            })
+            .ok_or("missing enrichment trace")?;
+        let comparisons = enrichment.counters["clone_comparisons"];
+        let total_pairs = 64 * 63 / 2;
+        assert!(comparisons < total_pairs / 2);
+        assert!(enrichment.counters["clone_pruned"] > comparisons);
         Ok(())
     }
 

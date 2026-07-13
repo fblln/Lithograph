@@ -1,0 +1,59 @@
+schema_version = 2
+
+[[cases]]
+id = "diagnostic"
+tier = "pr"
+source = "fixture"
+path = "fixtures/diagnostic"
+license = "MIT"
+expectations = "expectations/diagnostic.json"
+
+[[cases]]
+id = "flask"
+tier = "merge"
+source = "git"
+url = "https://github.com/pallets/flask.git"
+commit = "2c1b30d0503cfb064f1cb252e6614a06915a362a"
+tree = "1f787a439328e6397cab9f7b79f0f6350031d7d1"
+license = "BSD-3-Clause"
+expectations = "expectations/flask.json"
+
+[[cases]]
+id = "ripgrep"
+tier = "merge"
+source = "git"
+url = "https://github.com/BurntSushi/ripgrep.git"
+commit = "4649aa9700619f94cf9c66876e9549d83420e16c"
+tree = "d7a1d4d108598ad6e23d82a180c71541b221d32c"
+license = "MIT OR Unlicense"
+expectations = "expectations/ripgrep.json"
+
+[[cases]]
+id = "full-stack-fastapi"
+tier = "merge"
+source = "git"
+url = "https://github.com/fastapi/full-stack-fastapi-template.git"
+commit = "1b8b78415f0b2397bbd10b73caaf44c01299b969"
+tree = "6dc9018b32fa95ae8f3e387a1a8de315a960b630"
+license = "MIT"
+expectations = "expectations/full-stack-fastapi.json"
+
+[[cases]]
+id = "nestjs"
+tier = "nightly"
+source = "git"
+url = "https://github.com/nestjs/nest.git"
+commit = "d8a0ab829ddd8291b75109c9ac4fc4c7d070fc9e"
+tree = "2d23657cc0d23bfb337f59db5a4f9e8e33277f6d"
+license = "MIT"
+expectations = "expectations/nestjs.json"
+
+[[cases]]
+id = "uv"
+tier = "nightly"
+source = "git"
+url = "https://github.com/astral-sh/uv.git"
+commit = "135a3636789bb6886e0a7876f58cb4dbb270ba6d"
+tree = "a971c0d9b3d058ba8b36498c62199a8f6f3e5937"
+license = "MIT OR Apache-2.0"
+expectations = "expectations/uv.json"
