@@ -2789,8 +2789,11 @@ mod tests {
             observations: BTreeMap::new(),
             reproduce: String::new(),
         };
-        assert!(lab.accept(&run, "", "missing").is_err());
-        assert!(lab.accept(&run, "reviewed", "missing").is_err());
+        assert!(lab.accept_with_policy(&run, "", "missing", false).is_err());
+        assert!(
+            lab.accept_with_policy(&run, "reviewed", "missing", false)
+                .is_err()
+        );
     }
 
     #[test]
@@ -2823,13 +2826,15 @@ mod tests {
         };
         let review = lab.acceptance_review(&run, "first review")?;
         assert!(
-            lab.accept(&run, "changed reason", &review.confirmation_token)
+            lab.accept_with_policy(&run, "changed reason", &review.confirmation_token, false)
                 .is_err()
         );
-        let accepted = lab.accept(&run, "first review", &review.confirmation_token)?;
+        let accepted =
+            lab.accept_with_policy(&run, "first review", &review.confirmation_token, false)?;
         assert_eq!(accepted.reason, "first review");
         let stale = lab.acceptance_review(&run, "second review")?;
-        let replacement = lab.accept(&run, "second review", &stale.confirmation_token)?;
+        let replacement =
+            lab.accept_with_policy(&run, "second review", &stale.confirmation_token, false)?;
         assert_eq!(replacement.previous_graph_hash.as_deref(), Some("graph"));
         assert_eq!(replacement.previous_reason.as_deref(), Some("first review"));
         Ok(())
