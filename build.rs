@@ -2,20 +2,24 @@
 
 use std::path::Path;
 
+mod build_support;
+
 fn main() {
-    // lbug's current macOS prebuilt static archive references OpenSSL but
-    // does not propagate its link directives. Homebrew provides the library
-    // outside the default linker search path on Apple Silicon; emit both the
-    // search path (when present) and the two dynamic libraries for the final
-    // application/test link. Other platforms already discover OpenSSL through
-    // their standard linker configuration.
-    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
+    let Ok(target_os) = std::env::var("CARGO_CFG_TARGET_OS") else {
         return;
-    }
+    };
+    let plan = build_support::native_link_plan(&target_os);
+
+    // lbug's prebuilt static archives reference OpenSSL but do not propagate
+    // its link directives. Linux finds OpenSSL through its standard linker
+    // configuration. Homebrew installs it outside the default search path on
+    // Apple Silicon, so macOS additionally probes that well-known location.
     const HOMEBREW_OPENSSL: &str = "/opt/homebrew/opt/openssl@3/lib";
-    if Path::new(HOMEBREW_OPENSSL).is_dir() {
+    if plan.probe_homebrew_openssl && Path::new(HOMEBREW_OPENSSL).is_dir() {
         println!("cargo:rustc-link-search=native={HOMEBREW_OPENSSL}");
     }
-    println!("cargo:rustc-link-lib=dylib=ssl");
-    println!("cargo:rustc-link-lib=dylib=crypto");
+    if plan.link_openssl {
+        println!("cargo:rustc-link-lib=dylib=ssl");
+        println!("cargo:rustc-link-lib=dylib=crypto");
+    }
 }
