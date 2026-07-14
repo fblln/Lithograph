@@ -725,6 +725,15 @@ struct BuilderState {
     nodes: BTreeMap<GraphNodeId, GraphNode>,
     relations: Vec<Relation>,
     relation_count: usize,
+    // LIT-40.2: (source, target, kind) keys of existing relations, populated
+    // only while materializing environment facts so `relate_if_absent` dedups
+    // with a set lookup instead of scanning every relation per fact.
+    env_relation_keys: BTreeSet<(GraphNodeId, GraphNodeId, RelationKind)>,
+    // LIT-40.1: symbol (start_line, end_line, id) tuples grouped by artifact,
+    // populated only while materializing environment facts so
+    // `smallest_symbol_owner` queries one file's symbols instead of scanning
+    // every node per source-code fact.
+    env_symbols_by_artifact: HashMap<ArtifactId, Vec<(u32, u32, GraphNodeId)>>,
     environment_facts: EnvironmentFacts,
     artifact_paths: BTreeSet<String>,
     python_modules: BTreeMap<String, GraphNodeId>,
@@ -743,6 +752,8 @@ impl BuilderState {
             nodes: BTreeMap::new(),
             relations: Vec::new(),
             relation_count: 0,
+            env_relation_keys: BTreeSet::new(),
+            env_symbols_by_artifact: HashMap::new(),
             environment_facts: EnvironmentFacts::default(),
             artifact_paths: artifacts
                 .iter()
@@ -801,12 +812,45 @@ impl BuilderState {
     fn materialize_environment_facts(&mut self) {
         let mut facts = std::mem::take(&mut self.environment_facts);
         facts.sort_deterministically();
+        // LIT-40.2: seed the dedup key set from relations added by earlier
+        // passes so `relate_if_absent` matches the previous full-scan behaviour
+        // without the per-fact O(relations) cost.
+        self.env_relation_keys = self
+            .relations
+            .iter()
+            .map(|relation| {
+                (
+                    relation.source.clone(),
+                    relation.target.clone(),
+                    relation.kind,
+                )
+            })
+            .collect();
+        // LIT-40.1: group symbol spans by artifact in one node pass so
+        // `smallest_symbol_owner` scans one file's symbols, not all nodes.
+        let mut env_symbols_by_artifact: HashMap<ArtifactId, Vec<(u32, u32, GraphNodeId)>> =
+            HashMap::new();
+        for node in self.nodes.values() {
+            let GraphNode::Symbol(symbol) = node else {
+                continue;
+            };
+            let Some(span) = symbol.evidence.span.as_ref() else {
+                continue;
+            };
+            env_symbols_by_artifact
+                .entry(symbol.evidence.artifact_id.clone())
+                .or_default()
+                .push((span.start_line, span.end_line, symbol.id.clone()));
+        }
+        self.env_symbols_by_artifact = env_symbols_by_artifact;
         for fact in &facts.env {
             self.materialize_env_fact(fact);
         }
         for fact in &facts.config {
             self.materialize_config_fact(fact);
         }
+        self.env_relation_keys = BTreeSet::new();
+        self.env_symbols_by_artifact = HashMap::new();
         self.environment_facts = facts;
     }
 
@@ -883,21 +927,15 @@ impl BuilderState {
 
     fn smallest_symbol_owner(&self, evidence: &EvidenceRef) -> Option<GraphNodeId> {
         let line = evidence.span.as_ref()?.start_line;
-        self.nodes
-            .values()
-            .filter_map(|node| {
-                let GraphNode::Symbol(symbol) = node else {
-                    return None;
-                };
-                if symbol.evidence.artifact_id != evidence.artifact_id {
-                    return None;
-                }
-                let span = symbol.evidence.span.as_ref()?;
-                (span.start_line <= line && line <= span.end_line)
-                    .then_some((span.end_line - span.start_line, symbol.id.clone()))
-            })
-            .min_by_key(|(span_length, id)| (*span_length, id.clone()))
-            .map(|(_, id)| id)
+        // LIT-40.1: only this file's symbols can enclose the line; the same
+        // min-by (span_length, id) over that subset yields the identical owner
+        // the previous all-nodes scan produced.
+        self.env_symbols_by_artifact
+            .get(&evidence.artifact_id)?
+            .iter()
+            .filter(|(start_line, end_line, _)| *start_line <= line && line <= *end_line)
+            .min_by_key(|(start_line, end_line, id)| (end_line - start_line, id.clone()))
+            .map(|(_, _, id)| id.clone())
     }
 
     fn relate(
@@ -953,9 +991,10 @@ impl BuilderState {
         evidence: Vec<EvidenceRef>,
         provenance: Option<RelationProvenance>,
     ) {
-        if self.relations.iter().any(|relation| {
-            relation.source == source && relation.target == target && relation.kind == kind
-        }) {
+        // LIT-40.2: dedup via the key set seeded in `materialize_environment_facts`
+        // (the only caller), replacing the per-fact scan of every relation.
+        let key = (source.clone(), target.clone(), kind);
+        if !self.env_relation_keys.insert(key) {
             return;
         }
         self.relate_with_provenance(source, target, kind, confidence, evidence, provenance);
@@ -3819,6 +3858,54 @@ mod tests {
     /// `BTreeSet<String>` reference across several candidates sharing one
     /// interner, so Jaccard scores are unchanged. Mixed case, single-character
     /// tokens, and repeated tokens are all exercised.
+    /// LIT-40.1: `smallest_symbol_owner` selects the innermost enclosing symbol
+    /// (smallest span) among a file's symbols, breaking ties by node id, and
+    /// falls back to a wider symbol for lines only it encloses -- the exact
+    /// selection the previous all-nodes scan produced, now over the per-artifact
+    /// index.
+    #[test]
+    fn smallest_symbol_owner_picks_innermost_then_breaks_ties_by_id()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use super::{BuilderState, EvidenceRef};
+        use crate::domain::SourceSpan;
+        use crate::domain::ids::{ArtifactId, RepoPath};
+        use crate::graph::model::GraphNodeId;
+
+        let repo_path = RepoPath::new("app.py")?;
+        let artifact = ArtifactId::from_path(&repo_path);
+        let mut state = BuilderState::new(&[]);
+        // Outer 1..=20 encloses two equally-sized inner symbols 5..=10.
+        state.env_symbols_by_artifact.insert(
+            artifact.clone(),
+            vec![
+                (1, 20, GraphNodeId::new("symbol:app.py#outer")),
+                (5, 10, GraphNodeId::new("symbol:app.py#inner_b")),
+                (5, 10, GraphNodeId::new("symbol:app.py#inner_a")),
+            ],
+        );
+        let at = |line: u32| -> Result<EvidenceRef, Box<dyn std::error::Error>> {
+            Ok(EvidenceRef::file(artifact.clone(), repo_path.clone())
+                .with_span(SourceSpan::new(line, line)?))
+        };
+        // Line 7 sits in all three; the smallest span wins, id breaks the tie.
+        assert_eq!(
+            state
+                .smallest_symbol_owner(&at(7)?)
+                .map(|id| id.as_str().to_owned()),
+            Some("symbol:app.py#inner_a".to_owned())
+        );
+        // Line 2 sits only in the outer symbol.
+        assert_eq!(
+            state
+                .smallest_symbol_owner(&at(2)?)
+                .map(|id| id.as_str().to_owned()),
+            Some("symbol:app.py#outer".to_owned())
+        );
+        // A line outside every span has no owner.
+        assert_eq!(state.smallest_symbol_owner(&at(25)?), None);
+        Ok(())
+    }
+
     /// LIT-35.3 AC2/AC3/AC5: a warm rebuild over an unchanged candidate set
     /// reuses the persisted clone snapshot (cache hit, no exact verification)
     /// and yields SimilarTo relations byte-identical to a fresh build; editing a

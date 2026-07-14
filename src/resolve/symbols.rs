@@ -2,7 +2,7 @@
 
 use crate::domain::Confidence;
 use crate::graph::{Graph, GraphNode, GraphNodeId, ModuleLanguage, RelationKind, SymbolKind};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// One definition addressable by the resolver.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,18 +53,24 @@ impl ProjectSymbolRegistry {
                 _ => None,
             })
             .collect();
+        // LIT-40.3: module path by node id, so the file->module map is one pass
+        // over BelongsToModule relations instead of an all-nodes scan per
+        // relation (O(belongs_to_module x nodes) previously).
+        let modules_by_id: HashMap<&GraphNodeId, &str> = graph
+            .nodes
+            .iter()
+            .filter_map(|node| match node {
+                GraphNode::Module(module) => Some((node.id(), module.path.as_str())),
+                _ => None,
+            })
+            .collect();
         let file_module: BTreeMap<_, _> = graph
             .relations
             .iter()
             .filter(|relation| relation.kind == RelationKind::BelongsToModule)
             .filter_map(|relation| {
                 let file = relation.source.as_str().strip_prefix("artifact:")?;
-                let module = graph.nodes.iter().find_map(|node| match node {
-                    GraphNode::Module(module) if node.id() == &relation.target => {
-                        Some(module.path.as_str())
-                    }
-                    _ => None,
-                })?;
+                let module = modules_by_id.get(&relation.target).copied()?;
                 Some((file, module))
             })
             .collect();
