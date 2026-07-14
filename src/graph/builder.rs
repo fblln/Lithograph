@@ -46,10 +46,11 @@ struct CloneDiagnostics {
     // Peak number of candidate pairs held in memory at once (LIT-35.1 AC4):
     // the compact Vec<(u32, u32)> that replaced the old BTreeSet pair tree.
     peak_candidate_pairs: u64,
-    // Distinct candidate pairs sharing a rare prefix token, before the size-band
-    // predicate (LIT-35.2 AC4). The gap between this, `comparison_count`, and
-    // `pruned_count` shows how much the prefix filter and band predicate each
-    // remove.
+    // Deduplicated in-band candidate pairs produced by the bounded prefix-index
+    // traversal (LIT-35.2 AC4, LIT-38.1 AC1). Because the length/size-band bound
+    // is applied while walking postings, out-of-band shared-token pairs are
+    // never generated, so this is far smaller than the pre-LIT-38.1 count that
+    // materialized every co-occurring prefix pair before filtering.
     prefilter_pairs: u64,
     // Sub-phase wall-clock costs in microseconds (LIT-35.1 AC4). Reported as
     // component durations so the clone bottleneck can be attributed to
@@ -302,9 +303,28 @@ impl GraphBuilder {
             .as_micros()
             .try_into()
             .unwrap_or(u64::MAX);
+        // LIT-39: the enrichment stage is more than clone detection. Time the
+        // remaining sub-phases (environment-fact materialization and the final
+        // graph assembly) so their component_*_us observations account for
+        // stage_enrichment_us instead of being an untimed blind spot.
+        let env_facts_started = Instant::now();
         state.materialize_environment_facts();
+        let env_facts_us = env_facts_started
+            .elapsed()
+            .as_micros()
+            .try_into()
+            .unwrap_or(u64::MAX);
+        // Time final graph assembly *and* the snapshot clone into `output`
+        // together: the clone materializes the enrichment-stage graph that
+        // `record` hashes, so it is enrichment work, not free (LIT-39).
+        let finish_started = Instant::now();
         let mut graph = state.finish();
         output.graph = graph.clone();
+        let enrichment_finish_us = finish_started
+            .elapsed()
+            .as_micros()
+            .try_into()
+            .unwrap_or(u64::MAX);
         output.record(GraphBuildPass::Enrichment);
         output.record_trace(
             GraphBuildPass::Enrichment,
@@ -357,6 +377,10 @@ impl GraphBuilder {
             ),
             ("clone_cache_lookup", clone_diagnostics.cache_lookup_us),
             ("clone_merge", clone_diagnostics.merge_us),
+            // LIT-39: non-clone enrichment sub-phases so the component timings
+            // sum to stage_enrichment_us within a small residual.
+            ("environment_fact_materialization", env_facts_us),
+            ("enrichment_finish", enrichment_finish_us),
         ] {
             output.record_component_duration(GraphBuildPass::Enrichment, component, duration);
         }
@@ -3175,24 +3199,40 @@ fn clone_verification_pairs(
             }
         }
         // Candidates co-occurring in a postings list are the only pairs that
-        // can meet the threshold; dedupe before the band predicate so the
-        // prefilter diagnostic counts distinct shared-rare-token pairs.
+        // can meet the threshold. LIT-38.1: walk each postings list ordered by
+        // token-set length so the size-band / length-ratio bound stops the
+        // inner scan early -- once a longer candidate fails the length ratio,
+        // every later (even longer) one fails too, so no in-band pair is ever
+        // skipped. This bounds generation from O(sum of list^2) to the in-band
+        // neighbourhood, applying the band predicate during traversal instead
+        // of materializing every co-occurring pair first.
         let mut language_pairs: Vec<(u32, u32)> = Vec::new();
-        for postings in index.values() {
+        for postings in index.values_mut() {
+            postings.sort_unstable_by_key(|&member| (candidates[member].tokens.len(), member));
             for (position, &i) in postings.iter().enumerate() {
+                let i_len = candidates[i].tokens.len() as f64;
                 for &j in &postings[position + 1..] {
-                    language_pairs.push((i.min(j) as u32, i.max(j) as u32));
+                    // Length-ordered, so `j` is at least as long as `i`; this is
+                    // the exact length-ratio test `in_band_universe` applies, so
+                    // the break agrees with it and drops only out-of-band pairs.
+                    if i_len / (candidates[j].tokens.len() as f64) < similar_threshold {
+                        break;
+                    }
+                    if in_band_universe(i, j) {
+                        language_pairs.push((i.min(j) as u32, i.max(j) as u32));
+                    }
                 }
             }
         }
+        // A pair can share more than one prefix token; dedupe so verification
+        // (and the band-universe subset invariant) sees each pair once.
         language_pairs.sort_unstable();
         language_pairs.dedup();
+        // Count the deduplicated in-band candidate pairs, comparable to the
+        // pre-LIT-38.1 diagnostic (which the bound reduces because out-of-band
+        // pairs are never generated).
         prefilter_pairs += language_pairs.len() as u64;
-        for &(i, j) in &language_pairs {
-            if in_band_universe(i as usize, j as usize) {
-                pairs.push((i, j));
-            }
-        }
+        pairs.extend_from_slice(&language_pairs);
     }
     // Distinct languages never share a pair, so `pairs` is already unique and
     // sorting yields the ascending order the verifier and decision trace
@@ -3774,6 +3814,11 @@ mod tests {
         assert_eq!(jaccard_similarity(&[1, 2], &[1, 2, 3, 4]), 0.5);
     }
 
+    /// LIT-38.2 AC2: the slice-interning tokenizer produces sorted-unique
+    /// interned token vectors byte-identical to the previous
+    /// `BTreeSet<String>` reference across several candidates sharing one
+    /// interner, so Jaccard scores are unchanged. Mixed case, single-character
+    /// tokens, and repeated tokens are all exercised.
     /// LIT-35.3 AC2/AC3/AC5: a warm rebuild over an unchanged candidate set
     /// reuses the persisted clone snapshot (cache hit, no exact verification)
     /// and yields SimilarTo relations byte-identical to a fresh build; editing a
