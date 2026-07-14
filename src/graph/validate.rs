@@ -135,7 +135,7 @@ fn validate_evidence(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum NodeKindTag {
+pub(crate) enum NodeKindTag {
     Artifact,
     Symbol,
     Config,
@@ -148,7 +148,7 @@ enum NodeKindTag {
     Unresolved,
 }
 
-fn node_kind_tag(node: &GraphNode) -> NodeKindTag {
+pub(crate) fn node_kind_tag(node: &GraphNode) -> NodeKindTag {
     match node {
         GraphNode::Artifact(_) => NodeKindTag::Artifact,
         GraphNode::Symbol(_) => NodeKindTag::Symbol,
@@ -182,7 +182,7 @@ fn node_evidence(node: &GraphNode) -> Vec<&crate::domain::EvidenceRef> {
 // accepted, and structural kinds like Contains/References/Calls accept many
 // target kinds) so this catches clear mismatches (e.g. ReadsEnv -> Symbol)
 // without becoming a second copy of the builder's own dispatch logic.
-fn target_kind_allowed(kind: RelationKind, target: NodeKindTag) -> bool {
+pub(crate) fn target_kind_allowed(kind: RelationKind, target: NodeKindTag) -> bool {
     if target == NodeKindTag::Unresolved {
         return true;
     }

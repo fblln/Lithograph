@@ -21,7 +21,8 @@ pub mod type_aware;
 
 use crate::domain::Confidence;
 use crate::graph::{
-    Graph, GraphNode, GraphNodeId, Relation, RelationProvenance, RelationResolution,
+    Graph, GraphNode, GraphNodeId, NodeKindTag, Relation, RelationProvenance, RelationResolution,
+    node_kind_tag, target_kind_allowed,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -58,6 +59,10 @@ pub struct ResolverContext<'a> {
     pub symbols_by_qualified_name: BTreeMap<&'a str, &'a GraphNodeId>,
     /// Artifact node ids by repository-relative path.
     pub artifacts_by_path: BTreeMap<&'a str, &'a GraphNodeId>,
+    /// Node kinds by identifier. The resolver pipeline uses the graph
+    /// validator's allow-list before accepting a candidate, keeping invalid
+    /// relation targets unconstructible instead of merely detectable later.
+    node_kinds: BTreeMap<&'a GraphNodeId, NodeKindTag>,
     /// Shared project-wide declaration index for symbol-aware resolvers.
     pub symbols: ProjectSymbolRegistry,
     /// LIT-37: `Imports` relations grouped by their source node id, in graph
@@ -81,10 +86,12 @@ impl<'a> ResolverContext<'a> {
         let mut local_package_names = BTreeSet::new();
         let mut symbols_by_qualified_name = BTreeMap::new();
         let mut artifacts_by_path = BTreeMap::new();
+        let mut node_kinds = BTreeMap::new();
         let mut unresolved_values_by_id = HashMap::new();
         let mut callable_symbol_ids = HashSet::new();
 
         for node in &graph.nodes {
+            node_kinds.insert(node.id(), node_kind_tag(node));
             match node {
                 GraphNode::Module(module) => {
                     modules_by_path.insert(module.path.as_str(), node.id());
@@ -137,6 +144,7 @@ impl<'a> ResolverContext<'a> {
             local_package_names,
             symbols_by_qualified_name,
             artifacts_by_path,
+            node_kinds,
             symbols: ProjectSymbolRegistry::build(graph),
             imports_by_source,
             unresolved_values_by_id,
@@ -242,9 +250,10 @@ impl HybridResolverPipeline {
                 continue;
             };
             let resolved = self.resolvers.iter().find_map(|resolver| {
-                resolver
-                    .resolve(&context, relation, unresolved_value)
-                    .map(|resolved| (resolved, resolver.strategy()))
+                let resolved = resolver.resolve(&context, relation, unresolved_value)?;
+                let target_kind = context.node_kinds.get(&resolved.target)?;
+                target_kind_allowed(relation.kind, *target_kind)
+                    .then_some((resolved, resolver.strategy()))
             });
             match resolved {
                 Some((resolved, strategy)) => updates.push((index, resolved, strategy)),
@@ -516,11 +525,21 @@ mod tests {
     }
 
     fn relation(id: &str, source: &str, target: &str, resolution: RelationResolution) -> Relation {
+        relation_of_kind(id, source, target, RelationKind::Imports, resolution)
+    }
+
+    fn relation_of_kind(
+        id: &str,
+        source: &str,
+        target: &str,
+        kind: RelationKind,
+        resolution: RelationResolution,
+    ) -> Relation {
         Relation {
             id: id.to_owned(),
             source: GraphNodeId::new(source),
             target: GraphNodeId::new(target),
-            kind: RelationKind::Imports,
+            kind,
             confidence: Confidence::Low,
             evidence: Vec::new(),
             provenance: Some(RelationProvenance {
@@ -557,6 +576,37 @@ mod tests {
         assert_eq!(provenance.resolution, RelationResolution::HybridResolved);
         assert_eq!(provenance.resolver_strategy, "package-map-exact-match");
         assert_eq!(provenance.language.as_deref(), Some("javascript"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn package_targets_are_rejected_for_calls_and_uses_type()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for (kind, package_name) in [
+            (RelationKind::Calls, "react"),
+            (RelationKind::UsesType, "json"),
+        ] {
+            let mut graph = Graph {
+                nodes: vec![package(package_name, true), unresolved(package_name)],
+                relations: vec![relation_of_kind(
+                    "relation:1",
+                    "artifact:App.tsx",
+                    &format!("unresolved:{package_name}"),
+                    kind,
+                    RelationResolution::SyntaxOnly,
+                )],
+            };
+
+            let report = HybridResolverPipeline::default_pipeline().resolve(&mut graph);
+
+            assert_eq!(report.resolved, 0, "{kind:?} must not target a package");
+            assert_eq!(report.still_unresolved, 1);
+            assert_eq!(
+                graph.relations[0].target,
+                GraphNodeId::new(format!("unresolved:{package_name}"))
+            );
+        }
 
         Ok(())
     }
@@ -651,7 +701,11 @@ mod tests {
         }
 
         let mut graph = Graph {
-            nodes: vec![unresolved("anything")],
+            nodes: vec![
+                package("a", true),
+                package("b", true),
+                unresolved("anything"),
+            ],
             relations: vec![relation(
                 "relation:1",
                 "artifact:App.tsx",

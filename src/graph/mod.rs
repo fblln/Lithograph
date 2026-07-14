@@ -71,3 +71,4 @@ pub use tensions::{
     TensionSnapshotStore, score_tensions,
 };
 pub use validate::{GraphIssue, GraphIssueKind, GraphValidator};
+pub(crate) use validate::{NodeKindTag, node_kind_tag, target_kind_allowed};
