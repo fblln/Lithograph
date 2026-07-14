@@ -212,6 +212,17 @@ impl AnalysisCache {
             kind_slug(kind)
         ))
     }
+
+    /// Path of the versioned near-clone snapshot for a candidate-set `identity`
+    /// (LIT-35.3). Namespaced away from per-artifact entries and versioned by
+    /// [`ANALYSIS_CACHE_VERSION`], so a cache-format bump discards old
+    /// snapshots the same way it discards analyzer entries. The builder owns
+    /// serialization, since the snapshot references graph types the analysis
+    /// layer cannot depend on.
+    pub fn clone_snapshot_path(&self, identity: &str) -> PathBuf {
+        self.dir
+            .join(format!("v{ANALYSIS_CACHE_VERSION}-clone-{identity}.json"))
+    }
 }
 
 /// Filesystem-safe slug for an [`AnalyzerKind`], used to namespace cache

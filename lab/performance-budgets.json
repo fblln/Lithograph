@@ -96,6 +96,42 @@
       "mode": "community_only",
       "metric": "community_summary_us",
       "max_relative_increase": 0.2
+    },
+    {
+      "case_id": "nestjs",
+      "mode": "warm_cache",
+      "metric": "component_clone_tokenization_us",
+      "max_relative_increase": 0.3
+    },
+    {
+      "case_id": "nestjs",
+      "mode": "warm_cache",
+      "metric": "component_clone_candidate_generation_us",
+      "max_relative_increase": 0.3
+    },
+    {
+      "case_id": "nestjs",
+      "mode": "warm_cache",
+      "metric": "component_clone_exact_verification_us",
+      "max_relative_increase": 0.3
+    },
+    {
+      "case_id": "uv",
+      "mode": "warm_cache",
+      "metric": "component_clone_tokenization_us",
+      "max_relative_increase": 0.3
+    },
+    {
+      "case_id": "uv",
+      "mode": "warm_cache",
+      "metric": "component_clone_candidate_generation_us",
+      "max_relative_increase": 0.3
+    },
+    {
+      "case_id": "uv",
+      "mode": "warm_cache",
+      "metric": "component_clone_exact_verification_us",
+      "max_relative_increase": 0.3
     }
   ]
 }

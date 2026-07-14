@@ -762,6 +762,11 @@ impl Lab {
                 if community_cache_root.exists() {
                     std::fs::remove_dir_all(&community_cache_root)?;
                 }
+                // LIT-35.5: same reasoning for the near-clone snapshot cache --
+                // leaving it in place would make every sample a cache hit and
+                // zero out the clone phases the clone budgets gate. Clear only
+                // the clone snapshot files so the analyzer cache stays warm.
+                clear_clone_snapshots(&cache_root);
                 let sample_cache = crate::analysis::AnalysisCache::new(&cache_root);
                 let path = self.run_case_with_cache(&case, suite, Some(&sample_cache))?;
                 let run = self.load_run(&path)?;
@@ -2230,6 +2235,24 @@ fn machine_slug(machine: &MachineFingerprint) -> String {
         "{}-{}-{}",
         machine.os, machine.architecture, machine.parallelism
     )
+}
+
+/// Removes persisted near-clone snapshot files from an analyzer cache dir so
+/// the next graph build re-runs full clone detection (LIT-35.5). Best-effort:
+/// leaves every non-clone (analyzer) entry untouched so that cache stays warm.
+fn clear_clone_snapshots(cache_root: &Path) {
+    let Ok(entries) = std::fs::read_dir(cache_root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if entry
+            .file_name()
+            .to_str()
+            .is_some_and(|name| name.contains("-clone-"))
+        {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
 }
 
 fn next_sample_sequence(root: &Path) -> Result<usize, LabError> {

@@ -97,6 +97,19 @@ node indices, an active movement queue, and one summary edge pass. Repeated
 lab and health computations can reuse snapshots keyed by the canonical graph
 hash, normalized scope, and `LEIDEN_ALGORITHM_VERSION`.
 
+Near-clone detection exposes per-phase observations
+`component_clone_tokenization_us`, `component_clone_candidate_generation_us`
+(the exact-safe rare-token prefix filter), `component_clone_exact_verification_us`,
+`component_clone_cache_lookup_us`, and `component_clone_merge_us`, alongside the
+deterministic counters `stage_enrichment_clone_comparisons` (pairs reaching exact
+verification), `stage_enrichment_clone_prefilter_pairs`, and
+`stage_enrichment_clone_cache_hit`. `warm_cache` benchmarking clears the
+persisted clone snapshot before each sample -- exactly as it clears the
+community snapshot -- so the tokenization, candidate-generation, and
+exact-verification budgets measure the implementation rather than a snapshot hit;
+the snapshot's no-op reuse is covered by unit tests instead. Reviewed relative
+budgets gate the three dominant clone phases for `uv` and `nestjs`.
+
 The lab also evaluates the versioned weighted scope recorded in
 `lab/community-scope-decision.json`. It records edge count, runtime, ARI, NMI,
 curated pair accuracy, cohesion, and conductance without changing the
