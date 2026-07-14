@@ -3853,11 +3853,6 @@ mod tests {
         assert_eq!(jaccard_similarity(&[1, 2], &[1, 2, 3, 4]), 0.5);
     }
 
-    /// LIT-38.2 AC2: the slice-interning tokenizer produces sorted-unique
-    /// interned token vectors byte-identical to the previous
-    /// `BTreeSet<String>` reference across several candidates sharing one
-    /// interner, so Jaccard scores are unchanged. Mixed case, single-character
-    /// tokens, and repeated tokens are all exercised.
     /// LIT-40.1: `smallest_symbol_owner` selects the innermost enclosing symbol
     /// (smallest span) among a file's symbols, breaking ties by node id, and
     /// falls back to a wider symbol for lines only it encloses -- the exact
