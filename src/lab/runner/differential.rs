@@ -17,9 +17,14 @@ pub(super) fn differential_python_definitions(
     graph: &Graph,
 ) -> Result<AssertionResult, LabError> {
     let script = r#"import ast, pathlib, sys
+root = pathlib.Path(sys.argv[1])
 count = 0
-for path in pathlib.Path(sys.argv[1]).rglob('*.py'):
-    if any(part in {'.git', '.lithograph'} for part in path.parts):
+for path in root.rglob('*.py'):
+    relative = path.relative_to(root)
+    name = relative.name
+    if any(part in {'.git', '.lithograph', 'test', 'tests', '__tests__', 'spec', 'specs'} for part in relative.parts):
+        continue
+    if name.startswith(('test_', 'spec_')) or name.endswith(('_test.py', '_tests.py', '.test.py', '.spec.py')):
         continue
     try:
         tree = ast.parse(path.read_text(encoding='utf-8'))

@@ -41,6 +41,8 @@ pub struct PipelineInvalidationMetadata {
     pub prompt_version: String,
     /// Semantic grouping setting used for planning.
     pub semantic_grouping: bool,
+    /// Whether conventional test artifacts were included in the scan.
+    pub include_tests: bool,
 }
 
 impl Default for PipelineInvalidationMetadata {
@@ -53,16 +55,18 @@ impl Default for PipelineInvalidationMetadata {
             graph_pipeline_version: GRAPH_BUILD_PIPELINE_VERSION,
             prompt_version: String::new(),
             semantic_grouping: false,
+            include_tests: false,
         }
     }
 }
 
 impl PipelineInvalidationMetadata {
     /// Builds current metadata for a run.
-    pub fn current(prompt_version: &str, semantic_grouping: bool) -> Self {
+    pub fn current(prompt_version: &str, semantic_grouping: bool, include_tests: bool) -> Self {
         Self {
             prompt_version: prompt_version.to_owned(),
             semantic_grouping,
+            include_tests,
             ..Self::default()
         }
     }
@@ -118,7 +122,7 @@ impl RepositorySnapshot {
             .map(|(path, hash)| format!("{path}:{hash}"))
             .collect();
         pairs.push(format!(
-            "pipeline:analyzer={}:language_registry={}:graph_schema={}:graph_model={}:graph_pipeline={}:prompt={}:semantic_grouping={}",
+            "pipeline:analyzer={}:language_registry={}:graph_schema={}:graph_model={}:graph_pipeline={}:prompt={}:semantic_grouping={}:include_tests={}",
             self.pipeline.analyzer_version,
             self.pipeline.language_registry_version,
             self.pipeline.graph_schema_version,
@@ -126,6 +130,7 @@ impl RepositorySnapshot {
             self.pipeline.graph_pipeline_version,
             self.pipeline.prompt_version,
             self.pipeline.semantic_grouping,
+            self.pipeline.include_tests,
         ));
         pairs.sort_unstable();
         blake3::hash(pairs.join("\n").as_bytes())
@@ -437,7 +442,7 @@ mod tests {
     }
 
     fn pipeline() -> PipelineInvalidationMetadata {
-        PipelineInvalidationMetadata::current("v1", false)
+        PipelineInvalidationMetadata::current("v1", false, false)
     }
 
     #[test]

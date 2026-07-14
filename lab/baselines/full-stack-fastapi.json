@@ -2,25 +2,26 @@
   "schema_version": 2,
   "case_id": "full-stack-fastapi",
   "source_revision": "1b8b78415f0b2397bbd10b73caaf44c01299b969",
-  "graph_hash": "ed461db8df6f3a5b95ddbacf3707ff0be75608a9edd9b0746ea424a74ceab40c",
+  "graph_hash": "04bdcf9bf2df45076eb958dcb3ab5e997a7d491637829941e9c3e148ca34860a",
   "stage_hashes": {
-    "analytics": "66eddcebec963c1243742b5b480824d2aa78be73a2e74869df302bb8699eed13",
-    "definitions_and_imports": "2efac49388e07d0bd9d1a869229d0ec3ca16bed10685409e1b871933d64996e2",
-    "enrichment": "a93b2bcf24ec75308f958915ddece4afb55a1706348e37ec12a819fd0c4e9ddf",
-    "finalize": "66eddcebec963c1243742b5b480824d2aa78be73a2e74869df302bb8699eed13",
-    "persistence": "66eddcebec963c1243742b5b480824d2aa78be73a2e74869df302bb8699eed13",
-    "resolution": "66eddcebec963c1243742b5b480824d2aa78be73a2e74869df302bb8699eed13",
-    "structure": "65b16cf3c2062628b6a7a5cbe9d21449322871dc1ecee52fe1849f760db8593f"
+    "analytics": "84be892db2253d1a296ca3ff3b358c13e0b37b1b055c1ed50c56a4e4a655bb77",
+    "definitions_and_imports": "765b6706e77b01f4eb310a640caa71a95ce291cd2bd51c39fb69075ee69196f4",
+    "enrichment": "e4453a9e205d8007fbffcc0ee030b401dfd221878873296951e45dc0e5cc9ae9",
+    "finalize": "84be892db2253d1a296ca3ff3b358c13e0b37b1b055c1ed50c56a4e4a655bb77",
+    "persistence": "84be892db2253d1a296ca3ff3b358c13e0b37b1b055c1ed50c56a4e4a655bb77",
+    "resolution": "84be892db2253d1a296ca3ff3b358c13e0b37b1b055c1ed50c56a4e4a655bb77",
+    "structure": "c7f5d68a27734f6315f2a7c85743e195b4bcc53929df78e7254822e4015f77b5"
   },
   "assertions": {
     "backend-main-contains-id-generator": true,
     "backend-main-no-phantom": true,
     "backend-python": true,
+    "fastapi-model-community": true,
     "frontend-typescript": true,
     "graph-valid": true,
     "template-negative-clone": true
   },
-  "reason": "Reviewed LIT-33 Full Stack FastAPI truth pack",
+  "reason": "Default test exclusion and architecture-aware communities recalibrate reviewed merge corpus baselines",
   "previous_graph_hash": "ed461db8df6f3a5b95ddbacf3707ff0be75608a9edd9b0746ea424a74ceab40c",
-  "previous_reason": "Pinned Full Stack FastAPI 0.6.0 corpus baseline; exact graph-valid failure tracked by LIT-29 until 2026-08-13"
+  "previous_reason": "Reviewed LIT-33 Full Stack FastAPI truth pack"
 }

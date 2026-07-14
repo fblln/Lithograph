@@ -2,15 +2,15 @@
   "schema_version": 2,
   "case_id": "flask",
   "source_revision": "2c1b30d0503cfb064f1cb252e6614a06915a362a",
-  "graph_hash": "682c84ba441583dd9caee67549b5bd2a4f774c290838cbe9e72896e96d3681af",
+  "graph_hash": "83a13d6e4b11e53ab420ac555b6790a77f2e028db17327b6a39e6af6e8e25d14",
   "stage_hashes": {
-    "analytics": "4e1ff01113943ecae49683bedb3deef287c48e4391fcc690229784dbf8ba60e0",
-    "definitions_and_imports": "cb17ff160656174aa2e539a7be3e4b5b52f874225d2f63c6ef7d70f7db8946db",
-    "enrichment": "028097e0c5cfa4170262df0024303504c00661b3da36e0d656de3edd84c584c8",
-    "finalize": "4e1ff01113943ecae49683bedb3deef287c48e4391fcc690229784dbf8ba60e0",
-    "persistence": "4e1ff01113943ecae49683bedb3deef287c48e4391fcc690229784dbf8ba60e0",
-    "resolution": "4e1ff01113943ecae49683bedb3deef287c48e4391fcc690229784dbf8ba60e0",
-    "structure": "5f52555a7c20b5349454c4b78e98a4f1d23f09cfd404965e6309d6e7bf3dd72e"
+    "analytics": "f62a512602b4243710ffc3696bf4d0c715dba0a1d3c96f8573a2190c7b74fdf8",
+    "definitions_and_imports": "ef19991d5ef4e73c840e4cbccd89b8b65fec619ee4e7201bbfc48d88bc1e09eb",
+    "enrichment": "739b03c6d981c5696487370bbc3bf7c7ab8fcd7b634516e387946b8079288de6",
+    "finalize": "f62a512602b4243710ffc3696bf4d0c715dba0a1d3c96f8573a2190c7b74fdf8",
+    "persistence": "f62a512602b4243710ffc3696bf4d0c715dba0a1d3c96f8573a2190c7b74fdf8",
+    "resolution": "f62a512602b4243710ffc3696bf4d0c715dba0a1d3c96f8573a2190c7b74fdf8",
+    "structure": "760702829737d60972bd22d90d6f2ebf2921242a6e7663b1697876284ea2e5eb"
   },
   "assertions": {
     "flask-app-contains-class": true,
@@ -21,7 +21,7 @@
     "flask-no-phantom-class": true,
     "graph-valid": true
   },
-  "reason": "Reviewed LIT-32 clone bucket pair normalization and recovered exact-Jaccard Flask pairs",
-  "previous_graph_hash": "186bfceef6cde67befce8b8e80fc0f698950c2269cb896e910462b728836ce33",
-  "previous_reason": "Reviewed LIT-33 Flask semantic role truth"
+  "reason": "Default test exclusion and architecture-aware communities recalibrate reviewed merge corpus baselines",
+  "previous_graph_hash": "682c84ba441583dd9caee67549b5bd2a4f774c290838cbe9e72896e96d3681af",
+  "previous_reason": "Reviewed LIT-32 clone bucket pair normalization and recovered exact-Jaccard Flask pairs"
 }

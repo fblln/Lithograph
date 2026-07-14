@@ -26,7 +26,7 @@ pub use communities::{
     CommunityAnalysis, CommunityDiagnostics, CommunityScope, CommunitySnapshot,
     CommunitySnapshotStore, CommunitySummary, CommunityTopic, LEIDEN_ALGORITHM_VERSION,
     TOPIC_ALGORITHM_VERSION, TopicSnapshot, TopicSnapshotStore, analyze_communities,
-    environment_aware_scope, label_topic_snapshot, leiden_communities,
+    architecture_aware_scope, environment_aware_scope, label_topic_snapshot, leiden_communities,
     leiden_communities_with_diagnostics,
 };
 pub use enrichment::{ENRICHMENT_ALGORITHM_VERSION, EnrichmentOverlay, derive_enrichment};

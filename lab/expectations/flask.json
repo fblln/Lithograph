@@ -13,11 +13,10 @@
   "known_failures": [
     {
       "assertion_id": "graph-valid",
-      "backlog": ["LIT-29", "LIT-30"],
+      "backlog": ["LIT-30"],
       "expires": "2026-08-13",
-      "issue_count": 7,
+      "issue_count": 2,
       "signatures": [
-        { "contains": "of kind UsesType targets package:Flask", "count": 5 },
         { "contains": "evidence for examples/tutorial/flaskr/templates/blog/index.html spans lines 25-29", "count": 2 }
       ]
     }

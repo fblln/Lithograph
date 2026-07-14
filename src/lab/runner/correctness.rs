@@ -12,8 +12,8 @@ use super::{
 };
 use crate::domain::Artifact;
 use crate::graph::{
-    CommunityScope, CommunitySnapshotStore, CommunitySummary, Graph, GraphBuildTraceConfig,
-    GraphBuildTraceDetail, GraphValidator, analyze_communities, environment_aware_scope,
+    CommunitySnapshotStore, CommunitySummary, Graph, GraphBuildTraceConfig, GraphBuildTraceDetail,
+    GraphValidator, analyze_communities, architecture_aware_scope, environment_aware_scope,
     filter_classes,
 };
 use crate::inventory::{RepositoryWalker, WalkOptions};
@@ -86,7 +86,7 @@ impl Lab {
         let community_store = CommunitySnapshotStore::new(self.root.join("work/community-cache"));
         let community_analysis = analyze_communities(
             &output.graph,
-            &CommunityScope::Combined,
+            &architecture_aware_scope(),
             Some(&community_store),
         )?;
         let communities_ms = millis(communities_start.elapsed());

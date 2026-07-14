@@ -26,6 +26,7 @@ where
         &model_name,
         &args.prompt_version,
         args.semantic_grouping,
+        args.include_tests,
     )?;
     writer.write_all(render_init_report(&report).as_bytes())?;
     Ok(())
@@ -45,6 +46,7 @@ where
         &model_name,
         &args.prompt_version,
         args.semantic_grouping,
+        args.include_tests,
     )?;
     writer.write_all(render_update_report(&report).as_bytes())?;
     Ok(())

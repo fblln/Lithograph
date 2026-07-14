@@ -2,24 +2,25 @@
   "schema_version": 2,
   "case_id": "uv",
   "source_revision": "135a3636789bb6886e0a7876f58cb4dbb270ba6d",
-  "graph_hash": "0596887696948557002031e6e83282c6805a8b20370112bdb08cd4e9e9167738",
+  "graph_hash": "d7b752d82a3d08ded1ec8bd1d538b8ee9813aa59d150c9d2b36c9cb151602ba3",
   "stage_hashes": {
-    "analytics": "d5e50dd335187a95b9bed16000b324aeef96f5f74721d8b7fcf268677c1bbf56",
-    "definitions_and_imports": "c5d0dcd5a73a06ef0b792851d7c345289be1b8fb4c4572a77b8bb4c56de209a8",
-    "enrichment": "937cbe69c941cb2ed31cd638a9bbd5056c6ed5a661667679e7995aed33da073b",
-    "finalize": "d5e50dd335187a95b9bed16000b324aeef96f5f74721d8b7fcf268677c1bbf56",
-    "persistence": "d5e50dd335187a95b9bed16000b324aeef96f5f74721d8b7fcf268677c1bbf56",
-    "resolution": "d5e50dd335187a95b9bed16000b324aeef96f5f74721d8b7fcf268677c1bbf56",
-    "structure": "b71b1c49e3ef6a0ebafaf41167b57902faff748b8eb632b7d8afe689790cc894"
+    "analytics": "0849412dabd2998440fb2bbcfb4d3300a56367390c7451a550e383f0f3016dbe",
+    "definitions_and_imports": "4d570b8a5484f1c9cc1d770c0e06889e9345cbceab16f504c590a31502a5bffa",
+    "enrichment": "7ac06e1b0f183f89550ed00641fb51b73ca71678b8622599b4e82488fb7c639f",
+    "finalize": "0849412dabd2998440fb2bbcfb4d3300a56367390c7451a550e383f0f3016dbe",
+    "persistence": "0849412dabd2998440fb2bbcfb4d3300a56367390c7451a550e383f0f3016dbe",
+    "resolution": "0849412dabd2998440fb2bbcfb4d3300a56367390c7451a550e383f0f3016dbe",
+    "structure": "a33303d11819a98ead6e7d63e6ea652c55ecc04084c559c6c6d48f1887253f90"
   },
   "assertions": {
     "graph-valid": true,
+    "uv-library-main-community": true,
     "uv-main-contained": true,
     "uv-negative-clone": true,
     "uv-no-phantom-main": true,
     "uv-rust": true
   },
-  "reason": "Reviewed final LIT-32 normalized clone candidate pairs on uv",
-  "previous_graph_hash": "18d29c9a496615bea4904ed3145b3a23af2bf37b7235508f366d23b9a29415e5",
-  "previous_reason": "Reviewed LIT-33 uv truth pack cargo differential and workspace package fix"
+  "reason": "Default test exclusion and architecture-aware communities recalibrate reviewed nightly corpus baselines",
+  "previous_graph_hash": "0596887696948557002031e6e83282c6805a8b20370112bdb08cd4e9e9167738",
+  "previous_reason": "Reviewed final LIT-32 normalized clone candidate pairs on uv"
 }

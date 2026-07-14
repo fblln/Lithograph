@@ -1,23 +1,37 @@
 //! Deterministic, scoped Leiden-style community summaries.
 
 use crate::graph::{Graph, GraphNode, GraphNodeId, RelationKind};
+use crate::inventory::is_test_path;
 use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
 /// Version of the deterministic local-moving Leiden phase implemented here.
-pub const LEIDEN_ALGORITHM_VERSION: u32 = 3;
+pub const LEIDEN_ALGORITHM_VERSION: u32 = 5;
 
 /// Edge scope used while detecting communities.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CommunityScope {
     /// Consider every relation kind.
     Combined,
+    /// Production-code architecture, excluding non-production bridge nodes
+    /// and relation categories that primarily express file/package indexing.
+    Architecture,
     /// Consider only these relation kinds.
     RelationKinds(Vec<RelationKind>),
     /// Consider relation kinds with explicit positive integer weights.
     WeightedRelationKinds(BTreeMap<RelationKind, u32>),
+}
+
+/// Scope used for repository architecture views and correctness evaluation.
+///
+/// It favors direct code structure and behavior while excluding package hubs,
+/// unresolved references, and documentation/example/test artifacts. Those
+/// facts remain queryable in the graph; they simply do not determine module
+/// boundaries.
+pub fn architecture_aware_scope() -> CommunityScope {
+    CommunityScope::Architecture
 }
 
 /// Deterministic work counters plus non-canonical phase timings.
@@ -367,10 +381,11 @@ pub fn leiden_communities_with_diagnostics(
     scope: &CommunityScope,
 ) -> CommunityAnalysis {
     let adjacency_start = Instant::now();
+    let graph_nodes: BTreeMap<_, _> = graph.nodes.iter().map(|node| (node.id(), node)).collect();
     let selected: Vec<_> = graph
         .relations
         .iter()
-        .filter(|edge| in_scope(edge.kind, scope))
+        .filter(|edge| relation_in_scope(edge, &graph_nodes, scope))
         .collect();
     let node_ids: Vec<_> = selected
         .iter()
@@ -612,9 +627,64 @@ fn in_scope(kind: RelationKind, scope: &CommunityScope) -> bool {
     relation_weight(kind, scope) > 0
 }
 
+fn relation_in_scope(
+    edge: &crate::graph::Relation,
+    nodes: &BTreeMap<&GraphNodeId, &GraphNode>,
+    scope: &CommunityScope,
+) -> bool {
+    if !in_scope(edge.kind, scope) {
+        return false;
+    }
+    !matches!(scope, CommunityScope::Architecture)
+        || nodes
+            .get(&edge.source)
+            .zip(nodes.get(&edge.target))
+            .is_some_and(|(source, target)| {
+                is_production_code_node(source) && is_production_code_node(target)
+            })
+}
+
+fn is_production_code_node(node: &GraphNode) -> bool {
+    let path = match node {
+        GraphNode::Artifact(node) => &node.path,
+        GraphNode::Symbol(node) => node.evidence.path.as_str(),
+        _ => return false,
+    };
+    !is_auxiliary_path(path)
+}
+
+fn is_auxiliary_path(path: &str) -> bool {
+    is_test_path(path)
+        || path.split('/').any(|component| {
+            matches!(
+                component,
+                "docs"
+                    | "examples"
+                    | "example"
+                    | "benches"
+                    | "benchmark"
+                    | "benchmarks"
+                    | "sample"
+                    | "samples"
+                    | "integration"
+                    | "e2e"
+            )
+        })
+}
+
 fn relation_weight(kind: RelationKind, scope: &CommunityScope) -> u32 {
     match scope {
         CommunityScope::Combined => 1,
+        CommunityScope::Architecture => match kind {
+            RelationKind::Contains | RelationKind::HasMethod | RelationKind::MemberOf => 4,
+            RelationKind::Calls
+            | RelationKind::DataFlows
+            | RelationKind::Implements
+            | RelationKind::Inherits
+            | RelationKind::HandlesRoute => 3,
+            RelationKind::Imports => 1,
+            _ => 0,
+        },
         CommunityScope::RelationKinds(kinds) => u32::from(kinds.contains(&kind)),
         CommunityScope::WeightedRelationKinds(weights) => weights.get(&kind).copied().unwrap_or(0),
     }
@@ -623,6 +693,7 @@ fn relation_weight(kind: RelationKind, scope: &CommunityScope) -> u32 {
 fn normalized_scope(scope: &CommunityScope) -> CommunityScope {
     match scope {
         CommunityScope::Combined => CommunityScope::Combined,
+        CommunityScope::Architecture => CommunityScope::Architecture,
         CommunityScope::RelationKinds(kinds) => {
             let mut kinds = kinds.clone();
             kinds.sort();
@@ -705,6 +776,82 @@ mod tests {
             community.members.contains(&GraphNodeId::new("env"))
                 && community.members.contains(&GraphNodeId::new("config"))
         }));
+    }
+
+    #[test]
+    fn architecture_scope_keeps_direct_production_code_groups_separate_from_auxiliary_nodes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        fn artifact(path: &str) -> Result<GraphNode, Box<dyn std::error::Error>> {
+            let path = crate::domain::RepoPath::new(path)?;
+            let evidence = crate::domain::EvidenceRef::file(
+                crate::domain::ArtifactId::from_path(&path),
+                path.clone(),
+            );
+            Ok(GraphNode::Artifact(crate::graph::ArtifactNode {
+                id: GraphNodeId::new(format!("artifact:{path}")),
+                path: path.to_string(),
+                category: crate::domain::ArtifactCategory::SourceCode,
+                evidence,
+            }))
+        }
+
+        let production_path = crate::domain::RepoPath::new("src/service.rs")?;
+        let production_evidence = crate::domain::EvidenceRef::file(
+            crate::domain::ArtifactId::from_path(&production_path),
+            production_path,
+        );
+        let graph = Graph {
+            nodes: vec![
+                artifact("src/service.rs")?,
+                GraphNode::Symbol(crate::graph::SymbolNode {
+                    id: GraphNodeId::new("symbol:src/service.rs#service::run"),
+                    kind: crate::graph::SymbolKind::Function,
+                    qualified_name: "service::run".to_owned(),
+                    doc: None,
+                    evidence: production_evidence,
+                }),
+                artifact("tests/service_test.rs")?,
+                artifact("docs/service.md")?,
+            ],
+            relations: vec![
+                edge(
+                    "contains",
+                    "artifact:src/service.rs",
+                    "symbol:src/service.rs#service::run",
+                    RelationKind::Contains,
+                ),
+                edge(
+                    "test-call",
+                    "artifact:tests/service_test.rs",
+                    "symbol:src/service.rs#service::run",
+                    RelationKind::Calls,
+                ),
+                edge(
+                    "doc-import",
+                    "artifact:docs/service.md",
+                    "symbol:src/service.rs#service::run",
+                    RelationKind::Imports,
+                ),
+                edge(
+                    "reference",
+                    "artifact:src/service.rs",
+                    "symbol:src/service.rs#service::run",
+                    RelationKind::References,
+                ),
+            ],
+        };
+
+        let analysis = leiden_communities_with_diagnostics(&graph, &architecture_aware_scope());
+        assert_eq!(analysis.diagnostics.selected_edges, 1);
+        assert_eq!(analysis.communities.len(), 1);
+        assert_eq!(
+            analysis.communities[0].members,
+            vec![
+                GraphNodeId::new("artifact:src/service.rs"),
+                GraphNodeId::new("symbol:src/service.rs#service::run"),
+            ]
+        );
+        Ok(())
     }
 
     #[test]

@@ -66,9 +66,11 @@ fn scan_and_plan(
     repo_root: &Path,
     cache: Option<&AnalysisCache>,
     semantic_grouping: bool,
+    include_tests: bool,
 ) -> Result<(Vec<Artifact>, Graph, Vec<DocumentationModule>), InitError> {
     let walk_options = WalkOptions {
         exclude_globs: scan_exclude_globs(),
+        include_tests,
         ..WalkOptions::default()
     };
     let artifacts = RepositoryWalker::new(walk_options).walk(repo_root)?;
@@ -217,7 +219,7 @@ pub fn run_init(
     model_name: &str,
     prompt_version: &str,
 ) -> Result<InitReport, InitError> {
-    run_init_with_options(repo_root, model, model_name, prompt_version, false)
+    run_init_with_options(repo_root, model, model_name, prompt_version, false, false)
 }
 
 /// Runs the full `init` pipeline with explicit planning options.
@@ -227,13 +229,14 @@ pub fn run_init_with_options(
     model_name: &str,
     prompt_version: &str,
     semantic_grouping: bool,
+    include_tests: bool,
 ) -> Result<InitReport, InitError> {
     let cache = analysis_cache(repo_root);
     let mut stage_timings: Vec<StageTiming> = Vec::new();
 
     let (artifacts, graph, modules) =
         timed_stage(PipelineStage::PreprocessIndex, &mut stage_timings, || {
-            scan_and_plan(repo_root, Some(&cache), semantic_grouping)
+            scan_and_plan(repo_root, Some(&cache), semantic_grouping, include_tests)
         })?;
 
     let research = timed_stage(PipelineStage::Research, &mut stage_timings, || {
@@ -318,7 +321,11 @@ pub fn run_init_with_options(
             manifest: &manifest,
             written_pages: &written_pages,
             previous_snapshot: previous_snapshot.as_ref(),
-            pipeline: PipelineInvalidationMetadata::current(prompt_version, semantic_grouping),
+            pipeline: PipelineInvalidationMetadata::current(
+                prompt_version,
+                semantic_grouping,
+                include_tests,
+            ),
             cache_hits: cache.hits(),
             cache_misses: cache.misses(),
             prompt_chars,
@@ -415,7 +422,7 @@ pub fn run_update(
     model_name: &str,
     prompt_version: &str,
 ) -> Result<UpdateReport, InitError> {
-    run_update_with_options(repo_root, model, model_name, prompt_version, false)
+    run_update_with_options(repo_root, model, model_name, prompt_version, false, false)
 }
 
 /// Runs `update` with explicit planning options.
@@ -425,6 +432,7 @@ pub fn run_update_with_options(
     model_name: &str,
     prompt_version: &str,
     semantic_grouping: bool,
+    include_tests: bool,
 ) -> Result<UpdateReport, InitError> {
     let lithograph_dir = repo_root.join(".lithograph");
     let manifest_path = lithograph_dir.join("manifest.json");
@@ -437,7 +445,7 @@ pub fn run_update_with_options(
             let previous_manifest: Option<PageManifest> = JsonStore.read(&manifest_path)?;
             let previous_snapshot: Option<RepositorySnapshot> = JsonStore.read(&snapshot_path)?;
             let (artifacts, graph, modules) =
-                scan_and_plan(repo_root, Some(&cache), semantic_grouping)?;
+                scan_and_plan(repo_root, Some(&cache), semantic_grouping, include_tests)?;
             Ok((
                 artifacts,
                 graph,
@@ -576,7 +584,11 @@ pub fn run_update_with_options(
             manifest: &manifest,
             written_pages: &written_pages,
             previous_snapshot: previous_snapshot.as_ref(),
-            pipeline: PipelineInvalidationMetadata::current(prompt_version, semantic_grouping),
+            pipeline: PipelineInvalidationMetadata::current(
+                prompt_version,
+                semantic_grouping,
+                include_tests,
+            ),
             cache_hits: cache.hits(),
             cache_misses: cache.misses(),
             prompt_chars,
@@ -649,7 +661,7 @@ fn write_research_artifacts(
 
 #[cfg(test)]
 mod tests {
-    use super::{InitError, run_init, run_update};
+    use super::{InitError, run_init, run_init_with_options, run_update, run_update_with_options};
     use crate::generation::{LanguageModel, MockModel, ModelError, ModelRequest, PageGeneration};
     use crate::run::PipelineStage;
     use std::path::Path;
@@ -714,6 +726,39 @@ mod tests {
 
         let manifest_json = std::fs::read_to_string(temp.path().join(".lithograph/manifest.json"))?;
         assert!(manifest_json.contains("\"output_hash\""));
+
+        Ok(())
+    }
+
+    #[test]
+    fn init_and_update_exclude_tests_unless_explicitly_enabled()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::create_dir_all(temp.path().join("tests"))?;
+        std::fs::write(temp.path().join("src/lib.rs"), "pub fn production() {}\n")?;
+        std::fs::write(
+            temp.path().join("tests/api_test.rs"),
+            "#[test] fn api() {}\n",
+        )?;
+
+        let default_init = run_init(temp.path(), &MockModel, "mock", "v1")?;
+        assert_eq!(default_init.artifact_count, 1);
+        let default_graph = std::fs::read_to_string(temp.path().join(".lithograph/graph.json"))?;
+        assert!(!default_graph.contains("tests/api_test.rs"));
+
+        let opt_in_update =
+            run_update_with_options(temp.path(), &MockModel, "mock", "v1", false, true)?;
+        assert_eq!(opt_in_update.artifact_count, 2);
+        let opt_in_graph = std::fs::read_to_string(temp.path().join(".lithograph/graph.json"))?;
+        assert!(opt_in_graph.contains("tests/api_test.rs"));
+
+        let default_update = run_update(temp.path(), &MockModel, "mock", "v1")?;
+        assert_eq!(default_update.artifact_count, 1);
+
+        let opt_in_init =
+            run_init_with_options(temp.path(), &MockModel, "mock", "v1", false, true)?;
+        assert_eq!(opt_in_init.artifact_count, 2);
 
         Ok(())
     }

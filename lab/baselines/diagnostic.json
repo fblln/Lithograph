@@ -1,16 +1,16 @@
 {
   "schema_version": 2,
   "case_id": "diagnostic",
-  "source_revision": "fixture:25f03da1a4c504fbd28c747650b12c095883d28bfa58a73ac36d8de3fe4914b6",
-  "graph_hash": "0da44dfb2f16594ff0a8788681706729752fa6e2246db7cbef05f10bb4709b74",
+  "source_revision": "fixture:3401be7e1e362f986e9d48820149a34d3f041eab76bea674f1ce48502476fb17",
+  "graph_hash": "63261121346e9be6e64b093e3127f8e225d83496baa7d50bc1f6f6338cf237be",
   "stage_hashes": {
-    "analytics": "ab045a4d014643db7735394f142ed20cd9b4550218e5230a9e3717173cf26c31",
-    "definitions_and_imports": "2a90d41af838a66b68aa97b1b6e75c3c244447c5320e0147b0d7eb8fdda0d341",
-    "enrichment": "06c2cef7dd23b40fab3a0ab0bdd44c52633ebe035e220661554acd3a1e7a6859",
-    "finalize": "ab045a4d014643db7735394f142ed20cd9b4550218e5230a9e3717173cf26c31",
-    "persistence": "ab045a4d014643db7735394f142ed20cd9b4550218e5230a9e3717173cf26c31",
-    "resolution": "ab045a4d014643db7735394f142ed20cd9b4550218e5230a9e3717173cf26c31",
-    "structure": "9f8ada326bf0334aec7703eb6934347ebd7aaa355284b3e071303289b9c1b9a1"
+    "analytics": "7bd256e85baec7fbc8f998fe0d94f1c25e7fc442f707f078b7ccf6a57811e1af",
+    "definitions_and_imports": "42d3a5112210159fde25680f19a2084d130bbabb5c18bfa60fba2eb709a35733",
+    "enrichment": "7bd256e85baec7fbc8f998fe0d94f1c25e7fc442f707f078b7ccf6a57811e1af",
+    "finalize": "7bd256e85baec7fbc8f998fe0d94f1c25e7fc442f707f078b7ccf6a57811e1af",
+    "persistence": "7bd256e85baec7fbc8f998fe0d94f1c25e7fc442f707f078b7ccf6a57811e1af",
+    "resolution": "7bd256e85baec7fbc8f998fe0d94f1c25e7fc442f707f078b7ccf6a57811e1af",
+    "structure": "a9d51d8c06ed3c485dfb66df3e4dcb4cffb78a13b0a206b7258ed9e26de16b5c"
   },
   "assertions": {
     "cache-equivalence": true,
@@ -64,7 +64,7 @@
     "service-method-community": true,
     "service-repository-boundary": true
   },
-  "reason": "Canonicalized diagnostic fixture EOF whitespace; reviewed semantic graph remains unchanged",
+  "reason": "Default test exclusion removes test-only graph facts while architecture scope preserves production communities",
   "previous_graph_hash": "0da44dfb2f16594ff0a8788681706729752fa6e2246db7cbef05f10bb4709b74",
-  "previous_reason": "Reviewed LIT-33 diagnostic oracle expansion, cache-move equivalence, and schema v2 contracts"
+  "previous_reason": "Canonicalized diagnostic fixture EOF whitespace; reviewed semantic graph remains unchanged"
 }
