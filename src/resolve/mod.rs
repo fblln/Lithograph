@@ -23,7 +23,7 @@ use crate::domain::Confidence;
 use crate::graph::{
     Graph, GraphNode, GraphNodeId, Relation, RelationProvenance, RelationResolution,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 pub use environment::{
     ConfigFact, ENVIRONMENT_FACT_VERSION, EnvFact, EnvironmentCandidate,
@@ -60,6 +60,17 @@ pub struct ResolverContext<'a> {
     pub artifacts_by_path: BTreeMap<&'a str, &'a GraphNodeId>,
     /// Shared project-wide declaration index for symbol-aware resolvers.
     pub symbols: ProjectSymbolRegistry,
+    /// LIT-37: `Imports` relations grouped by their source node id, in graph
+    /// relation order. Lets a per-call resolver find a source file's imports
+    /// with one map lookup instead of scanning every relation, turning the
+    /// TypeScript call resolver's O(calls x relations) hot path into O(calls).
+    imports_by_source: HashMap<&'a GraphNodeId, Vec<&'a Relation>>,
+    /// LIT-37: `Unresolved` node literal values by node id, so an import's raw
+    /// value is a map lookup instead of a full `graph.nodes` scan per import.
+    unresolved_values_by_id: HashMap<&'a GraphNodeId, &'a str>,
+    /// LIT-37: ids of callable symbols (functions/methods), so candidate
+    /// filtering is a set membership test instead of a full `graph.nodes` scan.
+    callable_symbol_ids: HashSet<&'a GraphNodeId>,
 }
 
 impl<'a> ResolverContext<'a> {
@@ -70,6 +81,8 @@ impl<'a> ResolverContext<'a> {
         let mut local_package_names = BTreeSet::new();
         let mut symbols_by_qualified_name = BTreeMap::new();
         let mut artifacts_by_path = BTreeMap::new();
+        let mut unresolved_values_by_id = HashMap::new();
+        let mut callable_symbol_ids = HashSet::new();
 
         for node in &graph.nodes {
             match node {
@@ -84,16 +97,36 @@ impl<'a> ResolverContext<'a> {
                 }
                 GraphNode::Symbol(symbol) => {
                     symbols_by_qualified_name.insert(symbol.qualified_name.as_str(), node.id());
+                    if matches!(
+                        symbol.kind,
+                        crate::graph::SymbolKind::Function | crate::graph::SymbolKind::Method
+                    ) {
+                        callable_symbol_ids.insert(node.id());
+                    }
                 }
                 GraphNode::Artifact(artifact) => {
                     artifacts_by_path.insert(artifact.path.as_str(), node.id());
+                }
+                GraphNode::Unresolved(unresolved) => {
+                    unresolved_values_by_id.insert(node.id(), unresolved.value.as_str());
                 }
                 GraphNode::Config(_)
                 | GraphNode::Documentation(_)
                 | GraphNode::Container(_)
                 | GraphNode::Command(_)
-                | GraphNode::EnvVar(_)
-                | GraphNode::Unresolved(_) => {}
+                | GraphNode::EnvVar(_) => {}
+            }
+        }
+
+        // Group imports by source in relation order, so the per-call resolver
+        // sees the same imports it would by scanning `graph.relations` (LIT-37).
+        let mut imports_by_source: HashMap<&GraphNodeId, Vec<&Relation>> = HashMap::new();
+        for relation in &graph.relations {
+            if relation.kind == crate::graph::RelationKind::Imports {
+                imports_by_source
+                    .entry(&relation.source)
+                    .or_default()
+                    .push(relation);
             }
         }
 
@@ -105,6 +138,9 @@ impl<'a> ResolverContext<'a> {
             symbols_by_qualified_name,
             artifacts_by_path,
             symbols: ProjectSymbolRegistry::build(graph),
+            imports_by_source,
+            unresolved_values_by_id,
+            callable_symbol_ids,
         }
     }
 }
@@ -295,16 +331,22 @@ impl Resolver for TypeScriptCallResolver {
         let source_path = relation.source.as_str().strip_prefix("artifact:")?;
         let mut candidates = BTreeSet::new();
 
-        for import in context.graph.relations.iter().filter(|import| {
-            import.kind == crate::graph::RelationKind::Imports
-                && import.source == relation.source
-                && import
-                    .provenance
-                    .as_ref()
-                    .and_then(|provenance| provenance.language.as_deref())
-                    == Some(language)
+        // LIT-37: same-source imports come from the prebuilt index (relation
+        // order preserved) rather than a full scan of every graph relation.
+        let source_imports = context
+            .imports_by_source
+            .get(&relation.source)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        for import in source_imports.iter().filter(|import| {
+            import
+                .provenance
+                .as_ref()
+                .and_then(|provenance| provenance.language.as_deref())
+                == Some(language)
         }) {
-            let Some(raw_import) = unresolved_value_by_id(context.graph, &import.target) else {
+            let Some(raw_import) = context.unresolved_values_by_id.get(&import.target).copied()
+            else {
                 continue;
             };
             let Some((exported, _)) = extract_typescript_import_bindings(raw_import)
@@ -325,7 +367,7 @@ impl Resolver for TypeScriptCallResolver {
                 else {
                     continue;
                 };
-                if callable_symbol(context.graph, symbol_id) {
+                if context.callable_symbol_ids.contains(symbol_id) {
                     candidates.insert((*symbol_id).clone());
                 }
             }
@@ -338,24 +380,6 @@ impl Resolver for TypeScriptCallResolver {
             confidence: Confidence::High,
         })
     }
-}
-
-fn unresolved_value_by_id<'a>(graph: &'a Graph, id: &GraphNodeId) -> Option<&'a str> {
-    graph.nodes.iter().find_map(|node| match node {
-        GraphNode::Unresolved(unresolved) if node.id() == id => Some(unresolved.value.as_str()),
-        _ => None,
-    })
-}
-
-fn callable_symbol(graph: &Graph, id: &GraphNodeId) -> bool {
-    graph.nodes.iter().any(|node| {
-        node.id() == id
-            && matches!(
-                node,
-                GraphNode::Symbol(symbol)
-                    if matches!(symbol.kind, crate::graph::SymbolKind::Function | crate::graph::SymbolKind::Method)
-            )
-    })
 }
 
 fn typescript_import_candidates(source_path: &str, reference: &str, language: &str) -> Vec<String> {
