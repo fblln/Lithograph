@@ -6,7 +6,8 @@
     { "kind": "artifact", "id": "frontend-typescript", "path": "frontend/src/main.tsx", "category": "SourceCode", "format": "tsx" },
     { "kind": "relation", "id": "backend-main-contains-id-generator", "source_contains": "artifact:backend/app/main.py", "target_contains": "custom_generate_unique_id", "relation": "Contains", "present": true },
     { "kind": "relation", "id": "backend-main-no-phantom", "source_contains": "artifact:backend/app/main.py", "target_contains": "definitely_missing_generator", "relation": "Contains", "present": false },
-    { "kind": "clone_pair", "id": "template-negative-clone", "left_contains": "custom_generate_unique_id", "right_contains": "main.tsx", "similar": false }
+    { "kind": "clone_pair", "id": "template-negative-clone", "left_contains": "custom_generate_unique_id", "right_contains": "main.tsx", "similar": false },
+    { "kind": "community_pair", "id": "fastapi-model-community", "left_contains": "artifact:backend/app/models.py", "right_contains": "backend.app.models::Item", "together": true }
   ],
   "truth_pack": { "reviewer": "Lithograph maintainers", "provenance": "Full Stack FastAPI 0.6.0 pinned source and reviewed LIT-33 corpus sample", "unlabeled": ["frontend-backend route recall", "community ground truth", "semantic role ranking"] },
   "known_failures": [

@@ -19,6 +19,11 @@ pub struct WalkOptions {
     pub exclude_globs: Vec<String>,
     /// Whether dot-prefixed files and directories should be included.
     pub include_hidden: bool,
+    /// Whether conventional test files and directories should be included.
+    ///
+    /// Tests are valuable for implementation detail, but ordinarily obscure
+    /// the production architecture a repository scan is intended to explain.
+    pub include_tests: bool,
 }
 
 impl Default for WalkOptions {
@@ -26,6 +31,7 @@ impl Default for WalkOptions {
         Self {
             exclude_globs: Vec::new(),
             include_hidden: true,
+            include_tests: false,
         }
     }
 }
@@ -83,6 +89,9 @@ impl RepositoryWalker {
 
             let path = entry.path();
             let relative_path = relative_path(&root, path)?;
+            if !self.options.include_tests && is_test_path(relative_path.as_str()) {
+                continue;
+            }
             if excludes
                 .iter()
                 .any(|exclude| exclude.is_match(relative_path.as_str()))
@@ -110,6 +119,37 @@ impl RepositoryWalker {
             })
             .collect()
     }
+}
+
+/// Returns whether a repository-relative path is conventionally test-only.
+///
+/// This intentionally checks path components instead of broad substrings, so
+/// production files such as `contest.rs` remain part of the architecture.
+pub fn is_test_path(path: &str) -> bool {
+    let components: Vec<_> = path.split('/').collect();
+    components.iter().any(|component| {
+        matches!(
+            *component,
+            "test" | "tests" | "__tests__" | "spec" | "specs"
+        )
+    }) || components.last().is_some_and(|name| {
+        name.starts_with("test_")
+            || name.starts_with("spec_")
+            || name.ends_with("_test.rs")
+            || name.ends_with("_tests.rs")
+            || name.ends_with(".test.rs")
+            || name.ends_with(".spec.rs")
+            || name.ends_with(".test.ts")
+            || name.ends_with(".spec.ts")
+            || name.ends_with(".test.tsx")
+            || name.ends_with(".spec.tsx")
+            || name.ends_with(".test.js")
+            || name.ends_with(".spec.js")
+            || name.ends_with(".test.jsx")
+            || name.ends_with(".spec.jsx")
+            || name.ends_with(".e2e-spec.ts")
+            || name.ends_with(".e2e.ts")
+    })
 }
 
 fn relative_path(root: &Path, path: &Path) -> Result<RepoPath, WalkError> {
@@ -398,6 +438,7 @@ mod tests {
         let artifacts = RepositoryWalker::new(WalkOptions {
             exclude_globs: vec!["build/**".to_owned()],
             include_hidden: true,
+            include_tests: false,
         })
         .walk(temp.path())?;
         let paths: Vec<&str> = artifacts
@@ -406,6 +447,56 @@ mod tests {
             .collect();
 
         assert_eq!(paths, vec![".gitignore", "kept.txt"]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn excludes_conventional_tests_unless_explicitly_enabled()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = TempDir::new()?;
+        fs::create_dir_all(temp.path().join("tests"))?;
+        fs::create_dir_all(temp.path().join("src/__tests__"))?;
+        fs::write(temp.path().join("src/lib.rs"), "pub fn run() {}\n")?;
+        fs::write(
+            temp.path().join("tests/test_api.py"),
+            "def test_api(): pass\n",
+        )?;
+        fs::write(
+            temp.path().join("src/__tests__/widget.test.ts"),
+            "test('widget', () => {});\n",
+        )?;
+        fs::write(
+            temp.path().join("src/parser_test.rs"),
+            "#[test] fn parser() {}\n",
+        )?;
+        fs::write(temp.path().join("src/contest.rs"), "pub fn score() {}\n")?;
+
+        let production_paths: Vec<_> = RepositoryWalker::new(WalkOptions::default())
+            .walk(temp.path())?
+            .into_iter()
+            .map(|artifact| artifact.path.to_string())
+            .collect();
+        assert_eq!(production_paths, vec!["src/contest.rs", "src/lib.rs"]);
+
+        let all_paths: Vec<_> = RepositoryWalker::new(WalkOptions {
+            include_tests: true,
+            ..WalkOptions::default()
+        })
+        .walk(temp.path())?
+        .into_iter()
+        .map(|artifact| artifact.path.to_string())
+        .collect();
+        assert_eq!(
+            all_paths,
+            vec![
+                "src/__tests__/widget.test.ts",
+                "src/contest.rs",
+                "src/lib.rs",
+                "src/parser_test.rs",
+                "tests/test_api.py",
+            ]
+        );
 
         Ok(())
     }
@@ -458,6 +549,7 @@ mod tests {
         let invalid_glob = RepositoryWalker::new(WalkOptions {
             exclude_globs: vec!["[".to_owned()],
             include_hidden: true,
+            include_tests: false,
         })
         .walk(temp.path());
         assert!(matches!(
@@ -635,6 +727,7 @@ mod tests {
         if let Err(error) = RepositoryWalker::new(WalkOptions {
             exclude_globs: vec!["[".to_owned()],
             include_hidden: true,
+            include_tests: false,
         })
         .walk(temp.path())
         {

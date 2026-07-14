@@ -371,6 +371,9 @@ pub struct InitArgs {
     /// Use deterministic semantic grouping when planning documentation modules.
     #[arg(long)]
     pub semantic_grouping: bool,
+    /// Include conventional test files and directories in the scan.
+    #[arg(long)]
+    pub include_tests: bool,
 }
 
 /// Arguments for `integrate-agents`.
@@ -665,6 +668,7 @@ mod tests {
                 path: PathBuf::from("fixtures/polyglot"),
                 prompt_version: "v1".to_owned(),
                 semantic_grouping: false,
+                include_tests: false,
             }))
         );
     }
@@ -695,6 +699,7 @@ mod tests {
                 path: PathBuf::from("fixtures/polyglot"),
                 prompt_version: "v1".to_owned(),
                 semantic_grouping: false,
+                include_tests: false,
             }))
         );
     }
@@ -712,6 +717,20 @@ mod tests {
             cli.command,
             Some(Command::Init(InitArgs {
                 semantic_grouping: true,
+                ..
+            }))
+        ));
+    }
+
+    #[test]
+    fn parses_init_include_tests_flag() {
+        let cli =
+            Cli::parse_from_args(["lithograph", "init", "fixtures/polyglot", "--include-tests"]);
+
+        assert!(matches!(
+            cli.command,
+            Some(Command::Init(InitArgs {
+                include_tests: true,
                 ..
             }))
         ));

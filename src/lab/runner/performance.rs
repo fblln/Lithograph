@@ -6,7 +6,7 @@
 //! samples measure the implementation rather than a cache hit.
 
 use super::{Lab, LabError, hash_json, process_rss_kib, read_compatible, read_required};
-use crate::graph::{CommunityScope, CommunitySummary, Graph};
+use crate::graph::{CommunitySummary, Graph};
 use crate::lab::model::*;
 use crate::storage::JsonStore;
 use serde_json::json;
@@ -225,7 +225,7 @@ impl Lab {
             }
             let expected: Vec<CommunitySummary> =
                 read_required(&run_root.join("communities.json"))?;
-            let scope = CommunityScope::Combined;
+            let scope = crate::graph::architecture_aware_scope();
             let verification = crate::graph::leiden_communities_with_diagnostics(&graph, &scope);
             if verification.communities != expected {
                 let expected_hash = hash_json(&expected)?;

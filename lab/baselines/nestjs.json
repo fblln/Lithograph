@@ -2,24 +2,25 @@
   "schema_version": 2,
   "case_id": "nestjs",
   "source_revision": "d8a0ab829ddd8291b75109c9ac4fc4c7d070fc9e",
-  "graph_hash": "2c09e5238197392376f47e4204a7fb5da3cc83767bbf9b61c1a4ef4775113afd",
+  "graph_hash": "820f87bbd30383eb709dfb340fb81ca1753c504305d1472006e2bae55aef5d65",
   "stage_hashes": {
-    "analytics": "acf98210b08621e4b8fc326f0cb356bdc91a67543cb08ce9a4a945c0b8b30bcd",
-    "definitions_and_imports": "0a9f57dad25b6047e2bb95fbb5401d4576e5c9ffc9a24cbb361e2064b9dcd528",
-    "enrichment": "c1830d201f737d7e16d7b0fb009d7bbc4f5f10c17e2fd48d07d159e2da93cd9f",
-    "finalize": "acf98210b08621e4b8fc326f0cb356bdc91a67543cb08ce9a4a945c0b8b30bcd",
-    "persistence": "acf98210b08621e4b8fc326f0cb356bdc91a67543cb08ce9a4a945c0b8b30bcd",
-    "resolution": "acf98210b08621e4b8fc326f0cb356bdc91a67543cb08ce9a4a945c0b8b30bcd",
-    "structure": "041ddf70f8f4203d4e3df72c226fe0760ed42e86ed662d17c59faa9d1a8d18c9"
+    "analytics": "94d6519d1d30421369c167d5a8af6a2c71f8de08fcf71c6a6388e5c0dca11b07",
+    "definitions_and_imports": "75258571b21d27d5d03f23fa095a18aa7cb9d8cdf641dec6551425d21a8aa510",
+    "enrichment": "44fda2bdd84e25b5e8e2670f7a453f85fd0d8a3892b91635bfe874b38e978281",
+    "finalize": "94d6519d1d30421369c167d5a8af6a2c71f8de08fcf71c6a6388e5c0dca11b07",
+    "persistence": "94d6519d1d30421369c167d5a8af6a2c71f8de08fcf71c6a6388e5c0dca11b07",
+    "resolution": "94d6519d1d30421369c167d5a8af6a2c71f8de08fcf71c6a6388e5c0dca11b07",
+    "structure": "7b52088e36223298e4e261d41470515ef05fe442ccf1726f725ff7e8935c2fc1"
   },
   "assertions": {
     "graph-valid": true,
+    "nest-application-community": true,
     "nest-application-contained": true,
     "nest-application-typescript": true,
     "nest-negative-clone": true,
     "nest-no-phantom-application": true
   },
-  "reason": "Reviewed final LIT-32 normalized clone candidate pairs on NestJS",
-  "previous_graph_hash": "1367fcc05ad2bd2ba7cf96ee17f015c83c8371df8a1b708254f3d23e02986db4",
-  "previous_reason": "Reviewed LIT-33 NestJS truth pack and clone pruning trace"
+  "reason": "Default test exclusion and architecture-aware communities recalibrate reviewed nightly corpus baselines",
+  "previous_graph_hash": "2c09e5238197392376f47e4204a7fb5da3cc83767bbf9b61c1a4ef4775113afd",
+  "previous_reason": "Reviewed final LIT-32 normalized clone candidate pairs on NestJS"
 }

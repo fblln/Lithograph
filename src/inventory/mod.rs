@@ -16,4 +16,4 @@ pub use language::{
 pub use limits::{MAX_ANALYZABLE_BYTES, SizeDecision, SizePolicy};
 pub use safety::{SafetyDecision, SafetyPolicy};
 pub use vendor::{VENDORED_ANALYSIS_THRESHOLD, VendorDecision, VendorPolicy};
-pub use walk::{RepositoryWalker, WalkError, WalkOptions};
+pub use walk::{RepositoryWalker, WalkError, WalkOptions, is_test_path};

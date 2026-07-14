@@ -42,6 +42,7 @@ fn execute_init_writes_docs_and_reports_counts() -> Result<(), Box<dyn std::erro
             path: temp.path().to_path_buf(),
             prompt_version: "v1".to_owned(),
             semantic_grouping: false,
+            include_tests: false,
         })),
     };
     let mut output = Vec::new();
@@ -68,6 +69,7 @@ fn execute_update_reports_regenerated_pages() -> Result<(), Box<dyn std::error::
             path: temp.path().to_path_buf(),
             prompt_version: "v1".to_owned(),
             semantic_grouping: false,
+            include_tests: false,
         })),
     };
     let mut output = Vec::new();
@@ -127,6 +129,7 @@ fn execute_watch_once_reports_up_to_date_after_init() -> Result<(), Box<dyn std:
                 path: temp.path().to_path_buf(),
                 prompt_version: "v1".to_owned(),
                 semantic_grouping: false,
+                include_tests: false,
             })),
         },
         &mut Vec::new(),
@@ -233,6 +236,7 @@ fn execute_graph_export_and_import_round_trips_artifact() -> Result<(), Box<dyn 
                 path: source.path().to_path_buf(),
                 prompt_version: "v1".to_owned(),
                 semantic_grouping: false,
+                include_tests: false,
             })),
         },
         &mut Vec::new(),
@@ -295,6 +299,7 @@ fn execute_ask_and_mcp_export_read_generated_docs() -> Result<(), Box<dyn std::e
                 path: temp.path().to_path_buf(),
                 prompt_version: "v1".to_owned(),
                 semantic_grouping: false,
+                include_tests: false,
             })),
         },
         &mut init_output,
@@ -697,6 +702,7 @@ fn drift_and_inspect_commands_never_rescan_lithographs_own_output()
                 path: temp.path().to_path_buf(),
                 prompt_version: "v1".to_owned(),
                 semantic_grouping: false,
+                include_tests: false,
             })),
         },
         &mut Vec::new(),
@@ -1028,6 +1034,7 @@ fn execute_inspect_metrics_reports_persisted_run_metadata() -> Result<(), Box<dy
                 path: temp.path().to_path_buf(),
                 prompt_version: "v1".to_owned(),
                 semantic_grouping: false,
+                include_tests: false,
             })),
         },
         &mut Vec::new(),
@@ -1088,6 +1095,7 @@ fn execute_inspect_metrics_fails_only_through_the_configured_budget_threshold()
                 path: temp.path().to_path_buf(),
                 prompt_version: "v1".to_owned(),
                 semantic_grouping: false,
+                include_tests: false,
             })),
         },
         &mut Vec::new(),

@@ -2,24 +2,26 @@
   "schema_version": 2,
   "case_id": "ripgrep",
   "source_revision": "4649aa9700619f94cf9c66876e9549d83420e16c",
-  "graph_hash": "658693ab52458b96653f75d25ecc401b6d34ec4d839e731aadb3cde42e59f186",
+  "graph_hash": "73cfda60881de12d5b1bb05699c01bd342b12d03ad96c540a63943b8ff476d36",
   "stage_hashes": {
-    "analytics": "3cf2ce384ff27f4cf797e6516813a12a3e625e8aecaedcc2fd8f2bd18c1f752f",
-    "definitions_and_imports": "7b47eea86586466f18f8157c96ba4c5f5f88a132bb6d35d5d5666542a0075229",
-    "enrichment": "dbb52a5d9d6f60bbe9c87d2cc6d092af8334bdd09ca0ef5d63b7f0f0fd022696",
-    "finalize": "3cf2ce384ff27f4cf797e6516813a12a3e625e8aecaedcc2fd8f2bd18c1f752f",
-    "persistence": "3cf2ce384ff27f4cf797e6516813a12a3e625e8aecaedcc2fd8f2bd18c1f752f",
-    "resolution": "3cf2ce384ff27f4cf797e6516813a12a3e625e8aecaedcc2fd8f2bd18c1f752f",
-    "structure": "0102e2ede2a63900cf7ebb83cd9d5f294482b038788b3b06acb7862f00d9a41c"
+    "analytics": "b426c84e21cce8c5a0f7c629610f8013690b39ad0f217b515900586d093375a1",
+    "definitions_and_imports": "cd49332e3c1e7e43753dc86759042c3bc12db0e27cfc58d191e797532aa7fe3c",
+    "enrichment": "a018f9e6a7632e8a2d7f1d9f3e319eaa9f8b3272acc2030732a453b5598820e1",
+    "finalize": "b426c84e21cce8c5a0f7c629610f8013690b39ad0f217b515900586d093375a1",
+    "persistence": "b426c84e21cce8c5a0f7c629610f8013690b39ad0f217b515900586d093375a1",
+    "resolution": "b426c84e21cce8c5a0f7c629610f8013690b39ad0f217b515900586d093375a1",
+    "structure": "68971d35682edfa23d1571ad13320b7298ac9f292d8f1f1184fd60079775b874"
   },
   "assertions": {
     "graph-valid": true,
+    "ripgrep-core-printer-separation": true,
     "ripgrep-core-rust": true,
     "ripgrep-main-contained": true,
+    "ripgrep-main-run-community": true,
     "ripgrep-negative-clone": true,
     "ripgrep-no-phantom-main": true
   },
-  "reason": "Reviewed LIT-33 ripgrep truth pack and cargo metadata differential",
-  "previous_graph_hash": "a190c0966c719ef4a64ceba54b19d9ea9c447d5815450906ae9fb499e5beb9f4",
-  "previous_reason": "Pinned ripgrep 14.1.1 corpus baseline"
+  "reason": "Default test exclusion and architecture-aware communities recalibrate reviewed merge corpus baselines",
+  "previous_graph_hash": "658693ab52458b96653f75d25ecc401b6d34ec4d839e731aadb3cde42e59f186",
+  "previous_reason": "Reviewed LIT-33 ripgrep truth pack and cargo metadata differential"
 }
