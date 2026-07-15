@@ -419,7 +419,7 @@ const CODEBASE_MEMORY_REGISTRY: &[LanguageRegistryEntry] = &[
     ),
     syntax_target("cfml", "cfml", ArtifactCategory::Template, &["cfm"]),
     syntax_target("crystal", "crystal", ArtifactCategory::SourceCode, &["cr"]),
-    syntax_target("csv", "csv", ArtifactCategory::Configuration, &["csv"]),
+    tabular_data("csv", "csv", &["csv"]),
     syntax_target("d", "d", ArtifactCategory::SourceCode, &["d"]),
     syntax_target(
         "devicetree",
@@ -622,6 +622,7 @@ const CODEBASE_MEMORY_REGISTRY: &[LanguageRegistryEntry] = &[
         &["thrift"],
     ),
     syntax_target("tlaplus", "tlaplus", ArtifactCategory::SourceCode, &["tla"]),
+    tabular_data("tsv", "tsv", &["tsv"]),
     syntax_target("typst", "typst", ArtifactCategory::Documentation, &["typ"]),
     syntax_target(
         "vhdl",
@@ -962,6 +963,32 @@ const fn syntax_target(
     }
 }
 
+/// Tabular data rows are records, not statements: a cell holding a path or a
+/// URL is a measurement, not a reference the repository makes. Mining them as
+/// text invents one graph node per distinct cell value, which on ripgrep's
+/// `benchsuite/runs/*/raw.csv` produced ~3.1k unresolved nodes -- more than
+/// half of that repository's graph (LIT-51). These stay artifacts with
+/// metadata only: `AnalyzerSelectionTemplate::Opaque` resolves to
+/// `ExtractionFallback::ArtifactOnly`, so the file is still inventoried and
+/// documented while its contents never reach reference extraction.
+const fn tabular_data(
+    id: &'static str,
+    name: &'static str,
+    extensions: &'static [&'static str],
+) -> LanguageRegistryEntry {
+    LanguageRegistryEntry {
+        id,
+        name,
+        category: ArtifactCategory::TestData,
+        support_tier: SupportTier::Opaque,
+        current_tier: RegistryIndexTier::Detected,
+        target_tier: RegistryIndexTier::Detected,
+        analyzer: AnalyzerSelectionTemplate::Opaque,
+        resolver_strategy: "artifact-only",
+        extensions,
+    }
+}
+
 /// Looks up a registry entry by stable language/format id.
 pub fn by_id(id: &str) -> Option<&'static LanguageRegistryEntry> {
     LANGUAGE_REGISTRY.iter().find(|entry| entry.id == id)
@@ -984,8 +1011,8 @@ pub fn by_extension(extension: &str) -> Option<&'static LanguageRegistryEntry> {
 #[cfg(test)]
 mod tests {
     use super::{
-        CODEBASE_MEMORY_GRAMMAR_IDS, ExtractionFallback, LANGUAGE_REGISTRY, ParserAvailability,
-        RegistryIndexTier, by_extension, by_id, by_name,
+        CODEBASE_MEMORY_GRAMMAR_IDS, ExtractionCapabilities, ExtractionFallback, LANGUAGE_REGISTRY,
+        ParserAvailability, RegistryIndexTier, by_extension, by_id, by_name,
     };
     use crate::domain::{AnalyzerSelection, ArtifactCategory, SupportTier};
     use std::collections::{BTreeMap, BTreeSet};
@@ -998,6 +1025,37 @@ mod tests {
             by_id(id).ok_or_else(|| {
                 std::io::Error::other(format!("missing codebase-memory grammar id {id}"))
             })?;
+        }
+
+        Ok(())
+    }
+
+    /// Tabular data must never reach reference extraction. Registering `csv`
+    /// as `Configuration` with the generic-text analyzer made every row of
+    /// ripgrep's `benchsuite/runs/*/raw.csv` a mined reference, inventing
+    /// ~3.1k unresolved nodes -- over half that repository's graph (LIT-51).
+    #[test]
+    fn tabular_data_is_inventoried_without_reference_extraction()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for extension in ["csv", "tsv"] {
+            let entry = by_extension(extension).ok_or_else(|| {
+                std::io::Error::other(format!("missing registry extension {extension}"))
+            })?;
+            assert_eq!(entry.category, ArtifactCategory::TestData);
+            assert_eq!(entry.support_tier, SupportTier::Opaque);
+            assert_eq!(entry.analyzer_selection(), AnalyzerSelection::Opaque);
+            // The file still exists as an artifact; only its contents are
+            // withheld from extraction.
+            assert_eq!(entry.fallback(), ExtractionFallback::ArtifactOnly);
+            assert_eq!(
+                entry.extraction_capabilities(),
+                ExtractionCapabilities {
+                    declarations: false,
+                    imports: false,
+                    symbols: false,
+                    syntax: false,
+                }
+            );
         }
 
         Ok(())

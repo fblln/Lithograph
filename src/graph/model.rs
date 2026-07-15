@@ -110,6 +110,12 @@ pub enum SymbolKind {
     /// (see LIT-22.2.3), e.g. a class, function, or struct in a language
     /// with a tree-sitter adapter but no specialized deep analyzer.
     Definition,
+    /// Symbol imported from outside the repository -- a standard-library or
+    /// manifest-declared package member, named by the import that binds it
+    /// (LIT-56). Its concrete category is deliberately not guessed: the
+    /// repository proves where `cpu_count` comes from, never whether it is a
+    /// function or a class.
+    External,
 }
 
 /// Code symbol node.
