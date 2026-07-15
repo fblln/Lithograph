@@ -96,7 +96,46 @@ pub fn generate_graph_docs(
         vec![],
         crate::domain::Confidence::Low,
     );
-    let lines = [overview, architecture, workflow, boundaries, data, ops, risks, drift].into_iter().filter_map(|id| document.section_index().get(&id).copied()).map(|section| format!("## {}\n\n<!-- graph-section:{} {} -->\n\n{}\n", section.title, section.id, section.deep_link_target, if section.kind == DocumentSectionKind::OperationalRunbook { "Run `lithograph init`, `lithograph update`, and `just check-all`. Indexing is local/offline; inspect configuration, dependencies, failures, and troubleshooting through graph evidence." } else if section.kind == DocumentSectionKind::Risk && tensions.is_empty() { "No graph-backed tensions were detected." } else { "Graph facts are available through the linked focused view." })).collect::<Vec<_>>();
+    let open_questions = document.add_section(
+        DocumentSectionKind::OpenQuestion,
+        "Open Questions",
+        vec!["graph:open-questions".into()],
+        vec![],
+        vec![],
+        vec![],
+        crate::domain::Confidence::Low,
+    );
+    let lines = [
+        overview,
+        architecture,
+        workflow,
+        boundaries,
+        data,
+        ops,
+        risks,
+        drift,
+        open_questions,
+    ]
+    .into_iter()
+    .filter_map(|id| document.section_index().get(&id).copied())
+    .map(|section| {
+        format!(
+            "## {}\n\n<!-- graph-section:{} {} -->\n\n{}\n",
+            section.title,
+            section.id,
+            section.deep_link_target,
+            if section.kind == DocumentSectionKind::OperationalRunbook {
+                "Run `lithograph init`, `lithograph update`, and `just check-all`. Indexing is local/offline; inspect configuration, dependencies, failures, and troubleshooting through graph evidence."
+            } else if section.kind == DocumentSectionKind::Risk && tensions.is_empty() {
+                "No graph-backed tensions were detected."
+            } else if section.kind == DocumentSectionKind::OpenQuestion {
+                "No unresolved graph-backed questions were detected."
+            } else {
+                "Graph facts are available through the linked focused view."
+            }
+        )
+    })
+    .collect::<Vec<_>>();
     let mermaid = "```mermaid\nflowchart LR\n  graph[\"Graph Snapshot\"] --> docs[\"Architecture Docs\"]\n```\n";
     (
         document,
@@ -122,7 +161,8 @@ mod tests {
         );
         assert!(markdown.contains("No graph-backed tensions"));
         assert!(markdown.contains("```mermaid"));
-        assert_eq!(doc.sections.len(), 8);
+        assert!(markdown.contains("No unresolved graph-backed questions"));
+        assert_eq!(doc.sections.len(), 9);
         assert_eq!(
             generate_graph_docs(
                 &Graph {

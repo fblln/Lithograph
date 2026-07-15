@@ -15,13 +15,46 @@ export interface ArchitectureCluster {
   packages: string[]
   edge_types: string[]
   cohesion: number
+  incoming_pressure: number
+  outgoing_pressure: number
+}
+
+export interface ArchitectureNodeSummary {
+  id: string
+  label: string
+  name: string
+  file_path: string | null
+  in_degree: number
+  out_degree: number
 }
 
 export interface ArchitectureSummary {
   clusters: ArchitectureCluster[]
+  cluster_links?: ArchitectureClusterLink[]
+  entry_points: ArchitectureNodeSummary[]
+  hotspots: ArchitectureNodeSummary[]
+}
+
+export interface ArchitectureClusterLink {
+  source: string
+  target: string
+  count: number
+  kinds: Array<{ kind: string; count: number }>
+  underlying: Array<{ source: string; target: string; kind: string }>
+}
+
+export async function getArchitectureSummary(): Promise<ArchitectureSummary> {
+  const summary = await callTool<unknown>('get_architecture', { aspects: ['clusters', 'entry_points'] })
+  if (typeof summary !== 'object' || summary === null) return { clusters: [], cluster_links: [], entry_points: [], hotspots: [] }
+  const value = summary as Partial<ArchitectureSummary>
+  return {
+    clusters: Array.isArray(value.clusters) ? value.clusters : [],
+    cluster_links: Array.isArray(value.cluster_links) ? value.cluster_links : [],
+    entry_points: Array.isArray(value.entry_points) ? value.entry_points : [],
+    hotspots: Array.isArray(value.hotspots) ? value.hotspots : [],
+  }
 }
 
 export async function getClusters(): Promise<ArchitectureCluster[]> {
-  const summary = await callTool<ArchitectureSummary>('get_architecture', { aspects: ['clusters'] })
-  return summary.clusters
+  return (await getArchitectureSummary()).clusters
 }

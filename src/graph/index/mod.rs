@@ -11,7 +11,8 @@ mod search;
 mod trace;
 
 pub use architecture::{
-    ALL_ARCHITECTURE_ASPECTS, ArchitectureAspect, ArchitectureSummary, FileTreeNode,
+    ALL_ARCHITECTURE_ASPECTS, ArchitectureAspect, ArchitectureClusterLink,
+    ArchitectureClusterLinkKind, ArchitectureClusterRelation, ArchitectureSummary, FileTreeNode,
     LanguageSummary,
 };
 pub use clusters::ArchitectureCluster;

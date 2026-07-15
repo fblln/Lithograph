@@ -21,6 +21,8 @@ export interface LayoutEdge {
   source: string
   target: string
   kind: string
+  count?: number
+  kinds?: Array<{ kind: string; count: number }>
 }
 
 export interface LayoutBudget {
@@ -49,5 +51,6 @@ export interface LayoutRequest {
   max_nodes?: number
   max_edges?: number
   node_labels?: string[]
+  node_ids?: string[]
   edge_types?: string[]
 }

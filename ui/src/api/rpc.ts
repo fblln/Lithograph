@@ -18,11 +18,12 @@ export class RpcError extends Error {
 
 let nextId = 1
 
-export async function callTool<T>(name: string, args: unknown = {}): Promise<T> {
+export async function callTool<T>(name: string, args: unknown = {}, signal?: AbortSignal): Promise<T> {
   const id = nextId++
   const response = await fetch('/rpc', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
+    signal,
     body: JSON.stringify({
       jsonrpc: '2.0',
       id,

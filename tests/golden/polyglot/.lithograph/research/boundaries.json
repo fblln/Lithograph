@@ -15,6 +15,7 @@
     "external package: subprocess",
     "external package: typescript",
     "external package: vite",
+    "unresolved reference: .github/workflows/ci.yml",
     "unresolved reference: /usr/local/bin/worker",
     "unresolved reference: /var/cache/ridgeline",
     "unresolved reference: App",
@@ -38,21 +39,29 @@
     "unresolved reference: main",
     "unresolved reference: meta",
     "unresolved reference: p",
-    "unresolved reference: route",
-    "unresolved reference: rust/"
+    "unresolved reference: route"
   ],
   "evidence": [
     {
+      "reference": "relation:3"
+    },
+    {
+      "reference": "relation:148"
+    },
+    {
+      "reference": "relation:6"
+    },
+    {
+      "reference": "relation:4"
+    },
+    {
+      "reference": "relation:5"
+    },
+    {
+      "reference": "relation:2"
+    },
+    {
       "reference": "relation:1"
-    },
-    {
-      "reference": "relation:9"
-    },
-    {
-      "reference": "relation:154"
-    },
-    {
-      "reference": "relation:12"
     },
     {
       "reference": "relation:10"
@@ -61,22 +70,13 @@
       "reference": "relation:11"
     },
     {
-      "reference": "relation:8"
-    },
-    {
       "reference": "relation:7"
     },
     {
-      "reference": "relation:16"
+      "reference": "relation:8"
     },
     {
-      "reference": "relation:17"
-    },
-    {
-      "reference": "relation:13"
-    },
-    {
-      "reference": "relation:14"
+      "reference": "relation:9"
     }
   ],
   "confidence": 85

@@ -586,9 +586,20 @@ fn push_fact(
 }
 
 fn node_span(node: tree_sitter::Node<'_>) -> Option<SourceSpan> {
-    let start = node.start_position().row as u32 + 1;
-    let end = node.end_position().row as u32 + 1;
-    SourceSpan::new(start, end.max(start)).ok()
+    let start_row = node.start_position().row as u32;
+    let end_position = node.end_position();
+    // `end_position` is exclusive. When a node's text ends with a newline it
+    // points at column 0 of the *following* row, which is one line past the
+    // node's last content line -- an unclosed HTML element or a file-final
+    // node then reports an end line past EOF and fails `GraphValidator`
+    // (LIT-30, LIT-31). Such a node ends on the preceding row instead.
+    let ends_on_previous_row = end_position.column == 0 && end_position.row as u32 > start_row;
+    let end_row = if ends_on_previous_row {
+        end_position.row as u32 - 1
+    } else {
+        end_position.row as u32
+    };
+    SourceSpan::new(start_row + 1, end_row.max(start_row) + 1).ok()
 }
 
 fn node_text(node: tree_sitter::Node<'_>, source: &str) -> String {
@@ -615,6 +626,114 @@ mod tests {
             10,
         )
         .with_text_status(TextStatus::Text, Some(1)))
+    }
+
+    /// Highest line touched by any fact in the output, mirroring what
+    /// evidence-carrying callers persist and `GraphValidator` then checks
+    /// against the artifact's inventory line count.
+    fn max_end_line(output: &super::TreeSitterAdapterOutput) -> u32 {
+        output
+            .definitions
+            .iter()
+            .chain(&output.imports)
+            .chain(&output.symbols)
+            .map(|fact| fact.span.end_line)
+            .chain(output.comments.iter().map(|comment| comment.span.end_line))
+            .chain(output.syntax_errors.iter().map(|error| error.span.end_line))
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// A node whose text ends with a newline must not report a span past the
+    /// artifact's last line. `tree_sitter::Node::end_position` is exclusive,
+    /// so such a node points at column 0 of the *following* row; treating
+    /// that row as the end line overshot EOF by one and produced
+    /// `InvalidSourceSpan` findings on the pinned corpora (LIT-30, LIT-31).
+    ///
+    /// This template mirrors the shape of the Flask corpus file that failed:
+    /// an unclosed void element (`<hr>`) followed by non-HTML template text
+    /// makes tree-sitter-html extend the element node to EOF.
+    #[test]
+    fn spans_stay_within_the_line_count_when_a_node_ends_with_a_newline() {
+        let template = "<article>\n  <p>body</p>\n</article>\n<hr>\n{% endif %}\n{% endblock %}\n";
+        let output = TreeSitterParserAdapter::html().parse(template);
+
+        assert_eq!(output.status, TreeSitterParseStatus::Parsed);
+        assert_eq!(line_count(template), 6);
+        assert!(
+            max_end_line(&output) <= line_count(template),
+            "span end {} exceeds the {}-line artifact",
+            max_end_line(&output),
+            line_count(template),
+        );
+        // The element really does run to the file's last line: the clamp must
+        // land exactly on it rather than trimming evidence short.
+        assert!(
+            output
+                .definitions
+                .iter()
+                .any(|fact| fact.text.starts_with("<hr>") && fact.span.end_line == 6),
+            "expected the EOF-spanning element to end on line 6, got {:?}",
+            output
+                .definitions
+                .iter()
+                .map(|fact| (fact.kind.as_str(), fact.span.clone()))
+                .collect::<Vec<_>>(),
+        );
+
+        // The uv corpus header (LIT-31): a trailing newline after a final
+        // `#include` reported the include one line past EOF.
+        let header = "// leading comment\n// second line\n\n#include <pybind11/pybind11.h>\n";
+        let output = TreeSitterParserAdapter::c().parse(header);
+        assert_eq!(line_count(header), 4);
+        assert!(max_end_line(&output) <= line_count(header));
+        assert!(
+            output
+                .imports
+                .iter()
+                .any(|fact| fact.kind == "preproc_include" && fact.span.end_line == 4),
+            "expected the final include to end on line 4, got {:?}",
+            output
+                .imports
+                .iter()
+                .map(|fact| (fact.kind.as_str(), fact.span.clone()))
+                .collect::<Vec<_>>(),
+        );
+    }
+
+    /// The no-final-newline counterpart, mirroring the uv corpus C header
+    /// (LIT-31): the last content line is still the end line, so the fix must
+    /// not shift spans off the final line.
+    #[test]
+    fn spans_cover_the_final_line_when_a_file_has_no_trailing_newline() {
+        let header = "#ifndef H\n#define H\nint f(void);\n#endif";
+        let output = TreeSitterParserAdapter::c().parse(header);
+
+        assert_eq!(output.status, TreeSitterParseStatus::Parsed);
+        assert_eq!(line_count(header), 4);
+        assert!(max_end_line(&output) <= line_count(header));
+        assert!(
+            output
+                .symbols
+                .iter()
+                .any(|fact| fact.text == "f" && fact.span.start_line == 3),
+            "expected the declaration on line 3 to keep its span",
+        );
+
+        let single = "int f(void);";
+        let output = TreeSitterParserAdapter::c().parse(single);
+        assert_eq!(max_end_line(&output), 1);
+        assert_eq!(line_count(single), 1);
+    }
+
+    /// Mirrors `inventory::walk::line_count`, the count `GraphValidator`
+    /// compares evidence spans against.
+    fn line_count(text: &str) -> u32 {
+        if text.is_empty() {
+            0
+        } else {
+            text.lines().count().try_into().unwrap_or(u32::MAX)
+        }
     }
 
     #[test]

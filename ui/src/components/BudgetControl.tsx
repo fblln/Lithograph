@@ -4,6 +4,10 @@ export interface BudgetControlProps {
   /** Currently applied max_nodes, or `undefined` for the server default. */
   value: number | undefined
   onApply: (maxNodes: number | undefined) => void
+  edgeValue?: number
+  onApplyEdges?: (maxEdges: number | undefined) => void
+  availableNodes?: number
+  availableEdges?: number
 }
 
 /**
@@ -19,9 +23,11 @@ export interface BudgetControlProps {
  */
 const LARGE_GRAPH_THRESHOLD = 500
 
-export function BudgetControl({ value, onApply }: BudgetControlProps) {
+export function BudgetControl({ value, onApply, edgeValue, onApplyEdges, availableNodes, availableEdges }: BudgetControlProps) {
   const [draft, setDraft] = useState(value === undefined ? '' : String(value))
+  const [edgeDraft, setEdgeDraft] = useState(edgeValue === undefined ? '' : String(edgeValue))
   const [pending, setPending] = useState<number | null>(null)
+  const [pendingFull, setPendingFull] = useState(false)
 
   function commit() {
     const trimmed = draft.trim()
@@ -42,6 +48,22 @@ export function BudgetControl({ value, onApply }: BudgetControlProps) {
     if (pending === null) return
     onApply(pending)
     setPending(null)
+  }
+
+  function commitEdges() {
+    if (!onApplyEdges) return
+    const trimmed = edgeDraft.trim()
+    if (trimmed === '') { onApplyEdges(undefined); return }
+    const parsed = Number(trimmed)
+    if (Number.isFinite(parsed) && parsed > 0) onApplyEdges(parsed)
+  }
+
+  function confirmFull() {
+    if (availableNodes !== undefined) onApply(availableNodes)
+    if (availableEdges !== undefined) onApplyEdges?.(availableEdges)
+    setDraft(availableNodes === undefined ? draft : String(availableNodes))
+    setEdgeDraft(availableEdges === undefined ? edgeDraft : String(availableEdges))
+    setPendingFull(false)
   }
 
   return (
@@ -68,6 +90,15 @@ export function BudgetControl({ value, onApply }: BudgetControlProps) {
           max nodes
         </span>
       </div>
+      {onApplyEdges && <div className="flex items-center gap-2">
+        <input type="number" min={1} value={edgeDraft} placeholder="400 (default)" onChange={(event) => setEdgeDraft(event.target.value)} onBlur={commitEdges} onKeyDown={(event) => { if (event.key === 'Enter') commitEdges() }} className="w-24 rounded border px-2 py-1 text-[11px]" style={{ background: 'var(--atlas-chip)', borderColor: 'var(--atlas-border)', color: 'var(--atlas-text-bright)' }} />
+        <span className="text-[10px]" style={{ color: 'var(--atlas-text-dim)' }}>max relationships</span>
+      </div>}
+      {availableNodes !== undefined && availableEdges !== undefined && <button type="button" onClick={() => setPendingFull(true)} className="w-fit rounded border px-2 py-1 text-[10.5px]" style={{ borderColor: 'var(--atlas-warn)', color: 'var(--atlas-warn)' }}>Render full scoped graph</button>}
+      {pendingFull && <div role="alertdialog" aria-label="Full graph performance warning" className="flex flex-col gap-1.5 rounded border p-2" style={{ borderColor: 'var(--atlas-warn)', background: 'oklch(0.22 0.02 75 / 0.15)' }}>
+        <p className="text-[10.5px]" style={{ color: 'var(--atlas-text-bright)' }}>Rendering all {availableNodes} nodes and {availableEdges} relationships may slow this browser.</p>
+        <div className="flex gap-2"><button type="button" onClick={confirmFull} className="rounded px-2 py-1 text-[10.5px] font-semibold" style={{ background: 'var(--atlas-warn)', color: 'var(--atlas-bg)' }}>Load full graph</button><button type="button" onClick={() => setPendingFull(false)} className="rounded px-2 py-1 text-[10.5px] font-semibold">Cancel</button></div>
+      </div>}
       {pending !== null && (
         <div
           className="flex flex-col gap-1.5 rounded border p-2"

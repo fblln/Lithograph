@@ -1,6 +1,7 @@
 //! Typed deterministic tags and taxonomy queries over graph entities.
+use crate::architecture::{LayerDetector, LayerKind};
 use crate::domain::Confidence;
-use crate::graph::Graph;
+use crate::graph::{Graph, GraphNode};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -153,6 +154,11 @@ pub fn resolve_expression(index: &TagIndex, expression: &str) -> Result<Vec<Stri
 }
 /// Derives conservative parser/path-style tags from stable graph identifiers.
 pub fn derive_tags(graph: &Graph, snapshot: &str) -> Vec<GraphTag> {
+    let detected_layers = LayerDetector.detect(graph);
+    let layers: BTreeMap<&str, LayerKind> = detected_layers
+        .iter()
+        .map(|layer| (layer.artifact_path.as_str(), layer.layer))
+        .collect();
     let mut tags = Vec::new();
     for node in &graph.nodes {
         let id = node.id().as_str();
@@ -167,8 +173,49 @@ pub fn derive_tags(graph: &Graph, snapshot: &str) -> Vec<GraphTag> {
         if id.contains("test") {
             tags.push(GraphTag::new(id, "role", "test", TagSource::Path, snapshot));
         }
+        if let Some(path) = artifact_path(node)
+            && let Some(layer) = layers.get(path)
+        {
+            tags.push(GraphTag::new(
+                id,
+                "layer",
+                layer_value(*layer),
+                TagSource::Architecture,
+                snapshot,
+            ));
+        }
     }
     TagIndex::new(tags).tags
+}
+
+/// Returns the repository-relative artifact path a node's evidence is
+/// attached to, when it carries evidence -- `Package`, `EnvVar`, `Container`,
+/// and `Unresolved` nodes have no single owning artifact and get no layer tag.
+fn artifact_path(node: &GraphNode) -> Option<&str> {
+    match node {
+        GraphNode::Artifact(artifact) => Some(artifact.path.as_str()),
+        GraphNode::Symbol(symbol) => Some(symbol.evidence.path.as_str()),
+        GraphNode::Config(config) => Some(config.evidence.path.as_str()),
+        GraphNode::Documentation(doc) => Some(doc.evidence.path.as_str()),
+        GraphNode::Command(command) => Some(command.evidence.path.as_str()),
+        GraphNode::Module(module) => Some(module.evidence.path.as_str()),
+        GraphNode::Container(_) | GraphNode::EnvVar(_) | GraphNode::Package(_) => None,
+        GraphNode::Unresolved(_) => None,
+    }
+}
+
+/// Lowercase tag value for a `LayerKind`, matching this module's namespace
+/// value conventions (e.g. `kind`, `role`).
+fn layer_value(layer: LayerKind) -> &'static str {
+    match layer {
+        LayerKind::Ui => "ui",
+        LayerKind::Api => "api",
+        LayerKind::Domain => "domain",
+        LayerKind::Data => "data",
+        LayerKind::Infra => "infra",
+        LayerKind::Test => "test",
+        LayerKind::Unknown => "unknown",
+    }
 }
 /// Inherits a cluster or subsystem tag while retaining its exact provenance.
 pub fn inherit_tag(parent: &GraphTag, entity_id: impl Into<String>) -> GraphTag {
@@ -187,6 +234,68 @@ pub fn inherit_tag(parent: &GraphTag, entity_id: impl Into<String>) -> GraphTag 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::{ArtifactCategory, ArtifactId, EvidenceRef, RepoPath};
+    use crate::graph::model::{ArtifactNode, GraphNodeId, PackageNode, SymbolKind, SymbolNode};
+
+    #[test]
+    fn derive_tags_adds_layer_tags_from_evidence_path() -> Result<(), Box<dyn std::error::Error>> {
+        let ui_path = RepoPath::new("src/components/Button.tsx")?;
+        let ui_evidence = EvidenceRef::file(ArtifactId::from_path(&ui_path), ui_path.clone());
+        let readme_path = RepoPath::new("README.md")?;
+        let readme_evidence =
+            EvidenceRef::file(ArtifactId::from_path(&readme_path), readme_path.clone());
+
+        let graph = Graph {
+            nodes: vec![
+                GraphNode::Artifact(ArtifactNode {
+                    id: GraphNodeId::new("artifact:src/components/Button.tsx"),
+                    path: ui_path.as_str().to_owned(),
+                    category: ArtifactCategory::SourceCode,
+                    evidence: ui_evidence.clone(),
+                }),
+                GraphNode::Symbol(SymbolNode {
+                    id: GraphNodeId::new("symbol:src/components/Button.tsx#Button"),
+                    kind: SymbolKind::Function,
+                    qualified_name: "Button".to_owned(),
+                    doc: None,
+                    evidence: ui_evidence,
+                }),
+                GraphNode::Artifact(ArtifactNode {
+                    id: GraphNodeId::new("artifact:README.md"),
+                    path: readme_path.as_str().to_owned(),
+                    category: ArtifactCategory::Documentation,
+                    evidence: readme_evidence,
+                }),
+                GraphNode::Package(PackageNode {
+                    id: GraphNodeId::new("package:left-pad"),
+                    name: "left-pad".to_owned(),
+                    is_external: true,
+                }),
+            ],
+            relations: vec![],
+        };
+
+        let tags = derive_tags(&graph, "g1");
+        let layer_of = |entity_id: &str| {
+            tags.iter()
+                .find(|tag| tag.entity_id == entity_id && tag.namespace == "layer")
+                .map(|tag| tag.value.as_str())
+        };
+
+        assert_eq!(layer_of("artifact:src/components/Button.tsx"), Some("ui"));
+        assert_eq!(
+            layer_of("symbol:src/components/Button.tsx#Button"),
+            Some("ui")
+        );
+        assert_eq!(layer_of("artifact:README.md"), Some("unknown"));
+        assert_eq!(layer_of("package:left-pad"), None);
+        assert!(
+            tags.iter()
+                .any(|tag| tag.namespace == "layer" && tag.source == TagSource::Architecture)
+        );
+
+        Ok(())
+    }
     #[test]
     fn tags_are_stable_and_queryable() {
         let a = GraphTag::new("symbol:a", "layer", "api", TagSource::Path, "g1");

@@ -763,6 +763,24 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn init_excludes_hidden_directories_but_keeps_root_dotfiles()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::create_dir_all(temp.path().join(".github/workflows"))?;
+        std::fs::write(temp.path().join("src/lib.rs"), "pub fn production() {}\n")?;
+        std::fs::write(temp.path().join(".github/workflows/ci.yml"), "jobs: {}\n")?;
+        std::fs::write(temp.path().join(".env.example"), "PORT=3000\n")?;
+
+        let result = run_init(temp.path(), &MockModel, "mock", "v1")?;
+        assert_eq!(result.artifact_count, 2);
+        let graph = std::fs::read_to_string(temp.path().join(".lithograph/graph.json"))?;
+        assert!(graph.contains(".env.example"));
+        assert!(!graph.contains(".github/workflows/ci.yml"));
+        Ok(())
+    }
+
     /// LIT-22.6.1 AC1: every run persists all four stages' timing to
     /// `run.json`, in pipeline order.
     #[test]

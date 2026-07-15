@@ -7,16 +7,12 @@
     "compose service: web",
     "container image: ghcr.io/example/route-api:${VERSION:-dev}",
     "container image: ghcr.io/example/route-api:${VERSION}",
-    "container image: ghcr.io/example/route-api:${{",
     "container image: ghcr.io/example/worker:1.0",
     "container image: node:24-alpine",
     "container image: python:3.13-slim",
     "container image: rust:1.96"
   ],
   "evidence": [
-    {
-      "reference": ".github/workflows/ci.yml"
-    },
     {
       "reference": "Dockerfile"
     },
@@ -43,6 +39,9 @@
     },
     {
       "reference": "docker-compose.yml"
+    },
+    {
+      "reference": "docs/architecture.md"
     }
   ],
   "confidence": 85

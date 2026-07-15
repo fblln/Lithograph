@@ -7,7 +7,7 @@ use super::common::search_result;
 use super::package::PackageSummary;
 use super::schema::GraphSchema;
 use super::search::SearchResult;
-use crate::graph::{ConfigNodeKind, Graph, GraphNode};
+use crate::graph::{ConfigNodeKind, Graph, GraphNode, GraphNodeId, RelationKind};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -103,8 +103,45 @@ pub struct ArchitectureSummary {
     pub layers: Vec<crate::architecture::ArchitectureLayer>,
     /// Functional architecture communities (LIT-22.5.1).
     pub clusters: Vec<ArchitectureCluster>,
+    /// Directed whole-graph relationships between functional communities.
+    pub cluster_links: Vec<ArchitectureClusterLink>,
     /// Nested repository file tree, rooted at the repository root.
     pub file_tree: Vec<FileTreeNode>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Count for one relation kind in a cluster-to-cluster aggregate.
+pub struct ArchitectureClusterLinkKind {
+    /// Graph relation kind.
+    pub kind: RelationKind,
+    /// Number of underlying relations of this kind.
+    pub count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Lightweight underlying relation used for aggregate drill-down.
+pub struct ArchitectureClusterRelation {
+    /// Source graph node.
+    pub source: GraphNodeId,
+    /// Target graph node.
+    pub target: GraphNodeId,
+    /// Graph relation kind.
+    pub kind: RelationKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Directed whole-graph relationship aggregate between two clusters.
+pub struct ArchitectureClusterLink {
+    /// Source cluster id.
+    pub source: String,
+    /// Target cluster id.
+    pub target: String,
+    /// Total number of underlying relations.
+    pub count: usize,
+    /// Relation-kind counts, most frequent first.
+    pub kinds: Vec<ArchitectureClusterLinkKind>,
+    /// Deterministically ordered relations available for drill-down.
+    pub underlying: Vec<ArchitectureClusterRelation>,
 }
 
 impl<'a> KnowledgeIndex<'a> {
@@ -207,6 +244,13 @@ impl<'a> KnowledgeIndex<'a> {
             })
             .collect();
 
+        let clusters = if wants(ArchitectureAspect::Clusters) {
+            self.clusters()
+        } else {
+            Vec::new()
+        };
+        let cluster_links = build_cluster_links(self.graph, &clusters);
+
         ArchitectureSummary {
             schema: self.schema(),
             languages,
@@ -221,11 +265,8 @@ impl<'a> KnowledgeIndex<'a> {
             } else {
                 Vec::new()
             },
-            clusters: if wants(ArchitectureAspect::Clusters) {
-                self.clusters()
-            } else {
-                Vec::new()
-            },
+            clusters,
+            cluster_links,
             file_tree: if wants(ArchitectureAspect::FileTree) {
                 build_file_tree(self.graph)
             } else {
@@ -233,6 +274,68 @@ impl<'a> KnowledgeIndex<'a> {
             },
         }
     }
+}
+
+fn build_cluster_links(
+    graph: &Graph,
+    clusters: &[ArchitectureCluster],
+) -> Vec<ArchitectureClusterLink> {
+    let membership: BTreeMap<&GraphNodeId, &str> = clusters
+        .iter()
+        .flat_map(|cluster| {
+            cluster
+                .members
+                .iter()
+                .map(move |member| (member, cluster.id.as_str()))
+        })
+        .collect();
+    let mut grouped: BTreeMap<(String, String), Vec<ArchitectureClusterRelation>> = BTreeMap::new();
+    for relation in &graph.relations {
+        let (Some(source), Some(target)) = (
+            membership.get(&relation.source),
+            membership.get(&relation.target),
+        ) else {
+            continue;
+        };
+        if source == target {
+            continue;
+        }
+        grouped
+            .entry(((*source).to_owned(), (*target).to_owned()))
+            .or_default()
+            .push(ArchitectureClusterRelation {
+                source: relation.source.clone(),
+                target: relation.target.clone(),
+                kind: relation.kind,
+            });
+    }
+    grouped
+        .into_iter()
+        .map(|((source, target), mut underlying)| {
+            underlying.sort_by(|a, b| {
+                a.source
+                    .cmp(&b.source)
+                    .then(a.kind.cmp(&b.kind))
+                    .then(a.target.cmp(&b.target))
+            });
+            let mut counts = BTreeMap::<RelationKind, usize>::new();
+            for relation in &underlying {
+                *counts.entry(relation.kind).or_default() += 1;
+            }
+            let mut kinds: Vec<_> = counts
+                .into_iter()
+                .map(|(kind, count)| ArchitectureClusterLinkKind { kind, count })
+                .collect();
+            kinds.sort_by(|a, b| b.count.cmp(&a.count).then(a.kind.cmp(&b.kind)));
+            ArchitectureClusterLink {
+                source,
+                target,
+                count: underlying.len(),
+                kinds,
+                underlying,
+            }
+        })
+        .collect()
 }
 
 fn module_language_id(module: &crate::graph::ModuleNode) -> String {
@@ -294,4 +397,67 @@ fn build_file_tree(graph: &Graph) -> Vec<FileTreeNode> {
     }
 
     to_nodes(&root, "")
+}
+
+#[cfg(test)]
+mod cluster_link_tests {
+    use super::*;
+    use crate::domain::Confidence;
+    use crate::graph::Relation;
+
+    #[test]
+    fn whole_graph_cluster_links_are_directed_counted_and_deterministic() {
+        let cluster = |id: &str, member: &str| ArchitectureCluster {
+            id: id.to_owned(),
+            members: vec![GraphNodeId::new(member)],
+            top_nodes: vec![],
+            packages: vec![],
+            edge_types: vec![],
+            cohesion: 0.0,
+            incoming_pressure: 0,
+            outgoing_pressure: 0,
+        };
+        let relation = |id: &str, source: &str, target: &str, kind| Relation {
+            id: id.to_owned(),
+            source: GraphNodeId::new(source),
+            target: GraphNodeId::new(target),
+            kind,
+            confidence: Confidence::High,
+            evidence: vec![],
+            provenance: None,
+        };
+        let graph = Graph {
+            nodes: vec![],
+            relations: vec![
+                relation("2", "node:a", "node:b", RelationKind::Contains),
+                relation("1", "node:a", "node:b", RelationKind::Calls),
+                relation("3", "node:b", "node:a", RelationKind::Imports),
+            ],
+        };
+        let clusters = vec![
+            cluster("cluster:a", "node:a"),
+            cluster("cluster:b", "node:b"),
+        ];
+
+        let links = build_cluster_links(&graph, &clusters);
+
+        assert_eq!(links.len(), 2);
+        assert_eq!(
+            (
+                links[0].source.as_str(),
+                links[0].target.as_str(),
+                links[0].count
+            ),
+            ("cluster:a", "cluster:b", 2)
+        );
+        assert_eq!(
+            links[0]
+                .kinds
+                .iter()
+                .map(|item| (item.kind, item.count))
+                .collect::<Vec<_>>(),
+            vec![(RelationKind::Contains, 1), (RelationKind::Calls, 1)]
+        );
+        assert_eq!(links, build_cluster_links(&graph, &clusters));
+    }
 }

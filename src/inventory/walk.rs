@@ -19,6 +19,9 @@ pub struct WalkOptions {
     pub exclude_globs: Vec<String>,
     /// Whether dot-prefixed files and directories should be included.
     pub include_hidden: bool,
+    /// Whether dot-prefixed directories should be traversed. Hidden files at
+    /// the repository root remain useful configuration evidence by default.
+    pub include_hidden_directories: bool,
     /// Whether conventional test files and directories should be included.
     ///
     /// Tests are valuable for implementation detail, but ordinarily obscure
@@ -31,6 +34,7 @@ impl Default for WalkOptions {
         Self {
             exclude_globs: Vec::new(),
             include_hidden: true,
+            include_hidden_directories: false,
             include_tests: false,
         }
     }
@@ -61,6 +65,7 @@ impl RepositoryWalker {
         }
 
         let excludes = self.build_exclude_set()?;
+        let include_hidden_directories = self.options.include_hidden_directories;
         let mut artifacts = Vec::new();
         let mut builder = WalkBuilder::new(&root);
         builder
@@ -71,11 +76,15 @@ impl RepositoryWalker {
             .git_exclude(true)
             .require_git(false)
             .parents(false)
-            // `.git`'s own object/ref store is never a documentable
-            // artifact, unlike other hidden directories such as
-            // `.github/`; prune it outright rather than relying on
-            // `include_hidden`, which controls hidden files generally.
-            .filter_entry(|entry| entry.file_name() != std::ffi::OsStr::new(".git"))
+            // Hidden folders are operational/tool state rather than the
+            // production architecture by default. Dotfiles remain visible
+            // because files such as `.env.example` are configuration facts.
+            .filter_entry(move |entry| {
+                entry.file_name() != std::ffi::OsStr::new(".git")
+                    && (include_hidden_directories
+                        || !entry.file_type().is_some_and(|kind| kind.is_dir())
+                        || !entry.file_name().to_string_lossy().starts_with('.'))
+            })
             .sort_by_file_path(|left, right| left.cmp(right));
 
         for entry in builder.build() {
@@ -366,11 +375,11 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot");
         let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
 
-        assert_eq!(artifacts.len(), 23);
+        assert_eq!(artifacts.len(), 22);
         assert!(
             artifacts
                 .iter()
-                .any(|artifact| artifact.path.as_str() == ".github/workflows/ci.yml")
+                .all(|artifact| artifact.path.as_str() != ".github/workflows/ci.yml")
         );
         assert!(
             artifacts
@@ -378,6 +387,38 @@ mod tests {
                 .any(|artifact| artifact.path.as_str() == "data/sample.bin")
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn excludes_hidden_directories_but_keeps_dotfiles_by_default()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = TempDir::new()?;
+        fs::create_dir(temp.path().join(".github"))?;
+        fs::write(temp.path().join(".github/workflow.yml"), "jobs: {}\n")?;
+        fs::write(temp.path().join(".env.example"), "PORT=3000\n")?;
+
+        let default = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        assert_eq!(
+            default
+                .iter()
+                .map(|item| item.path.as_str())
+                .collect::<Vec<_>>(),
+            vec![".env.example"]
+        );
+
+        let opted_in = RepositoryWalker::new(WalkOptions {
+            include_hidden_directories: true,
+            ..WalkOptions::default()
+        })
+        .walk(temp.path())?;
+        assert_eq!(
+            opted_in
+                .iter()
+                .map(|item| item.path.as_str())
+                .collect::<Vec<_>>(),
+            vec![".env.example", ".github/workflow.yml"]
+        );
         Ok(())
     }
 
@@ -438,6 +479,7 @@ mod tests {
         let artifacts = RepositoryWalker::new(WalkOptions {
             exclude_globs: vec!["build/**".to_owned()],
             include_hidden: true,
+            include_hidden_directories: false,
             include_tests: false,
         })
         .walk(temp.path())?;
@@ -549,6 +591,7 @@ mod tests {
         let invalid_glob = RepositoryWalker::new(WalkOptions {
             exclude_globs: vec!["[".to_owned()],
             include_hidden: true,
+            include_hidden_directories: false,
             include_tests: false,
         })
         .walk(temp.path());
@@ -727,6 +770,7 @@ mod tests {
         if let Err(error) = RepositoryWalker::new(WalkOptions {
             exclude_globs: vec!["[".to_owned()],
             include_hidden: true,
+            include_hidden_directories: false,
             include_tests: false,
         })
         .walk(temp.path())

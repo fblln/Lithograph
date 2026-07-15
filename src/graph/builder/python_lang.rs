@@ -26,6 +26,38 @@ impl BuilderState {
             vec![file_evidence(artifact)],
         );
 
+        // LIT-44.1: this file's own bound-name -> origin-module map (`from
+        // pydantic import BaseModel` binds `BaseModel` to `pydantic`, `import
+        // fastapi as fa` binds `fa` to `fastapi`), built up front so base
+        // classes/decorators/return types/calls below can classify a
+        // reference through the same file's own imports rather than always
+        // falling to `Unresolved`. Deliberately same-file only: no attempt to
+        // trace which module a local variable like `app = FastAPI()` came
+        // from, so `@app.get(...)` stays `Unresolved` exactly as before.
+        let mut imported_modules: BTreeMap<String, String> = BTreeMap::new();
+        for import in &analysis.imports {
+            match import.kind {
+                PythonImportKind::Import => {
+                    for name in &import.names {
+                        let bound = name.alias.clone().unwrap_or_else(|| {
+                            name.name.split('.').next().unwrap_or(&name.name).to_owned()
+                        });
+                        imported_modules.insert(bound, name.name.clone());
+                    }
+                }
+                PythonImportKind::ImportFrom => {
+                    if import.relative_level == 0
+                        && let Some(module) = &import.module
+                    {
+                        for name in &import.names {
+                            let bound = name.alias.clone().unwrap_or_else(|| name.name.clone());
+                            imported_modules.insert(bound, module.clone());
+                        }
+                    }
+                }
+            }
+        }
+
         let mut symbol_ids: BTreeMap<String, GraphNodeId> = BTreeMap::new();
         let mut callable_ids: BTreeMap<String, Vec<GraphNodeId>> = BTreeMap::new();
 
@@ -51,7 +83,9 @@ impl BuilderState {
                 .or_default()
                 .push(id.clone());
             for decorator in &class.decorators {
-                let target = self.unresolved(decorator);
+                let target = self
+                    .same_file_import_external_target(&imported_modules, decorator)
+                    .unwrap_or_else(|| self.unresolved(decorator));
                 self.relate_with_provenance(
                     id.clone(),
                     target,
@@ -108,7 +142,9 @@ impl BuilderState {
                     )),
                 );
                 if let Some(return_type) = &method.return_type {
-                    let target = self.unresolved(return_type);
+                    let target = self
+                        .same_file_import_external_target(&imported_modules, return_type)
+                        .unwrap_or_else(|| self.unresolved(return_type));
                     self.relate_with_provenance(
                         method_id.clone(),
                         target,
@@ -147,7 +183,9 @@ impl BuilderState {
             );
             self.process_python_route_decorators(artifact, artifact_node, function, &id);
             for decorator in &function.decorators {
-                let target = self.unresolved(decorator);
+                let target = self
+                    .same_file_import_external_target(&imported_modules, decorator)
+                    .unwrap_or_else(|| self.unresolved(decorator));
                 self.relate_with_provenance(
                     id.clone(),
                     target,
@@ -162,7 +200,9 @@ impl BuilderState {
                 );
             }
             if let Some(return_type) = &function.return_type {
-                let target = self.unresolved(return_type);
+                let target = self
+                    .same_file_import_external_target(&imported_modules, return_type)
+                    .unwrap_or_else(|| self.unresolved(return_type));
                 self.relate_with_provenance(
                     id.clone(),
                     target,
@@ -200,12 +240,16 @@ impl BuilderState {
                 reference,
                 &symbol_ids,
                 &callable_ids,
+                &imported_modules,
             );
         }
 
-        // Base classes (LIT-22.3.3): only resolves to a same-file class by
-        // bare name -- cross-module base classes stay `Unresolved` rather
-        // than guessing which import they came from (AC3).
+        // Base classes (LIT-22.3.3): resolves to a same-file class by bare
+        // name, or (LIT-44.1) to a known stdlib/manifest-declared package
+        // when the base was itself imported directly in this file (e.g.
+        // `from pydantic import BaseModel`) -- anything else (a cross-module
+        // base from an intra-repo module, or one this file doesn't import
+        // under that exact name) stays `Unresolved` rather than guessing.
         for class in &analysis.classes {
             let Some(class_id) = symbol_ids.get(&class.name) else {
                 continue;
@@ -215,6 +259,7 @@ impl BuilderState {
                 let target = symbol_ids
                     .get(base_name)
                     .cloned()
+                    .or_else(|| self.same_file_import_external_target(&imported_modules, base))
                     .unwrap_or_else(|| self.unresolved(base));
                 self.relate_with_provenance(
                     class_id.clone(),
@@ -360,6 +405,7 @@ impl BuilderState {
         reference: &crate::analysis::PythonReference,
         symbol_ids: &BTreeMap<String, GraphNodeId>,
         callable_ids: &BTreeMap<String, Vec<GraphNodeId>>,
+        imported_modules: &BTreeMap<String, String>,
     ) {
         match reference.kind {
             PythonReferenceKind::Call => {
@@ -382,7 +428,13 @@ impl BuilderState {
                         )),
                     );
                 } else {
-                    let target = self.unresolved(&reference.value);
+                    // LIT-44.1: a bare call to a name this file imported
+                    // directly (`Depends(...)` after `from fastapi import
+                    // Depends`) resolves to the known stdlib/manifest package
+                    // instead of `Unresolved`; anything else is unchanged.
+                    let target = self
+                        .same_file_import_external_target(imported_modules, &reference.value)
+                        .unwrap_or_else(|| self.unresolved(&reference.value));
                     self.relate_with_provenance(
                         artifact_node.clone(),
                         target,
@@ -526,6 +578,46 @@ impl BuilderState {
             }
         }
     }
+    /// LIT-44.1: resolves `text` (a decorator, base class, return-type
+    /// annotation, or bare call target, as written) through this file's own
+    /// `imported_modules` map (built in [`Self::process_python`]) when its
+    /// leading identifier was itself imported directly in this file. Returns
+    /// `None` -- leaving the caller's existing `unresolved(text)` fallback
+    /// unchanged -- when the leading identifier isn't an import in this file
+    /// (e.g. a local variable like `app` in `app.get(...)`) or the import's
+    /// origin module is neither stdlib nor a manifest-declared dependency.
+    fn same_file_import_external_target(
+        &mut self,
+        imported_modules: &BTreeMap<String, String>,
+        text: &str,
+    ) -> Option<GraphNodeId> {
+        let root = python_identifier_root(text);
+        let module = imported_modules.get(root)?;
+        let top_level = module.split('.').next().unwrap_or(module);
+        if is_python_stdlib_module(module)
+            || self
+                .python_manifest_packages
+                .contains(&normalize_python_package_name(top_level))
+        {
+            Some(self.python_external_target(module))
+        } else {
+            None
+        }
+    }
+}
+
+/// The leading dotted identifier of a decorator/base-class/return-type/call
+/// text, stopping at the first character that can't be part of one (a call's
+/// `(`, a generic's `[`, ...), then reduced to its first segment: `app.get`
+/// -> `app`, `Optional[Item]` -> `Optional`, `validator("field")` ->
+/// `validator`, `pydantic.BaseModel` -> `pydantic`.
+fn python_identifier_root(text: &str) -> &str {
+    let leading = text
+        .find(|character: char| {
+            !(character.is_alphanumeric() || character == '_' || character == '.')
+        })
+        .map_or(text, |end| &text[..end]);
+    leading.split('.').next().unwrap_or(leading)
 }
 
 fn python_relative_target(
@@ -673,6 +765,117 @@ mod tests {
                 .any(|node| node.id() == &relation.target
                     && matches!(node, GraphNode::Unresolved(unresolved) if unresolved.value == "SomeImportedBase"))
         }));
+
+        Ok(())
+    }
+
+    /// LIT-44.1 AC1: a top-level import of a name declared as a dependency
+    /// in `pyproject.toml` resolves to a shared external `Package` node
+    /// instead of `Unresolved`; an import of a name this repo never
+    /// declares (and that isn't stdlib) stays `Unresolved` exactly as
+    /// before -- this is a classification split, not a blanket silencer.
+    #[test]
+    fn python_import_of_manifest_dependency_resolves_to_package_node()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("pyproject.toml"),
+            "[project]\nname = \"demo\"\ndependencies = [\"fastapi>=0.100\"]\n",
+        )?;
+        std::fs::write(
+            temp.path().join("main.py"),
+            "from fastapi import FastAPI\nfrom some_undeclared_lib import Thing\n\napp = FastAPI()\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let fastapi_package = graph
+            .nodes
+            .iter()
+            .find_map(|node| match node {
+                GraphNode::Package(package) if package.name == "fastapi" => Some(node.id()),
+                _ => None,
+            })
+            .ok_or("expected a package:fastapi node for the manifest-declared dependency")?;
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::Imports
+                    && &relation.target == fastapi_package)
+        );
+
+        assert!(
+            graph.nodes.iter().any(|node| matches!(
+                node,
+                GraphNode::Unresolved(unresolved) if unresolved.value == "some_undeclared_lib"
+            )),
+            "expected the undeclared import to remain Unresolved"
+        );
+
+        Ok(())
+    }
+
+    /// LIT-44.1 AC2: a base class, decorator, and bare call imported
+    /// directly in the same file (`from pydantic import BaseModel, Field,
+    /// validate_call`) resolve through that file's own import to the
+    /// manifest-declared `pydantic` package node -- not `Unresolved` --
+    /// while the same file's `@app.get` (a local-variable-mediated
+    /// reference, not a direct import) is left `Unresolved` as before.
+    #[test]
+    fn python_same_file_import_resolves_base_class_decorator_and_call()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(temp.path().join("requirements.txt"), "pydantic==2.5.0\n")?;
+        std::fs::write(
+            temp.path().join("models.py"),
+            concat!(
+                "from pydantic import BaseModel, Field, validate_call\n\n\n",
+                "class Item(BaseModel):\n",
+                "    value: int = Field(default=0)\n\n\n",
+                "@validate_call\n",
+                "def make_item():\n",
+                "    return Item()\n",
+            ),
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let pydantic_package = graph
+            .nodes
+            .iter()
+            .find_map(|node| match node {
+                GraphNode::Package(package) if package.name == "pydantic" => Some(node.id()),
+                _ => None,
+            })
+            .ok_or("missing package:pydantic node")?;
+
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::Inherits
+                    && &relation.target == pydantic_package),
+            "expected Item's Inherits edge to resolve to package:pydantic"
+        );
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::Decorates
+                    && &relation.target == pydantic_package),
+            "expected @validate_call's Decorates edge to resolve to package:pydantic"
+        );
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::Calls
+                    && &relation.target == pydantic_package),
+            "expected Field(...)'s Calls edge to resolve to package:pydantic"
+        );
 
         Ok(())
     }

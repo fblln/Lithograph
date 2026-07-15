@@ -22,13 +22,6 @@
       "artifact_count": 1
     },
     {
-      "language": "github-actions",
-      "tier": "SyntaxIndexed",
-      "target_tier": "SyntaxIndexed",
-      "resolver_strategy": "structured-syntax",
-      "artifact_count": 1
-    },
-    {
       "language": "html",
       "tier": "SyntaxIndexed",
       "target_tier": "SyntaxIndexed",
@@ -122,12 +115,6 @@
   ],
   "layers": [
     {
-      "artifact_path": ".github/workflows/ci.yml",
-      "layer": "Infra",
-      "confidence": "High",
-      "reason": "path contains `.github`"
-    },
-    {
       "artifact_path": "Dockerfile",
       "layer": "Infra",
       "confidence": "High",
@@ -159,9 +146,9 @@
     },
     {
       "artifact_path": "config/schema.json",
-      "layer": "Unknown",
-      "confidence": "Low",
-      "reason": "no path, category, or graph-role evidence matched a known layer"
+      "layer": "Data",
+      "confidence": "High",
+      "reason": "path contains `schema`"
     },
     {
       "artifact_path": "config/settings.yaml",
@@ -179,7 +166,7 @@
       "artifact_path": "docker-compose.yml",
       "layer": "Infra",
       "confidence": "High",
-      "reason": "artifact category is ContainerDefinition"
+      "reason": "path contains `docker`"
     },
     {
       "artifact_path": "docs/architecture.md",
@@ -261,7 +248,7 @@
     }
   ],
   "architecture_facts": [
-    "knowledge graph schema: 155 node(s), 178 relation(s)",
+    "knowledge graph schema: 149 node(s), 172 relation(s)",
     "container/component candidate: Configuration (Configuration)",
     "container/component candidate: assets (Directory)",
     "container/component candidate: data (Directory)",
@@ -277,9 +264,9 @@
     "Configuration (Configuration) score 99",
     "web (Directory) score 66",
     "python_app (PythonPackage) score 56",
-    "Infrastructure (Infrastructure) score 45",
-    "Documentation (Documentation) score 44",
+    "Documentation (Documentation) score 45",
     "fixture-worker (RustCrate) score 32",
+    "Infrastructure (Infrastructure) score 31",
     "root (Directory) score 14",
     "generated (Directory) score 11",
     "assets (Directory) score 5",
@@ -288,11 +275,8 @@
   "decisions_and_docs": [
     "existing architecture knowledge: docs/architecture.md"
   ],
-  "mermaid": "```mermaid\nflowchart LR\n  M1[\"Configuration\"]\n  M2[\"assets\"]\n  M3[\"data\"]\n  M4[\"generated\"]\n  M5[\"root\"]\n  M6[\"vendor\"]\n  M7[\"web\"]\n  M8[\"Documentation\"]\n  M9[\"Infrastructure\"]\n  M10[\"python_app\"]\n  M9 -->|ReadsEnv| M1\n  M9 -->|DefinesEnv| M1\n  M8 -->|References| M9\n  M8 -->|References| M9\n  M8 -->|References| M5\n  M8 -->|References| M2\n  M8 -->|References| M1\n  M8 -->|References| M1\n  M8 -->|References| M3\n  M8 -->|References| M9\n  M8 -->|References| M4\n  M8 -->|References| M1\n```",
+  "mermaid": "```mermaid\nflowchart LR\n  M1[\"Configuration\"]\n  M2[\"assets\"]\n  M3[\"data\"]\n  M4[\"generated\"]\n  M5[\"root\"]\n  M6[\"vendor\"]\n  M7[\"web\"]\n  M8[\"Documentation\"]\n  M9[\"Infrastructure\"]\n  M10[\"python_app\"]\n  M9 -->|ReadsEnv| M1\n  M9 -->|DefinesEnv| M1\n  M8 -->|References| M9\n  M8 -->|References| M5\n  M8 -->|References| M2\n  M8 -->|References| M1\n  M8 -->|References| M1\n  M8 -->|References| M3\n  M8 -->|References| M9\n  M8 -->|References| M4\n  M8 -->|References| M1\n```",
   "evidence": [
-    {
-      "reference": ".github/workflows/ci.yml"
-    },
     {
       "reference": "Dockerfile"
     },
@@ -325,6 +309,9 @@
     },
     {
       "reference": "generated/client.py"
+    },
+    {
+      "reference": "pyproject.toml"
     }
   ],
   "confidence": 85

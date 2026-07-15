@@ -56,7 +56,15 @@ pub struct LayerDetector;
 const PATH_LAYER_RULES: &[(LayerKind, &[&str])] = &[
     (
         LayerKind::Test,
-        &["test", "tests", "__tests__", "spec", "specs", "fixtures"],
+        &[
+            "test",
+            "tests",
+            "__tests__",
+            "spec",
+            "specs",
+            "fixtures",
+            "testdata",
+        ],
     ),
     (
         LayerKind::Infra,
@@ -191,10 +199,11 @@ fn classify(
 
 /// Matches `keyword` as a whole path component (`/`-delimited segment or
 /// filename), not an arbitrary substring -- so `"apiary.py"` doesn't match
-/// `"api"`.
+/// `"api"`. Directory segments (`visual-tests`) and file stems
+/// (`graph.spec.ts`, post extension-strip) share the same affix rule.
 fn has_path_component(path_lower: &str, keyword: &str) -> bool {
     path_lower.split('/').any(|segment| {
-        segment == keyword
+        matches_component(segment, keyword)
             || segment
                 .strip_suffix(".py")
                 .or_else(|| segment.strip_suffix(".rs"))
@@ -202,14 +211,21 @@ fn has_path_component(path_lower: &str, keyword: &str) -> bool {
                 .or_else(|| segment.strip_suffix(".tsx"))
                 .or_else(|| segment.strip_suffix(".js"))
                 .or_else(|| segment.strip_suffix(".go"))
-                .is_some_and(|stem| {
-                    stem == keyword
-                        || stem.starts_with(&format!("{keyword}_"))
-                        || stem.starts_with(&format!("{keyword}-"))
-                        || stem.ends_with(&format!("_{keyword}"))
-                        || stem.ends_with(&format!("-{keyword}"))
-                })
+                .is_some_and(|stem| matches_component(stem, keyword))
     })
+}
+
+/// Matches `component` (a directory segment or an extension-stripped file
+/// stem) against `keyword` exactly, or with `keyword` set off by a
+/// `_`/`-`/`.` delimiter -- so `visual-tests`, `e2e_tests`, and
+/// `graph.spec` (from `graph.spec.ts`) all match `tests`/`spec`, while a
+/// bare substring like `contests` or `webpack` never matches `test`/`web`.
+fn matches_component(component: &str, keyword: &str) -> bool {
+    component == keyword
+        || ["_", "-", "."].iter().any(|delimiter| {
+            component.starts_with(&format!("{keyword}{delimiter}"))
+                || component.ends_with(&format!("{delimiter}{keyword}"))
+        })
 }
 
 fn layer_for_category(category: ArtifactCategory) -> Option<LayerKind> {
@@ -283,7 +299,12 @@ mod tests {
             std::fs::write(full, contents)?;
         }
 
-        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let artifacts = RepositoryWalker::new(WalkOptions {
+            include_hidden_directories: true,
+            include_tests: true,
+            ..WalkOptions::default()
+        })
+        .walk(temp.path())?;
         let graph = GraphBuilder.build(temp.path(), &artifacts);
         let layers = LayerDetector.detect(&graph);
 
@@ -319,6 +340,69 @@ mod tests {
         Ok(())
     }
 
+    /// LIT-24.50: a hyphenated test-suite directory and a dot-delimited
+    /// spec filename both classify as `Test` even though neither exactly
+    /// equals a keyword, while a plain `ui`-rooted component path and
+    /// adversarial substring-only lookalikes (`contests/`, `apiary.py`,
+    /// `webpack.config.js`) are unaffected.
+    #[test]
+    fn affix_delimited_paths_classify_without_over_matching()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        for (path, contents) in [
+            ("ui/visual-tests/graph-readability.spec.ts", "export {}\n"),
+            (
+                "ui/src/testdata/graphFixtures.ts",
+                "export const fixtures = [];\n",
+            ),
+            (
+                "ui/src/components/Button.tsx",
+                "export const Button = () => null;\n",
+            ),
+            ("contests/leaderboard.py", "leaderboard = []\n"),
+            ("apiary.py", "print('not an api')\n"),
+            ("webpack.config.js", "module.exports = {};\n"),
+        ] {
+            let full = temp.path().join(path);
+            if let Some(parent) = full.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(full, contents)?;
+        }
+
+        let artifacts = RepositoryWalker::new(WalkOptions {
+            include_tests: true,
+            ..WalkOptions::default()
+        })
+        .walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+        let layers = LayerDetector.detect(&graph);
+
+        let layer_of = |path: &str| {
+            layers
+                .iter()
+                .find(|layer| layer.artifact_path == path)
+                .map(|layer| layer.layer)
+        };
+        assert_eq!(
+            layer_of("ui/visual-tests/graph-readability.spec.ts"),
+            Some(LayerKind::Test)
+        );
+        assert_eq!(
+            layer_of("ui/src/testdata/graphFixtures.ts"),
+            Some(LayerKind::Test)
+        );
+        assert_eq!(
+            layer_of("ui/src/components/Button.tsx"),
+            Some(LayerKind::Ui)
+        );
+        assert_ne!(layer_of("contests/leaderboard.py"), Some(LayerKind::Test));
+        assert_ne!(layer_of("apiary.py"), Some(LayerKind::Api));
+        assert_ne!(layer_of("webpack.config.js"), Some(LayerKind::Ui));
+
+        Ok(())
+    }
+
     /// LIT-22.5.2 AC4: an ambiguous path (matches both `tests` and `api`
     /// keywords) resolves to `Test`, the documented priority order.
     #[test]
@@ -330,7 +414,11 @@ mod tests {
             temp.path().join("tests/api/test_routes.py"),
             "def test_routes():\n    pass\n",
         )?;
-        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let artifacts = RepositoryWalker::new(WalkOptions {
+            include_tests: true,
+            ..WalkOptions::default()
+        })
+        .walk(temp.path())?;
         let graph = GraphBuilder.build(temp.path(), &artifacts);
         let layers = LayerDetector.detect(&graph);
 

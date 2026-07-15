@@ -44,6 +44,10 @@ pub struct ArchitectureCluster {
     /// the maximum possible (`members * (members - 1) / 2`), clamped to
     /// `[0.0, 1.0]`. Higher means more tightly interconnected.
     pub cohesion: f64,
+    /// Relations entering the cluster from nodes outside it.
+    pub incoming_pressure: usize,
+    /// Relations leaving the cluster for nodes outside it.
+    pub outgoing_pressure: usize,
 }
 
 impl<'a> KnowledgeIndex<'a> {
@@ -167,6 +171,18 @@ fn build_cluster(
     } else {
         0.0
     };
+    let incoming_pressure = relations
+        .iter()
+        .filter(|relation| {
+            !members.contains(&relation.source) && members.contains(&relation.target)
+        })
+        .count();
+    let outgoing_pressure = relations
+        .iter()
+        .filter(|relation| {
+            members.contains(&relation.source) && !members.contains(&relation.target)
+        })
+        .count();
 
     // Safe: `members` is non-empty whenever `build_cluster` is called (the
     // caller already filtered to `members.len() >= 2`), and `BTreeSet`
@@ -184,5 +200,7 @@ fn build_cluster(
         packages: packages.into_iter().collect(),
         edge_types: edge_types.into_iter().collect(),
         cohesion,
+        incoming_pressure,
+        outgoing_pressure,
     }
 }

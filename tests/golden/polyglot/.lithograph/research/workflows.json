@@ -22,11 +22,6 @@
     "rust/src/lib.rs -[ReadsEnv]-> RIDGELINE_CACHE_DIR (High)",
     "src/python_app/service.py -[ReadsEnv]-> RIDGELINE_WORKER (High)",
     "src/python_app/service.py -[RunsCommand]-> [worker_path, \"--route\", str(route_file)] (Low)",
-    "checks -[RunsCommand]-> python -m pytest (High)",
-    "checks -[RunsCommand]-> cargo test --manifest-path rust/Cargo.toml (High)",
-    "checks -[RunsCommand]-> npm --prefix web run lint (High)",
-    "checks -[RunsCommand]-> docker build -t ghcr.io/example/route-api:${{ github.sha }} . (High)",
-    "checks -[BuildsImage]-> ghcr.io/example/route-api:${{ (High)",
     "api -[ReadsEnv]-> RIDGELINE_WORKER (High)",
     "api -[UsesImage]-> ghcr.io/example/route-api:${VERSION:-dev} (High)",
     "web -[UsesImage]-> node:24-alpine (High)",
@@ -34,16 +29,25 @@
   ],
   "evidence": [
     {
+      "reference": "relation:3"
+    },
+    {
+      "reference": "relation:148"
+    },
+    {
+      "reference": "relation:6"
+    },
+    {
+      "reference": "relation:4"
+    },
+    {
+      "reference": "relation:5"
+    },
+    {
+      "reference": "relation:2"
+    },
+    {
       "reference": "relation:1"
-    },
-    {
-      "reference": "relation:9"
-    },
-    {
-      "reference": "relation:154"
-    },
-    {
-      "reference": "relation:12"
     },
     {
       "reference": "relation:10"
@@ -52,22 +56,13 @@
       "reference": "relation:11"
     },
     {
-      "reference": "relation:8"
-    },
-    {
       "reference": "relation:7"
     },
     {
-      "reference": "relation:16"
+      "reference": "relation:8"
     },
     {
-      "reference": "relation:17"
-    },
-    {
-      "reference": "relation:13"
-    },
-    {
-      "reference": "relation:14"
+      "reference": "relation:9"
     }
   ],
   "confidence": 85

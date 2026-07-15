@@ -80,4 +80,19 @@ describe('BudgetControl', () => {
 
     expect(onApply).not.toHaveBeenCalled()
   })
+
+  it('requires confirmation before requesting every node and relationship', async () => {
+    const onApply = vi.fn()
+    const onApplyEdges = vi.fn()
+    const user = userEvent.setup()
+    render(<BudgetControl value={undefined} onApply={onApply} onApplyEdges={onApplyEdges} availableNodes={1200} availableEdges={4500} />)
+
+    await user.click(screen.getByRole('button', { name: 'Render full scoped graph' }))
+    expect(screen.getByText(/all 1200 nodes and 4500 relationships may slow/)).toBeInTheDocument()
+    expect(onApply).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Load full graph' }))
+    expect(onApply).toHaveBeenCalledWith(1200)
+    expect(onApplyEdges).toHaveBeenCalledWith(4500)
+  })
 })

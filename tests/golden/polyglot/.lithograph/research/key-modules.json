@@ -3,18 +3,15 @@
     "Configuration (Configuration) score 99",
     "web (Directory) score 66",
     "python_app (PythonPackage) score 56",
-    "Infrastructure (Infrastructure) score 45",
-    "Documentation (Documentation) score 44",
+    "Documentation (Documentation) score 45",
     "fixture-worker (RustCrate) score 32",
+    "Infrastructure (Infrastructure) score 31",
     "root (Directory) score 14",
     "generated (Directory) score 11",
     "assets (Directory) score 5",
     "data (Directory) score 2"
   ],
   "evidence": [
-    {
-      "reference": ".github/workflows/ci.yml"
-    },
     {
       "reference": "Dockerfile"
     },
@@ -41,6 +38,9 @@
     },
     {
       "reference": "docker-compose.yml"
+    },
+    {
+      "reference": "docs/architecture.md"
     }
   ],
   "confidence": 85

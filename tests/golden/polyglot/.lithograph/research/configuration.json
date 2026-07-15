@@ -1,5 +1,4 @@
 [
-  "ContinuousIntegration: .github/workflows/ci.yml",
   "ContainerDefinition: Dockerfile",
   "BuildDefinition: Makefile",
   "Configuration: config/schema.json",
@@ -32,7 +31,6 @@
   "Key: service.port",
   "Key: title",
   "Key: type",
-  "Job: checks",
   "Service: route-api",
   "Port: 8080",
   "Service: api",

@@ -9,6 +9,8 @@
     "lint": "oxlint",
     "typecheck": "tsc -b",
     "test": "vitest run",
+    "regression": "vitest run src/graph/fixtureScale.test.ts src/graph/regressionHarness.test.tsx src/App.test.tsx",
+    "visual-test": "npm run build && playwright test --config playwright.visual.config.ts",
     "check-all": "npm run typecheck && npm run lint && npm run test",
     "preview": "vite preview"
   },
@@ -20,6 +22,7 @@
     "three": "^0.185.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/vite": "^4.3.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

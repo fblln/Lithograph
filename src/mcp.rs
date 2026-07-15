@@ -1,11 +1,18 @@
 //! Minimal deterministic MCP-like JSON-line server over generated wiki data.
 
 use crate::ask::WikiSearch;
-use crate::graph::{
-    ArchitectureAspect, Graph, GraphStore, KnowledgeIndex, LayoutRequest, LayoutSnapshotStore,
-    RelationKind, SearchParams, TagIndex, TraceDirection, TraceParams, compute_layout_cached,
-    derive_tags, resolve_expression,
+use crate::docs_model::{GraphDocument, GraphDocumentSection};
+use crate::graph::analytics::{
+    BetweennessPolicy, MetricScope, betweenness, degree_metrics, page_rank,
 };
+use crate::graph::index::{node_label, node_name};
+use crate::graph::{
+    ArchitectureAspect, Graph, GraphNode, GraphNodeId, GraphStore, KnowledgeIndex, LayoutRequest,
+    LayoutSnapshotStore, Relation, RelationKind, SearchParams, TagIndex, TraceDirection,
+    TraceParams, compute_layout_cached, derive_tags, resolve_expression,
+};
+use crate::graph::{HealthThresholds, detect_health, score_tensions};
+use crate::graph_docs::generate_graph_docs;
 use crate::inventory::{RepositoryWalker, WalkOptions};
 use crate::plan::ModulePlanner;
 use crate::resolve::explain_environment;
@@ -20,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use std::io::{BufRead, Write};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 /// One MCP tool's stable name and human-readable purpose (LIT-22.8.1
 /// AC1/AC2): deterministic and schema-like enough for a caller to
@@ -96,7 +103,27 @@ pub const MCP_TOOLS: &[McpToolInfo] = &[
     },
     McpToolInfo {
         name: "get_graph_layout",
-        description: "Returns a budgeted, positioned graph slice: overview (no center_node) or a focused neighborhood. Params: center_node?, radius?, max_nodes?, max_edges?, node_labels?, edge_types?.",
+        description: "Returns a budgeted, positioned graph slice: overview (no center_node) or a focused neighborhood. Params: center_node?, radius?, max_nodes?, max_edges?, node_labels?, node_ids?, edge_types?.",
+    },
+    McpToolInfo {
+        name: "get_graph_analytics",
+        description: "Returns deterministic node metrics and health findings for graph overlays.",
+    },
+    McpToolInfo {
+        name: "get_repository_tensions",
+        description: "Returns typed, explainable repository tensions for dashboard hotspots.",
+    },
+    McpToolInfo {
+        name: "get_node_detail",
+        description: "Returns typed node evidence, bounded source excerpt, relation provenance, definitions, references, and related docs. Params: node_id.",
+    },
+    McpToolInfo {
+        name: "get_graph_document",
+        description: "Returns the current evidence-linked architecture and operations document model plus Markdown.",
+    },
+    McpToolInfo {
+        name: "regenerate_graph_document",
+        description: "Deterministically regenerates the current evidence-linked architecture and operations document model plus Markdown.",
     },
     McpToolInfo {
         name: "get_graph_schema",
@@ -203,6 +230,63 @@ pub struct McpResponse {
     /// Error text on failure.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+/// Typed, bounded detail payload for one graph node.  The explorer consumes
+/// this endpoint instead of deriving evidence from the budgeted layout: a
+/// layout is a visual projection and may omit the relations needed to explain
+/// a node.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct NodeDetail {
+    id: String,
+    label: String,
+    name: String,
+    evidence: Vec<NodeEvidence>,
+    source: SourceExcerpt,
+    definitions: Vec<RelatedNode>,
+    references: Vec<RelatedRelation>,
+    related_docs: Vec<RelatedNode>,
+    tags: Vec<crate::graph::GraphTag>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct NodeEvidence {
+    path: String,
+    start_line: Option<u32>,
+    end_line: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct SourceExcerpt {
+    status: SourceStatus,
+    text: Option<String>,
+    message: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum SourceStatus {
+    Available,
+    Missing,
+    Opaque,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct RelatedNode {
+    id: String,
+    label: String,
+    name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct RelatedRelation {
+    id: String,
+    direction: &'static str,
+    kind: RelationKind,
+    counterpart: RelatedNode,
+    evidence: Vec<NodeEvidence>,
+    resolver_strategy: Option<String>,
+    confidence: crate::domain::Confidence,
 }
 
 /// Deterministic wiki MCP handler.
@@ -315,6 +399,8 @@ impl WikiMcpServer {
             }
             "generate_subsystem_document" => {
                 let graph = self.load_graph()?;
+                let snapshot_id = graph_snapshot_id(&graph)?;
+                let tensions = score_tensions(&graph, &HealthThresholds::default(), &[]);
                 let subsystem = request
                     .params
                     .get("subsystem")
@@ -322,7 +408,26 @@ impl WikiMcpServer {
                     .ok_or("missing subsystem")?;
                 let instruction = request.params.get("instruction").and_then(Value::as_str);
                 let tag_expression = request.params.get("tag_expression").and_then(Value::as_str);
-                let mut document = if let Some(expression) = tag_expression {
+                let explicit_nodes = request
+                    .params
+                    .get("node_ids")
+                    .and_then(Value::as_array)
+                    .map(|ids| {
+                        ids.iter()
+                            .filter_map(Value::as_str)
+                            .map(GraphNodeId::new)
+                            .collect::<Vec<_>>()
+                    });
+                let mut document = if let Some(selected) = explicit_nodes {
+                    generate_subsystem_doc_for_nodes(
+                        &graph,
+                        subsystem,
+                        &snapshot_id,
+                        &tensions,
+                        instruction,
+                        &selected,
+                    )
+                } else if let Some(expression) = tag_expression {
                     let selected = resolve_expression(
                         &TagIndex::new(derive_tags(&graph, "current")),
                         expression,
@@ -335,13 +440,13 @@ impl WikiMcpServer {
                     generate_subsystem_doc_for_nodes(
                         &graph,
                         subsystem,
-                        "current",
-                        &[],
+                        &snapshot_id,
+                        &tensions,
                         instruction,
                         &selected,
                     )
                 } else {
-                    generate_subsystem_doc(&graph, subsystem, "current", &[], instruction)
+                    generate_subsystem_doc(&graph, subsystem, &snapshot_id, &tensions, instruction)
                 };
                 document.tag_expression = tag_expression.map(str::to_owned);
                 SubsystemDocumentStore::new(self.repo_root.join(".lithograph/subsystem-docs"))
@@ -352,6 +457,8 @@ impl WikiMcpServer {
             | "refine_subsystem_document"
             | "validate_subsystem_document" => {
                 let graph = self.load_graph()?;
+                let snapshot_id = graph_snapshot_id(&graph)?;
+                let tensions = score_tensions(&graph, &HealthThresholds::default(), &[]);
                 let subsystem = request
                     .params
                     .get("subsystem")
@@ -359,7 +466,26 @@ impl WikiMcpServer {
                     .ok_or("missing subsystem")?;
                 let instruction = request.params.get("instruction").and_then(Value::as_str);
                 let tag_expression = request.params.get("tag_expression").and_then(Value::as_str);
-                let mut document = if let Some(expression) = tag_expression {
+                let explicit_nodes = request
+                    .params
+                    .get("node_ids")
+                    .and_then(Value::as_array)
+                    .map(|ids| {
+                        ids.iter()
+                            .filter_map(Value::as_str)
+                            .map(GraphNodeId::new)
+                            .collect::<Vec<_>>()
+                    });
+                let mut document = if let Some(selected) = explicit_nodes {
+                    generate_subsystem_doc_for_nodes(
+                        &graph,
+                        subsystem,
+                        &snapshot_id,
+                        &tensions,
+                        instruction,
+                        &selected,
+                    )
+                } else if let Some(expression) = tag_expression {
                     let selected = resolve_expression(
                         &TagIndex::new(derive_tags(&graph, "current")),
                         expression,
@@ -372,13 +498,13 @@ impl WikiMcpServer {
                     generate_subsystem_doc_for_nodes(
                         &graph,
                         subsystem,
-                        "current",
-                        &[],
+                        &snapshot_id,
+                        &tensions,
                         instruction,
                         &selected,
                     )
                 } else {
-                    generate_subsystem_doc(&graph, subsystem, "current", &[], instruction)
+                    generate_subsystem_doc(&graph, subsystem, &snapshot_id, &tensions, instruction)
                 };
                 document.tag_expression = tag_expression.map(str::to_owned);
                 if request.tool == "validate_subsystem_document" {
@@ -390,6 +516,12 @@ impl WikiMcpServer {
                         json!({"valid": valid, "fresh": true, "graph_snapshot_id": document.graph_snapshot_id}),
                     )
                 } else {
+                    if request.tool == "refine_subsystem_document" {
+                        SubsystemDocumentStore::new(
+                            self.repo_root.join(".lithograph/subsystem-docs"),
+                        )
+                        .save(&document)?;
+                    }
                     Ok(serde_json::to_value(document)?)
                 }
             }
@@ -400,6 +532,88 @@ impl WikiMcpServer {
                 let result = compute_layout_cached(&graph, &request, &store)
                     .map_err(std::io::Error::other)?;
                 Ok(serde_json::to_value(result)?)
+            }
+            "get_graph_analytics" => {
+                let graph = self.load_graph()?;
+                let scope = MetricScope::Combined;
+                let degrees = degree_metrics(&graph, &scope);
+                let pagerank = page_rank(&graph, &scope, 20)
+                    .into_iter()
+                    .collect::<std::collections::BTreeMap<_, _>>();
+                let between = betweenness(&graph, &scope, BetweennessPolicy::default())
+                    .into_iter()
+                    .collect::<std::collections::BTreeMap<_, _>>();
+                let nodes = degrees
+                    .into_iter()
+                    .map(|(id, fan_in, fan_out)| {
+                        json!({
+                            "id": id, "fan_in": fan_in, "fan_out": fan_out,
+                            "page_rank": pagerank.get(&id).copied().unwrap_or_default(),
+                            "betweenness": between.get(&id).copied().unwrap_or_default(),
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                Ok(
+                    json!({"nodes": nodes, "findings": detect_health(&graph, &HealthThresholds::default())}),
+                )
+            }
+            "get_repository_tensions" => {
+                let graph = self.load_graph()?;
+                Ok(serde_json::to_value(score_tensions(
+                    &graph,
+                    &HealthThresholds::default(),
+                    &[],
+                ))?)
+            }
+            "get_node_detail" => {
+                let graph = self.load_graph()?;
+                let node_id = request
+                    .params
+                    .get("node_id")
+                    .and_then(Value::as_str)
+                    .ok_or("get_node_detail requires params.node_id")?;
+                Ok(serde_json::to_value(node_detail(
+                    &self.repo_root,
+                    &graph,
+                    node_id,
+                )?)?)
+            }
+            "get_graph_document" | "regenerate_graph_document" => {
+                let graph = self.load_graph()?;
+                let snapshot_id = graph_snapshot_id(&graph)?;
+                let tensions = score_tensions(&graph, &HealthThresholds::default(), &[]);
+                let current = generate_graph_docs(&graph, &tensions, &snapshot_id);
+                let path = self.repo_root.join(".lithograph/graph-document.json");
+                let stored: Option<StoredGraphDocument> = JsonStore.read(&path)?;
+                let had_stored = stored.is_some();
+                let baseline = stored.unwrap_or_else(|| {
+                    StoredGraphDocument::new(current.0.clone(), current.1.clone())
+                });
+                let selected = request
+                    .params
+                    .get("section_ids")
+                    .and_then(Value::as_array)
+                    .map(|values| {
+                        values
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .collect::<BTreeSet<_>>()
+                    });
+                let next = if request.tool == "regenerate_graph_document" {
+                    regenerate_graph_document(&baseline, &current.0, &current.1, selected.as_ref())
+                } else {
+                    baseline.clone()
+                };
+                let regenerated = request.tool == "regenerate_graph_document" && next != baseline;
+                if !had_stored || regenerated {
+                    JsonStore.write_if_changed(&path, &next)?;
+                }
+                Ok(graph_document_response(
+                    &next,
+                    &baseline,
+                    &current.0,
+                    regenerated,
+                ))
             }
             "get_schema" | "get_graph_schema" => {
                 let graph = self.load_graph()?;
@@ -679,6 +893,292 @@ impl WikiMcpServer {
     }
 }
 
+fn graph_snapshot_id(graph: &Graph) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(format!(
+        "blake3:{}",
+        blake3::hash(graph.to_json()?.as_bytes()).to_hex()
+    ))
+}
+
+const GRAPH_DOC_CONTEXT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct StoredGraphDocument {
+    document: GraphDocument,
+    markdown: String,
+    prompt_context_version: u32,
+}
+
+impl StoredGraphDocument {
+    fn new(document: GraphDocument, markdown: String) -> Self {
+        Self {
+            document,
+            markdown,
+            prompt_context_version: GRAPH_DOC_CONTEXT_VERSION,
+        }
+    }
+}
+
+fn regenerate_graph_document(
+    previous: &StoredGraphDocument,
+    current: &GraphDocument,
+    markdown: &str,
+    selected: Option<&BTreeSet<&str>>,
+) -> StoredGraphDocument {
+    let Some(selected) = selected else {
+        return StoredGraphDocument::new(current.clone(), markdown.to_owned());
+    };
+    let mut document = previous.document.clone();
+    document.graph_snapshot_id = current.graph_snapshot_id.clone();
+    for section in &mut document.sections {
+        if selected.contains(section.id.as_str())
+            && let Some(replacement) = current
+                .sections
+                .iter()
+                .find(|candidate| candidate.id == section.id)
+        {
+            *section = replacement.clone();
+        }
+    }
+    StoredGraphDocument::new(document, markdown.to_owned())
+}
+
+fn graph_document_response(
+    value: &StoredGraphDocument,
+    previous: &StoredGraphDocument,
+    current: &GraphDocument,
+    regenerated: bool,
+) -> Value {
+    let current_by_id = current.section_index();
+    let section_freshness = value.document.sections.iter().map(|section| {
+        let current_section = current_by_id.get(&section.id).copied();
+        let source_query_hash = stable_hash(&section.source_query_ids);
+        let evidence_hash = stable_hash(&section.evidence_references);
+        let current_source_hash = current_section.map(|item| stable_hash(&item.source_query_ids));
+        let current_evidence_hash = current_section.map(|item| stable_hash(&item.evidence_references));
+        let mut reasons = Vec::new();
+        if section.graph_snapshot_id != current.graph_snapshot_id { reasons.push("graph snapshot changed"); }
+        if current_source_hash.as_ref() != Some(&source_query_hash) { reasons.push("source query inputs changed"); }
+        if current_evidence_hash.as_ref() != Some(&evidence_hash) { reasons.push("evidence references changed"); }
+        let status = if reasons.is_empty() { "current" } else if reasons.len() == 1 && reasons[0] == "graph snapshot changed" { "partially_stale" } else { "stale" };
+        json!({ "section_id": section.id, "status": status, "source_query_hash": source_query_hash, "evidence_hash": evidence_hash, "prompt_context_version": value.prompt_context_version, "drift_findings": reasons })
+    }).collect::<Vec<_>>();
+    let previous_by_id = previous.document.section_index();
+    let diff = value.document.sections.iter().filter_map(|section| {
+        let before = previous_by_id.get(&section.id).copied();
+        if before == Some(section) { return None; }
+        Some(json!({ "section_id": section.id, "title": section.title, "before": before.map(section_summary), "after": section_summary(section) }))
+    }).collect::<Vec<_>>();
+    let freshness = if section_freshness
+        .iter()
+        .all(|item| item["status"] == "current")
+    {
+        "current"
+    } else {
+        "stale"
+    };
+    json!({ "document": value.document, "markdown": value.markdown, "freshness": freshness, "section_freshness": section_freshness, "diff": diff, "regenerated": regenerated })
+}
+
+fn section_summary(section: &GraphDocumentSection) -> String {
+    format!(
+        "{} · {} nodes · {} evidence · snapshot {}",
+        section.title,
+        section.affected_nodes.len(),
+        section.evidence_references.len(),
+        section.graph_snapshot_id
+    )
+}
+
+fn stable_hash<T: Serialize>(value: &T) -> String {
+    let bytes = match serde_json::to_vec(value) {
+        Ok(bytes) => bytes,
+        Err(_) => b"serialization-error".to_vec(),
+    };
+    format!("blake3:{}", blake3::hash(&bytes).to_hex())
+}
+
+fn node_detail(
+    repo_root: &Path,
+    graph: &Graph,
+    node_id: &str,
+) -> Result<NodeDetail, Box<dyn std::error::Error>> {
+    let node = graph
+        .nodes
+        .iter()
+        .find(|node| node.id().as_str() == node_id)
+        .ok_or_else(|| format!("unknown graph node `{node_id}`"))?;
+    let evidence = node_evidence(node);
+    let source = source_excerpt(repo_root, evidence.first());
+    let definitions = graph
+        .relations
+        .iter()
+        .filter(|relation| {
+            relation.source == *node.id()
+                && matches!(
+                    relation.kind,
+                    RelationKind::Contains | RelationKind::HasMethod | RelationKind::MemberOf
+                )
+        })
+        .filter_map(|relation| related_node(graph, &relation.target))
+        .collect();
+    let related_docs = graph
+        .relations
+        .iter()
+        .filter(|relation| relation.kind == RelationKind::DocumentsSource)
+        .filter_map(|relation| {
+            if relation.source == *node.id() {
+                related_node(graph, &relation.target)
+            } else if relation.target == *node.id() {
+                related_node(graph, &relation.source)
+            } else {
+                None
+            }
+        })
+        .collect();
+    let references = graph
+        .relations
+        .iter()
+        .filter_map(|relation| relation_for_node(graph, relation, node.id()))
+        .collect();
+    let tags = derive_tags(graph, "current")
+        .into_iter()
+        .filter(|tag| tag.entity_id == node.id().as_str())
+        .collect();
+
+    Ok(NodeDetail {
+        id: node.id().as_str().to_owned(),
+        label: node_label(node).to_owned(),
+        name: node_name(node),
+        evidence,
+        source,
+        definitions,
+        references,
+        related_docs,
+        tags,
+    })
+}
+
+fn node_evidence(node: &GraphNode) -> Vec<NodeEvidence> {
+    let evidence = match node {
+        GraphNode::Artifact(node) => Some(&node.evidence),
+        GraphNode::Symbol(node) => Some(&node.evidence),
+        GraphNode::Config(node) => Some(&node.evidence),
+        GraphNode::Documentation(node) => Some(&node.evidence),
+        GraphNode::Command(node) => Some(&node.evidence),
+        GraphNode::Module(node) => Some(&node.evidence),
+        GraphNode::Container(_)
+        | GraphNode::EnvVar(_)
+        | GraphNode::Package(_)
+        | GraphNode::Unresolved(_) => None,
+    };
+    evidence.into_iter().map(evidence_detail).collect()
+}
+
+fn evidence_detail(evidence: &crate::domain::EvidenceRef) -> NodeEvidence {
+    NodeEvidence {
+        path: evidence.path.as_str().to_owned(),
+        start_line: evidence.span.as_ref().map(|span| span.start_line),
+        end_line: evidence.span.as_ref().map(|span| span.end_line),
+    }
+}
+
+fn source_excerpt(repo_root: &Path, evidence: Option<&NodeEvidence>) -> SourceExcerpt {
+    let Some(evidence) = evidence else {
+        return SourceExcerpt {
+            status: SourceStatus::Opaque,
+            text: None,
+            message: Some("This node has no repository source evidence.".to_owned()),
+        };
+    };
+    let relative = Path::new(&evidence.path);
+    if relative.is_absolute()
+        || relative
+            .components()
+            .any(|part| matches!(part, Component::ParentDir))
+    {
+        return SourceExcerpt {
+            status: SourceStatus::Opaque,
+            text: None,
+            message: Some("The evidence path is not safe to read.".to_owned()),
+        };
+    }
+    let path = repo_root.join(relative);
+    let source = match std::fs::read_to_string(&path) {
+        Ok(source) => source,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return SourceExcerpt {
+                status: SourceStatus::Missing,
+                text: None,
+                message: Some("The source file is no longer present in this checkout.".to_owned()),
+            };
+        }
+        Err(_) => {
+            return SourceExcerpt {
+                status: SourceStatus::Opaque,
+                text: None,
+                message: Some(
+                    "The source is generated, binary, or cannot be displayed as text.".to_owned(),
+                ),
+            };
+        }
+    };
+    let lines = source.lines().collect::<Vec<_>>();
+    let start = evidence.start_line.unwrap_or(1).saturating_sub(1) as usize;
+    let end = evidence.end_line.unwrap_or_else(|| (start + 40) as u32) as usize;
+    let first = start.saturating_sub(3).min(lines.len());
+    let last = end.min(first + 80).min(lines.len());
+    let text = lines[first..last]
+        .iter()
+        .enumerate()
+        .map(|(offset, line)| format!("{:>5} | {line}", first + offset + 1))
+        .collect::<Vec<_>>()
+        .join("\n");
+    SourceExcerpt {
+        status: SourceStatus::Available,
+        text: Some(text),
+        message: None,
+    }
+}
+
+fn related_node(graph: &Graph, id: &GraphNodeId) -> Option<RelatedNode> {
+    graph
+        .nodes
+        .iter()
+        .find(|node| node.id() == id)
+        .map(|node| RelatedNode {
+            id: node.id().as_str().to_owned(),
+            label: node_label(node).to_owned(),
+            name: node_name(node),
+        })
+}
+
+fn relation_for_node(
+    graph: &Graph,
+    relation: &Relation,
+    node_id: &GraphNodeId,
+) -> Option<RelatedRelation> {
+    let (direction, counterpart) = if relation.source == *node_id {
+        ("outbound", related_node(graph, &relation.target)?)
+    } else if relation.target == *node_id {
+        ("inbound", related_node(graph, &relation.source)?)
+    } else {
+        return None;
+    };
+    Some(RelatedRelation {
+        id: relation.id.clone(),
+        direction,
+        kind: relation.kind,
+        counterpart,
+        evidence: relation.evidence.iter().map(evidence_detail).collect(),
+        resolver_strategy: relation
+            .provenance
+            .as_ref()
+            .map(|value| value.resolver_strategy.clone()),
+        confidence: relation.confidence,
+    })
+}
+
 fn search_params(params: &Value) -> SearchParams {
     SearchParams {
         label: params
@@ -802,6 +1302,20 @@ fn layout_params(params: &Value) -> Result<LayoutRequest, Box<dyn std::error::Er
             })
             .collect::<Result<BTreeSet<String>, Box<dyn std::error::Error>>>()?,
     };
+    let node_ids = match params.get("node_ids") {
+        None | Some(Value::Null) => BTreeSet::new(),
+        Some(value) => value
+            .as_array()
+            .ok_or("params.node_ids must be an array of node-id strings")?
+            .iter()
+            .map(|entry| {
+                entry
+                    .as_str()
+                    .map(crate::graph::GraphNodeId::new)
+                    .ok_or_else(|| "params.node_ids entries must be strings".into())
+            })
+            .collect::<Result<BTreeSet<_>, Box<dyn std::error::Error>>>()?,
+    };
     let edge_types = match params.get("edge_types") {
         None | Some(Value::Null) => BTreeSet::new(),
         Some(value) => value
@@ -821,6 +1335,7 @@ fn layout_params(params: &Value) -> Result<LayoutRequest, Box<dyn std::error::Er
         max_nodes,
         max_edges,
         node_labels,
+        node_ids,
         edge_types,
     })
 }
@@ -861,11 +1376,17 @@ fn adr_status_from_str(status: &str) -> Result<crate::adr::AdrStatus, Box<dyn st
 
 #[cfg(test)]
 mod tests {
-    use super::{MCP_TOOLS, McpRequest, WikiMcpServer};
+    use super::{
+        MCP_TOOLS, McpRequest, StoredGraphDocument, WikiMcpServer, graph_document_response,
+        regenerate_graph_document,
+    };
     use crate::generation::MockModel;
+    use crate::graph::Graph;
+    use crate::graph_docs::generate_graph_docs;
     use crate::orchestrate::run_init;
     use serde_json::Value;
     use serde_json::json;
+    use std::collections::BTreeSet;
     use std::io::Cursor;
     use std::path::Path;
 
@@ -1055,6 +1576,105 @@ mod tests {
         });
         assert!(bad_center.error.is_some());
 
+        Ok(())
+    }
+
+    #[test]
+    fn get_node_detail_returns_typed_evidence_and_gracefully_handles_missing_source()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let server = WikiMcpServer::new(temp.path());
+        let search = server.handle(McpRequest {
+            id: json!(1),
+            tool: "search_graph".to_owned(),
+            params: json!({ "label": "Artifact", "query": "python_app" }),
+        });
+        let id = search
+            .result
+            .as_ref()
+            .and_then(Value::as_array)
+            .and_then(|nodes| nodes.first())
+            .and_then(|node| node.get("id"))
+            .and_then(Value::as_str)
+            .ok_or("fixture artifact missing")?
+            .to_owned();
+        let detail = server.handle(McpRequest {
+            id: json!(2),
+            tool: "get_node_detail".to_owned(),
+            params: json!({ "node_id": id }),
+        });
+        let detail = detail.result.ok_or("missing detail response")?;
+        assert_eq!(detail["source"]["status"], json!("available"));
+        assert!(
+            detail["source"]["text"]
+                .as_str()
+                .is_some_and(|text| !text.is_empty())
+        );
+        assert!(
+            detail["evidence"]
+                .as_array()
+                .is_some_and(|items| !items.is_empty())
+        );
+        assert!(detail["references"].is_array());
+        assert!(
+            detail["tags"]
+                .as_array()
+                .is_some_and(|items| !items.is_empty())
+        );
+
+        let subsystem_doc = server.handle(McpRequest {
+            id: json!(3),
+            tool: "generate_subsystem_document".to_owned(),
+            params: json!({ "subsystem": "focused-fixture", "node_ids": [id] }),
+        });
+        let subsystem_doc = subsystem_doc.result.ok_or("missing subsystem document")?;
+        assert_eq!(
+            subsystem_doc["cited_nodes"].as_array().map(Vec::len),
+            Some(1)
+        );
+        assert!(
+            subsystem_doc["graph_snapshot_id"]
+                .as_str()
+                .is_some_and(|snapshot| snapshot.starts_with("blake3:"))
+        );
+        let refined = server.handle(McpRequest {
+            id: json!(4),
+            tool: "refine_subsystem_document".to_owned(),
+            params: json!({ "subsystem": "focused-fixture", "node_ids": [id], "instruction": "add operations" }),
+        });
+        assert!(
+            refined
+                .result
+                .as_ref()
+                .and_then(|value| value["markdown"].as_str())
+                .is_some_and(|markdown| markdown.contains("add operations"))
+        );
+
+        let path = detail["evidence"][0]["path"]
+            .as_str()
+            .ok_or("detail evidence lacks a path")?;
+        std::fs::remove_file(temp.path().join(path))?;
+        let missing = server.handle(McpRequest {
+            id: json!(5),
+            tool: "get_node_detail".to_owned(),
+            params: json!({ "node_id": id }),
+        });
+        assert_eq!(
+            missing
+                .result
+                .as_ref()
+                .map(|result| &result["source"]["status"]),
+            Some(&json!("missing"))
+        );
+        assert_eq!(
+            super::source_excerpt(temp.path(), None).status,
+            super::SourceStatus::Opaque
+        );
         Ok(())
     }
 
@@ -1781,6 +2401,45 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn graph_document_freshness_supports_no_op_and_section_level_regeneration() {
+        let graph = Graph {
+            nodes: vec![],
+            relations: vec![],
+        };
+        let (g1, markdown) = generate_graph_docs(&graph, &[], "g1");
+        let (g2, current_markdown) = generate_graph_docs(&graph, &[], "g2");
+        let previous = StoredGraphDocument::new(g1.clone(), markdown.clone());
+
+        assert_eq!(
+            regenerate_graph_document(&previous, &g1, &markdown, None),
+            previous
+        );
+
+        let selected_id = g1.sections[0].id.as_str();
+        let selected = BTreeSet::from([selected_id]);
+        let regenerated =
+            regenerate_graph_document(&previous, &g2, &current_markdown, Some(&selected));
+        assert_eq!(regenerated.document.sections[0].graph_snapshot_id, "g2");
+        assert!(
+            regenerated
+                .document
+                .sections
+                .iter()
+                .skip(1)
+                .any(|section| section.graph_snapshot_id == "g1")
+        );
+
+        let response = graph_document_response(&regenerated, &previous, &g2, true);
+        assert_eq!(response["freshness"], "stale");
+        assert_eq!(response["diff"].as_array().map(Vec::len), Some(1));
+        assert!(
+            response["section_freshness"]
+                .as_array()
+                .is_some_and(|items| items.iter().any(|item| item["status"] == "partially_stale"))
+        );
     }
 
     fn copy_dir(from: &Path, to: &Path) -> Result<(), Box<dyn std::error::Error>> {

@@ -1,12 +1,6 @@
 {
   "documents": [
     {
-      "id": "artifact:.github/workflows/ci.yml",
-      "kind": "Path",
-      "reference": ".github/workflows/ci.yml",
-      "text": ".github/workflows/ci.yml"
-    },
-    {
       "id": "artifact:Dockerfile",
       "kind": "Path",
       "reference": "Dockerfile",
@@ -137,30 +131,6 @@
       "kind": "Path",
       "reference": "web/src/App.tsx",
       "text": "web/src/App.tsx"
-    },
-    {
-      "id": "command:.github/workflows/ci.yml#jobs.checks.steps[1]",
-      "kind": "Fact",
-      "reference": "python -m pytest",
-      "text": "python -m pytest"
-    },
-    {
-      "id": "command:.github/workflows/ci.yml#jobs.checks.steps[2]",
-      "kind": "Fact",
-      "reference": "cargo test --manifest-path rust/Cargo.toml",
-      "text": "cargo test --manifest-path rust/Cargo.toml"
-    },
-    {
-      "id": "command:.github/workflows/ci.yml#jobs.checks.steps[3]",
-      "kind": "Fact",
-      "reference": "npm --prefix web run lint",
-      "text": "npm --prefix web run lint"
-    },
-    {
-      "id": "command:.github/workflows/ci.yml#jobs.checks.steps[4]",
-      "kind": "Fact",
-      "reference": "docker build -t ghcr.io/example/route-api:${{ github.sha }} .",
-      "text": "docker build -t ghcr.io/example/route-api:${{ github.sha }} ."
     },
     {
       "id": "command:Dockerfile#14",
@@ -371,12 +341,6 @@
       "kind": "Fact",
       "reference": "type",
       "text": "Key type"
-    },
-    {
-      "id": "config:.github/workflows/ci.yml#jobs.checks",
-      "kind": "Fact",
-      "reference": "checks",
-      "text": "Job checks"
     },
     {
       "id": "config:config/settings.yaml#service.name",

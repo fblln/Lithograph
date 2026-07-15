@@ -41,7 +41,8 @@ describe('Sidebar', () => {
     cleanup()
   })
 
-  it('shows the node-kind filter list on the default Filters tab', () => {
+  it('opens with an architecture explanation and keeps the file navigator one step away', async () => {
+    const user = userEvent.setup()
     render(
       <Sidebar
         layout={layout()}
@@ -51,8 +52,11 @@ describe('Sidebar', () => {
         onApplyMaxNodes={vi.fn()}
       />,
     )
-    expect(screen.getByText('Node kinds')).toBeInTheDocument()
-    expect(screen.getByText('Artifact')).toBeInTheDocument()
+    expect(screen.getByText('How this application is organized')).toBeInTheDocument()
+    expect(screen.getByText('Major areas')).toBeInTheDocument()
+    expect(screen.getByText('bounded graph slice')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Browse files and directories →' }))
+    expect(screen.getByRole('button', { name: /a.rs.*Artifact/ })).toBeInTheDocument()
   })
 
   it('switches to the Stats tab and shows edge-kind rollups instead', async () => {

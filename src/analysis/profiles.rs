@@ -861,7 +861,11 @@ mod tests {
 
     fn fixture_artifact(path: &str) -> Result<(Artifact, String), Box<dyn std::error::Error>> {
         let root = fixture_root();
-        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
+        let artifacts = RepositoryWalker::new(WalkOptions {
+            include_hidden_directories: true,
+            ..WalkOptions::default()
+        })
+        .walk(&root)?;
         let not_found = std::io::ErrorKind::NotFound;
         let artifact = artifacts
             .into_iter()

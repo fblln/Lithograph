@@ -595,7 +595,11 @@ fn table_renderer_includes_required_columns() -> Result<(), Box<dyn std::error::
 #[test]
 fn json_renderer_is_deterministic() -> Result<(), Box<dyn std::error::Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot");
-    let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
+    let artifacts = RepositoryWalker::new(WalkOptions {
+        include_hidden_directories: true,
+        ..WalkOptions::default()
+    })
+    .walk(&root)?;
     let json = render_artifacts_json(&artifacts)?;
     let rerendered = render_artifacts_json(&artifacts)?;
 

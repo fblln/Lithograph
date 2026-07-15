@@ -32,9 +32,10 @@ pub use communities::{
 pub use enrichment::{ENRICHMENT_ALGORITHM_VERSION, EnrichmentOverlay, derive_enrichment};
 pub use health::{HealthFinding, HealthRule, HealthSeverity, HealthThresholds, detect_health};
 pub use index::{
-    ArchitectureAspect, ArchitectureCluster, ArchitectureSummary, DependencyMatrix, FileTreeNode,
-    GraphSchema, KnowledgeIndex, LabelCount, LanguageSummary, PackageSummary, SearchParams,
-    SearchResult, TraceDirection, TraceParams, TraceRelation, TraceResult, TypeCount,
+    ArchitectureAspect, ArchitectureCluster, ArchitectureClusterLink, ArchitectureClusterLinkKind,
+    ArchitectureClusterRelation, ArchitectureSummary, DependencyMatrix, FileTreeNode, GraphSchema,
+    KnowledgeIndex, LabelCount, LanguageSummary, PackageSummary, SearchParams, SearchResult,
+    TraceDirection, TraceParams, TraceRelation, TraceResult, TypeCount,
 };
 pub use ladybug_schema::{
     LADYBUG_ALGORITHM_VERSION, LADYBUG_SCHEMA_VERSION, LADYBUG_TABLES_V1, LadybugTable,
