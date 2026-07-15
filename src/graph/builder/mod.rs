@@ -29,8 +29,8 @@ use crate::analysis::{
     RequirementsProfile, RustAnalysis, RustAnalyzer, RustReferenceKind, RustWorkspaceAnalysis,
     RustWorkspaceAnalyzer, StructuredAnalysis, StructuredAnalyzer, StructuredFormat,
     SyntaxIndexedLanguage, TextFinding, TextFindingKind, TreeSitterAdapterOutput,
-    TypeScriptAnalysis, TypeScriptAnalyzer, TypeScriptLanguage, is_python_stdlib_module, python,
-    rust_source, rust_std_crate,
+    TypeScriptAnalysis, TypeScriptAnalyzer, TypeScriptLanguage, is_python_stdlib_module,
+    normalize_python_package_name, python, rust_source, rust_std_crate,
 };
 use crate::domain::{
     AnalyzerSelection, Artifact, ArtifactId, Confidence, EvidenceRef, ModelExposurePolicy,
@@ -159,6 +159,35 @@ impl GraphBuilder {
                     }
                 };
             state.register_rust_crate_roots(&workspace);
+        }
+
+        // Collect this repo's own declared Python dependency names (LIT-44.1)
+        // before indexing any Python file, so `python_external_target` can
+        // classify a third-party import as a known project dependency
+        // regardless of artifact walk order (a `.py` file can sort before
+        // `pyproject.toml` in `artifacts`). Deliberately bypasses the
+        // analysis cache: these are the same artifacts the main definitions
+        // pass below analyzes (and caches) under the same `AnalyzerKind`, so
+        // routing this pre-read through `cache.get`/`cache.put` too would
+        // double-count every manifest as an extra cache hit without
+        // reflecting any real reuse. Manifests are small; re-parsing them
+        // once here is cheap.
+        for artifact in artifacts {
+            let Some(kind @ (AnalyzerKind::PyProject | AnalyzerKind::Requirements)) =
+                analyzer_kind(artifact)
+            else {
+                continue;
+            };
+            if artifact.text_status != TextStatus::Text
+                || artifact.model_policy == ModelExposurePolicy::Never
+            {
+                continue;
+            }
+            let Ok(text) = fs::read_to_string(repo_root.join(artifact.path.as_str())) else {
+                continue;
+            };
+            let output = compute_fresh(artifact, &text, repo_root, kind);
+            state.register_python_manifest_packages(&output);
         }
 
         for artifact in artifacts {
@@ -516,6 +545,12 @@ struct BuilderState {
     /// compute a file's true crate-relative module path instead of
     /// `rust_source::module_path`'s naive whole-repo-relative guess.
     rust_crate_roots: BTreeSet<String>,
+    /// Normalized ([`normalize_python_package_name`]) dependency names
+    /// declared by this repo's `pyproject.toml`/`requirements.txt` (LIT-44.1),
+    /// populated by a pre-pass before any Python file is indexed so
+    /// `python_external_target` can classify a third-party import as a known
+    /// project dependency regardless of artifact walk order.
+    python_manifest_packages: BTreeSet<String>,
 }
 
 impl BuilderState {
@@ -534,6 +569,7 @@ impl BuilderState {
             python_modules: BTreeMap::new(),
             rust_modules: BTreeMap::new(),
             rust_crate_roots: BTreeSet::new(),
+            python_manifest_packages: BTreeSet::new(),
         }
     }
     /// Records each resolved Cargo target's source root directory, so
@@ -722,12 +758,19 @@ impl BuilderState {
         }))
     }
     /// Resolves a Python import target that didn't match a project module:
-    /// a known stdlib module becomes a shared external `Package` node (one
+    /// a known stdlib module, or a module whose top-level segment matches a
+    /// dependency this repo's own `pyproject.toml`/`requirements.txt`
+    /// declares (LIT-44.1), becomes a shared external `Package` node (one
     /// per module name, deduplicated across the whole repo) instead of a
-    /// per-file `Unresolved` node.
+    /// per-file `Unresolved` node. Anything else -- a genuinely unknown or
+    /// undeclared third-party module -- still becomes `Unresolved`.
     fn python_external_target(&mut self, dotted_name: &str) -> GraphNodeId {
-        if is_python_stdlib_module(dotted_name) {
-            let top_level = dotted_name.split('.').next().unwrap_or(dotted_name);
+        let top_level = dotted_name.split('.').next().unwrap_or(dotted_name);
+        if is_python_stdlib_module(dotted_name)
+            || self
+                .python_manifest_packages
+                .contains(&normalize_python_package_name(top_level))
+        {
             self.package(top_level, true)
         } else {
             self.unresolved(dotted_name)

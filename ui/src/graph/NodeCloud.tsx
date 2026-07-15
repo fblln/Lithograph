@@ -15,6 +15,8 @@ export interface NodeCloudProps {
   onSelect: (node: PositionedNode) => void
   /** Called once a drag ends, with the node's new world position. */
   onDragEnd: (nodeId: string, position: [number, number, number]) => void
+  metricValues?: Map<string, number>
+  emphasizedIds?: Set<string>
 }
 
 const tempObject = new THREE.Object3D()
@@ -33,7 +35,7 @@ const fallbackPosition: [number, number, number] = [0, 0, 0]
  * `onDragEnd` fires once on release with the final position -- the caller
  * (not this component) decides whether/how that override persists.
  */
-export function NodeCloud({ nodes, positions, selectedId, onSelect, onDragEnd }: NodeCloudProps) {
+export function NodeCloud({ nodes, positions, selectedId, onSelect, onDragEnd, metricValues, emphasizedIds }: NodeCloudProps) {
   const meshRef = useRef<THREE.InstancedMesh>(null)
   const { raycaster } = useThree()
   const dragPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), [])
@@ -49,16 +51,20 @@ export function NodeCloud({ nodes, positions, selectedId, onSelect, onDragEnd }:
     if (!mesh) return
     nodes.forEach((node, index) => {
       const [x, y, z] = resolved[index]
-      const scale = node.id === selectedId ? SELECTED_SCALE : 1
+      const metric = metricValues?.get(node.id) ?? 0
+      const unrelated = emphasizedIds && !emphasizedIds.has(node.id)
+      const scale = node.id === selectedId ? SELECTED_SCALE : (unrelated ? 0.72 : 1 + Math.min(1, metric) * 0.8)
       tempObject.position.set(x, y, z)
       tempObject.scale.setScalar(scale)
       tempObject.updateMatrix()
       mesh.setMatrixAt(index, tempObject.matrix)
-      mesh.setColorAt(index, tempColor.set(colorForLabel(node.label)))
+      tempColor.set(colorForLabel(node.label)).lerp(new THREE.Color('#ff6b6b'), Math.min(1, metric))
+      if (unrelated) tempColor.lerp(new THREE.Color('#20232c'), 0.76)
+      mesh.setColorAt(index, tempColor)
     })
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [nodes, resolved, selectedId])
+  }, [emphasizedIds, nodes, resolved, selectedId, metricValues])
 
   function handleClick(event: ThreeEvent<MouseEvent>) {
     event.stopPropagation()

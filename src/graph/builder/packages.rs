@@ -243,6 +243,32 @@ impl BuilderState {
             );
         }
     }
+    /// Records this repo's own declared Python dependency names (LIT-44.1),
+    /// normalized for comparison against a Python file's import module
+    /// segment. Called from a pre-pass before any Python file is indexed, so
+    /// order relative to `pyproject.toml`/`requirements.txt` in `artifacts`
+    /// doesn't matter -- see `python_external_target`.
+    pub(super) fn register_python_manifest_packages(&mut self, output: &AnalyzerOutput) {
+        match output {
+            AnalyzerOutput::PyProject(profile) => {
+                let Some(project) = &profile.project else {
+                    return;
+                };
+                for dependency in &project.dependencies {
+                    let name = python_dependency_name(&dependency.requirement);
+                    self.python_manifest_packages
+                        .insert(normalize_python_package_name(name));
+                }
+            }
+            AnalyzerOutput::Requirements(profile) => {
+                for requirement in &profile.requirements {
+                    self.python_manifest_packages
+                        .insert(normalize_python_package_name(&requirement.name));
+                }
+            }
+            _ => {}
+        }
+    }
     pub(super) fn process_pyproject(
         &mut self,
         profile: PyProjectProfile,

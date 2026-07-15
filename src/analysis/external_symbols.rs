@@ -209,6 +209,25 @@ pub fn is_python_stdlib_module(dotted_name: &str) -> bool {
     PYTHON_STDLIB_MODULES.contains(&top_level)
 }
 
+/// Normalizes a Python package name for comparing a manifest-declared
+/// dependency name (e.g. `python-dateutil`, PEP 503 style) against a source
+/// file's import module name (`dateutil`) or vice versa: lowercased, with
+/// `-` and `.` folded to `_`. This only closes the hyphen/case/separator gap
+/// between how a name is written in `pyproject.toml`/`requirements.txt`
+/// versus a Python `import` statement -- it deliberately does not attempt to
+/// bridge distribution names that differ entirely from their import name
+/// (`PyYAML` imports as `yaml`, `beautifulsoup4` as `bs4`, `Pillow` as `PIL`).
+/// Those stay `Unresolved`, same as any other unmatched reference; a curated
+/// alias table would need ongoing upkeep this crate deliberately avoids.
+pub fn normalize_python_package_name(name: &str) -> String {
+    name.chars()
+        .map(|character| match character {
+            '-' | '.' => '_',
+            other => other.to_ascii_lowercase(),
+        })
+        .collect()
+}
+
 /// Rust standard-library crate names that ship with every toolchain.
 const RUST_STD_CRATES: &[&str] = &["std", "core", "alloc"];
 
@@ -282,7 +301,10 @@ pub fn is_rust_prelude_type(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_python_stdlib_module, is_rust_prelude_type, rust_std_crate};
+    use super::{
+        is_python_stdlib_module, is_rust_prelude_type, normalize_python_package_name,
+        rust_std_crate,
+    };
 
     #[test]
     fn recognizes_python_stdlib_modules_by_top_level_segment() {
@@ -291,6 +313,20 @@ mod tests {
         assert!(is_python_stdlib_module("collections.abc"));
         assert!(!is_python_stdlib_module("requests"));
         assert!(!is_python_stdlib_module("my_package.os"));
+    }
+
+    #[test]
+    fn normalizes_package_names_for_manifest_vs_import_comparison() {
+        assert_eq!(normalize_python_package_name("fastapi"), "fastapi");
+        assert_eq!(normalize_python_package_name("FastAPI"), "fastapi");
+        assert_eq!(
+            normalize_python_package_name("python-dateutil"),
+            "python_dateutil"
+        );
+        assert_eq!(
+            normalize_python_package_name("python_dateutil"),
+            "python_dateutil"
+        );
     }
 
     #[test]

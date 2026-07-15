@@ -1,6 +1,6 @@
 {
   "system_context": [
-    "Repository contains 23 artifact(s), 155 graph node(s), 178 graph relation(s), and 11 documentation module(s).",
+    "Repository contains 22 artifact(s), 149 graph node(s), 172 graph relation(s), and 11 documentation module(s).",
     "Configuration (Configuration) owns 46 graph member(s)",
     "assets (Directory) owns 2 graph member(s)",
     "data (Directory) owns 1 graph member(s)",
@@ -8,14 +8,13 @@
     "root (Directory) owns 6 graph member(s)",
     "vendor (Directory) owns 1 graph member(s)",
     "web (Directory) owns 33 graph member(s)",
-    "Documentation (Documentation) owns 13 graph member(s)",
-    "Infrastructure (Infrastructure) owns 19 graph member(s)",
+    "Documentation (Documentation) owns 14 graph member(s)",
+    "Infrastructure (Infrastructure) owns 12 graph member(s)",
     "python_app (PythonPackage) owns 19 graph member(s)",
     "fixture-worker (RustCrate) owns 14 graph member(s)",
     "language support: bin current Detected, target Detected via inventory-fallback (1 artifact(s))",
     "language support: docker-compose current SyntaxIndexed, target SyntaxIndexed via structured-syntax (1 artifact(s))",
     "language support: dockerfile current SyntaxIndexed, target SyntaxIndexed via structured-syntax (1 artifact(s))",
-    "language support: github-actions current SyntaxIndexed, target SyntaxIndexed via structured-syntax (1 artifact(s))",
     "language support: html current SyntaxIndexed, target SyntaxIndexed via syntax-indexed-treesitter (1 artifact(s))",
     "language support: json current SyntaxIndexed, target SyntaxIndexed via structured-syntax (1 artifact(s))",
     "language support: license current Detected, target Detected via inventory-fallback (1 artifact(s))",
@@ -23,7 +22,8 @@
     "language support: markdown current SyntaxIndexed, target SyntaxIndexed via structured-syntax (2 artifact(s))",
     "language support: npm current SyntaxIndexed, target SyntaxIndexed via inventory-fallback (1 artifact(s))",
     "language support: python current HybridResolved, target HybridResolved via specialized-hybrid (3 artifact(s))",
-    "language support: requirements-txt current Detected, target Detected via inventory-fallback (1 artifact(s))"
+    "language support: requirements-txt current Detected, target Detected via inventory-fallback (1 artifact(s))",
+    "language support: rust current HybridResolved, target HybridResolved via specialized-hybrid (3 artifact(s))"
   ],
   "workflows": [
     "Dockerfile -[ReadsEnv]-> RIDGELINE_WORKER (High)",
@@ -48,11 +48,6 @@
     "rust/src/lib.rs -[ReadsEnv]-> RIDGELINE_CACHE_DIR (High)",
     "src/python_app/service.py -[ReadsEnv]-> RIDGELINE_WORKER (High)",
     "src/python_app/service.py -[RunsCommand]-> [worker_path, \"--route\", str(route_file)] (Low)",
-    "checks -[RunsCommand]-> python -m pytest (High)",
-    "checks -[RunsCommand]-> cargo test --manifest-path rust/Cargo.toml (High)",
-    "checks -[RunsCommand]-> npm --prefix web run lint (High)",
-    "checks -[RunsCommand]-> docker build -t ghcr.io/example/route-api:${{ github.sha }} . (High)",
-    "checks -[BuildsImage]-> ghcr.io/example/route-api:${{ (High)",
     "api -[ReadsEnv]-> RIDGELINE_WORKER (High)",
     "api -[UsesImage]-> ghcr.io/example/route-api:${VERSION:-dev} (High)",
     "web -[UsesImage]-> node:24-alpine (High)",
@@ -74,6 +69,7 @@
     "external package: subprocess",
     "external package: typescript",
     "external package: vite",
+    "unresolved reference: .github/workflows/ci.yml",
     "unresolved reference: /usr/local/bin/worker",
     "unresolved reference: /var/cache/ridgeline",
     "unresolved reference: App",
@@ -97,11 +93,9 @@
     "unresolved reference: main",
     "unresolved reference: meta",
     "unresolved reference: p",
-    "unresolved reference: route",
-    "unresolved reference: rust/"
+    "unresolved reference: route"
   ],
   "configuration": [
-    "ContinuousIntegration: .github/workflows/ci.yml",
     "ContainerDefinition: Dockerfile",
     "BuildDefinition: Makefile",
     "Configuration: config/schema.json",
@@ -134,7 +128,6 @@
     "Key: service.port",
     "Key: title",
     "Key: type",
-    "Job: checks",
     "Service: route-api",
     "Port: 8080",
     "Service: api",
@@ -158,9 +151,9 @@
     "Configuration (Configuration) score 99",
     "web (Directory) score 66",
     "python_app (PythonPackage) score 56",
-    "Infrastructure (Infrastructure) score 45",
-    "Documentation (Documentation) score 44",
+    "Documentation (Documentation) score 45",
     "fixture-worker (RustCrate) score 32",
+    "Infrastructure (Infrastructure) score 31",
     "root (Directory) score 14",
     "generated (Directory) score 11",
     "assets (Directory) score 5",
@@ -168,7 +161,7 @@
   ],
   "agent_memory": {
     "system_context": {
-      "project_summary": "Repository contains 23 artifact(s), 155 graph node(s), 178 graph relation(s), and 11 documentation module(s).",
+      "project_summary": "Repository contains 22 artifact(s), 149 graph node(s), 172 graph relation(s), and 11 documentation module(s).",
       "included_components": [
         "Configuration (Configuration)",
         "assets (Directory)",
@@ -195,19 +188,16 @@
         "subprocess",
         "typescript",
         "vite",
+        ".github/workflows/ci.yml",
         "/usr/local/bin/worker",
         "/var/cache/ridgeline",
         "App",
         "None",
         "React",
         "RouteSummary",
-        "assets/",
-        "body"
+        "assets/"
       ],
       "evidence": [
-        {
-          "reference": ".github/workflows/ci.yml"
-        },
         {
           "reference": "Dockerfile"
         },
@@ -228,6 +218,9 @@
         },
         {
           "reference": "config/settings.yaml"
+        },
+        {
+          "reference": "data/sample.bin"
         }
       ],
       "confidence": 85
@@ -306,7 +299,7 @@
         {
           "name": "Documentation",
           "kind": "Documentation",
-          "member_count": 13,
+          "member_count": 14,
           "evidence": [
             "artifact:LICENSE",
             "artifact:README.md",
@@ -317,12 +310,12 @@
         {
           "name": "Infrastructure",
           "kind": "Infrastructure",
-          "member_count": 19,
+          "member_count": 12,
           "evidence": [
-            "artifact:.github/workflows/ci.yml",
             "artifact:Dockerfile",
             "artifact:docker-compose.yml",
-            "command:.github/workflows/ci.yml#jobs.checks.steps[1]"
+            "command:Dockerfile#14",
+            "command:Dockerfile#4"
           ]
         },
         {
@@ -352,7 +345,6 @@
         "Makefile -[References]-> rust/Cargo.toml (Low)",
         "Makefile -[References]-> ghcr.io/example/route-api:dev (Low)",
         "Makefile -[References]-> ghcr.io/example/route-api:dev (Low)",
-        "README.md -[References]-> .github/workflows/ci.yml (High)",
         "README.md -[References]-> Dockerfile (High)",
         "README.md -[References]-> Makefile (High)",
         "README.md -[References]-> README.md (High)",
@@ -372,6 +364,7 @@
         "README.md -[References]-> vendor/example/lib.rs (High)",
         "README.md -[References]-> web/index.html (High)",
         "README.md -[References]-> web/src/App.tsx (High)",
+        "README.md -[References]-> .github/workflows/ci.yml (High)",
         "assets/logo.svg -[References]-> xmlns=\"http://www.w3.org/2000/svg (Low)",
         "assets/logo.svg -[References]-> xmlns=\"http://www.w3.org/2000/svg (Low)",
         "config/schema.json -[References]-> https://json-schema.org/draft/2020-12/schema (Low)",
@@ -392,9 +385,6 @@
       ],
       "evidence": [
         {
-          "reference": ".github/workflows/ci.yml"
-        },
-        {
           "reference": "Dockerfile"
         },
         {
@@ -414,6 +404,9 @@
         },
         {
           "reference": "config/settings.yaml"
+        },
+        {
+          "reference": "data/sample.bin"
         }
       ],
       "confidence": 85
@@ -436,13 +429,6 @@
         },
         {
           "language": "dockerfile",
-          "tier": "SyntaxIndexed",
-          "target_tier": "SyntaxIndexed",
-          "resolver_strategy": "structured-syntax",
-          "artifact_count": 1
-        },
-        {
-          "language": "github-actions",
           "tier": "SyntaxIndexed",
           "target_tier": "SyntaxIndexed",
           "resolver_strategy": "structured-syntax",
@@ -542,12 +528,6 @@
       ],
       "layers": [
         {
-          "artifact_path": ".github/workflows/ci.yml",
-          "layer": "Infra",
-          "confidence": "High",
-          "reason": "path contains `.github`"
-        },
-        {
           "artifact_path": "Dockerfile",
           "layer": "Infra",
           "confidence": "High",
@@ -579,9 +559,9 @@
         },
         {
           "artifact_path": "config/schema.json",
-          "layer": "Unknown",
-          "confidence": "Low",
-          "reason": "no path, category, or graph-role evidence matched a known layer"
+          "layer": "Data",
+          "confidence": "High",
+          "reason": "path contains `schema`"
         },
         {
           "artifact_path": "config/settings.yaml",
@@ -599,7 +579,7 @@
           "artifact_path": "docker-compose.yml",
           "layer": "Infra",
           "confidence": "High",
-          "reason": "artifact category is ContainerDefinition"
+          "reason": "path contains `docker`"
         },
         {
           "artifact_path": "docs/architecture.md",
@@ -681,7 +661,7 @@
         }
       ],
       "architecture_facts": [
-        "knowledge graph schema: 155 node(s), 178 relation(s)",
+        "knowledge graph schema: 149 node(s), 172 relation(s)",
         "container/component candidate: Configuration (Configuration)",
         "container/component candidate: assets (Directory)",
         "container/component candidate: data (Directory)",
@@ -697,9 +677,9 @@
         "Configuration (Configuration) score 99",
         "web (Directory) score 66",
         "python_app (PythonPackage) score 56",
-        "Infrastructure (Infrastructure) score 45",
-        "Documentation (Documentation) score 44",
+        "Documentation (Documentation) score 45",
         "fixture-worker (RustCrate) score 32",
+        "Infrastructure (Infrastructure) score 31",
         "root (Directory) score 14",
         "generated (Directory) score 11",
         "assets (Directory) score 5",
@@ -708,11 +688,8 @@
       "decisions_and_docs": [
         "existing architecture knowledge: docs/architecture.md"
       ],
-      "mermaid": "```mermaid\nflowchart LR\n  M1[\"Configuration\"]\n  M2[\"assets\"]\n  M3[\"data\"]\n  M4[\"generated\"]\n  M5[\"root\"]\n  M6[\"vendor\"]\n  M7[\"web\"]\n  M8[\"Documentation\"]\n  M9[\"Infrastructure\"]\n  M10[\"python_app\"]\n  M9 -->|ReadsEnv| M1\n  M9 -->|DefinesEnv| M1\n  M8 -->|References| M9\n  M8 -->|References| M9\n  M8 -->|References| M5\n  M8 -->|References| M2\n  M8 -->|References| M1\n  M8 -->|References| M1\n  M8 -->|References| M3\n  M8 -->|References| M9\n  M8 -->|References| M4\n  M8 -->|References| M1\n```",
+      "mermaid": "```mermaid\nflowchart LR\n  M1[\"Configuration\"]\n  M2[\"assets\"]\n  M3[\"data\"]\n  M4[\"generated\"]\n  M5[\"root\"]\n  M6[\"vendor\"]\n  M7[\"web\"]\n  M8[\"Documentation\"]\n  M9[\"Infrastructure\"]\n  M10[\"python_app\"]\n  M9 -->|ReadsEnv| M1\n  M9 -->|DefinesEnv| M1\n  M8 -->|References| M9\n  M8 -->|References| M5\n  M8 -->|References| M2\n  M8 -->|References| M1\n  M8 -->|References| M1\n  M8 -->|References| M3\n  M8 -->|References| M9\n  M8 -->|References| M4\n  M8 -->|References| M1\n```",
       "evidence": [
-        {
-          "reference": ".github/workflows/ci.yml"
-        },
         {
           "reference": "Dockerfile"
         },
@@ -745,6 +722,9 @@
         },
         {
           "reference": "generated/client.py"
+        },
+        {
+          "reference": "pyproject.toml"
         }
       ],
       "confidence": 85
@@ -773,11 +753,6 @@
         "rust/src/lib.rs -[ReadsEnv]-> RIDGELINE_CACHE_DIR (High)",
         "src/python_app/service.py -[ReadsEnv]-> RIDGELINE_WORKER (High)",
         "src/python_app/service.py -[RunsCommand]-> [worker_path, \"--route\", str(route_file)] (Low)",
-        "checks -[RunsCommand]-> python -m pytest (High)",
-        "checks -[RunsCommand]-> cargo test --manifest-path rust/Cargo.toml (High)",
-        "checks -[RunsCommand]-> npm --prefix web run lint (High)",
-        "checks -[RunsCommand]-> docker build -t ghcr.io/example/route-api:${{ github.sha }} . (High)",
-        "checks -[BuildsImage]-> ghcr.io/example/route-api:${{ (High)",
         "api -[ReadsEnv]-> RIDGELINE_WORKER (High)",
         "api -[UsesImage]-> ghcr.io/example/route-api:${VERSION:-dev} (High)",
         "web -[UsesImage]-> node:24-alpine (High)",
@@ -785,16 +760,25 @@
       ],
       "evidence": [
         {
+          "reference": "relation:3"
+        },
+        {
+          "reference": "relation:148"
+        },
+        {
+          "reference": "relation:6"
+        },
+        {
+          "reference": "relation:4"
+        },
+        {
+          "reference": "relation:5"
+        },
+        {
+          "reference": "relation:2"
+        },
+        {
           "reference": "relation:1"
-        },
-        {
-          "reference": "relation:9"
-        },
-        {
-          "reference": "relation:154"
-        },
-        {
-          "reference": "relation:12"
         },
         {
           "reference": "relation:10"
@@ -803,22 +787,13 @@
           "reference": "relation:11"
         },
         {
-          "reference": "relation:8"
-        },
-        {
           "reference": "relation:7"
         },
         {
-          "reference": "relation:16"
+          "reference": "relation:8"
         },
         {
-          "reference": "relation:17"
-        },
-        {
-          "reference": "relation:13"
-        },
-        {
-          "reference": "relation:14"
+          "reference": "relation:9"
         }
       ],
       "confidence": 85
@@ -840,6 +815,7 @@
         "external package: subprocess",
         "external package: typescript",
         "external package: vite",
+        "unresolved reference: .github/workflows/ci.yml",
         "unresolved reference: /usr/local/bin/worker",
         "unresolved reference: /var/cache/ridgeline",
         "unresolved reference: App",
@@ -863,21 +839,29 @@
         "unresolved reference: main",
         "unresolved reference: meta",
         "unresolved reference: p",
-        "unresolved reference: route",
-        "unresolved reference: rust/"
+        "unresolved reference: route"
       ],
       "evidence": [
         {
+          "reference": "relation:3"
+        },
+        {
+          "reference": "relation:148"
+        },
+        {
+          "reference": "relation:6"
+        },
+        {
+          "reference": "relation:4"
+        },
+        {
+          "reference": "relation:5"
+        },
+        {
+          "reference": "relation:2"
+        },
+        {
           "reference": "relation:1"
-        },
-        {
-          "reference": "relation:9"
-        },
-        {
-          "reference": "relation:154"
-        },
-        {
-          "reference": "relation:12"
         },
         {
           "reference": "relation:10"
@@ -886,22 +870,13 @@
           "reference": "relation:11"
         },
         {
-          "reference": "relation:8"
-        },
-        {
           "reference": "relation:7"
         },
         {
-          "reference": "relation:16"
+          "reference": "relation:8"
         },
         {
-          "reference": "relation:17"
-        },
-        {
-          "reference": "relation:13"
-        },
-        {
-          "reference": "relation:14"
+          "reference": "relation:9"
         }
       ],
       "confidence": 85
@@ -911,18 +886,15 @@
         "Configuration (Configuration) score 99",
         "web (Directory) score 66",
         "python_app (PythonPackage) score 56",
-        "Infrastructure (Infrastructure) score 45",
-        "Documentation (Documentation) score 44",
+        "Documentation (Documentation) score 45",
         "fixture-worker (RustCrate) score 32",
+        "Infrastructure (Infrastructure) score 31",
         "root (Directory) score 14",
         "generated (Directory) score 11",
         "assets (Directory) score 5",
         "data (Directory) score 2"
       ],
       "evidence": [
-        {
-          "reference": ".github/workflows/ci.yml"
-        },
         {
           "reference": "Dockerfile"
         },
@@ -949,6 +921,9 @@
         },
         {
           "reference": "docker-compose.yml"
+        },
+        {
+          "reference": "docs/architecture.md"
         }
       ],
       "confidence": 85
@@ -964,16 +939,12 @@
         "compose service: web",
         "container image: ghcr.io/example/route-api:${VERSION:-dev}",
         "container image: ghcr.io/example/route-api:${VERSION}",
-        "container image: ghcr.io/example/route-api:${{",
         "container image: ghcr.io/example/worker:1.0",
         "container image: node:24-alpine",
         "container image: python:3.13-slim",
         "container image: rust:1.96"
       ],
       "evidence": [
-        {
-          "reference": ".github/workflows/ci.yml"
-        },
         {
           "reference": "Dockerfile"
         },
@@ -1000,10 +971,13 @@
         },
         {
           "reference": "docker-compose.yml"
+        },
+        {
+          "reference": "docs/architecture.md"
         }
       ],
       "confidence": 85
     }
   },
-  "input_hash": "239e799f1f4971be10f66270802573e69b9777c935c1988395bb77158dba1a22"
+  "input_hash": "e10f4342e712ad1f07d1e14611b0d701e26aa8f4e9bf8f4b85664246f369489b"
 }

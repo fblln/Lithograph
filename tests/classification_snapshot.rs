@@ -22,7 +22,6 @@ fn polyglot_fixture_classification_snapshot() -> Result<(), Box<dyn std::error::
     assert_eq!(
         snapshot,
         "\
-.github/workflows/ci.yml|ContinuousIntegration|github-actions|StructuredFormat|Text|Structured(github-actions)|Allowed|0|0
 Dockerfile|ContainerDefinition|dockerfile|StructuredFormat|Text|Structured(dockerfile)|Allowed|0|0
 LICENSE|Documentation|license|GenericText|Text|GenericText|Allowed|0|0
 Makefile|BuildDefinition|makefile|GenericText|Text|GenericText|Allowed|0|0

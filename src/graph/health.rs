@@ -224,8 +224,8 @@ fn finding<const N: usize>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::Confidence;
-    use crate::graph::{GraphNode, Relation, UnresolvedNode};
+    use crate::domain::{ArtifactCategory, ArtifactId, Confidence, EvidenceRef, RepoPath};
+    use crate::graph::{ArtifactNode, GraphNode, Relation, UnresolvedNode};
     fn edge(id: &str, source: &str, target: &str, kind: RelationKind) -> Relation {
         Relation {
             id: id.into(),
@@ -238,12 +238,30 @@ mod tests {
         }
     }
     #[test]
-    fn detectors_are_deterministic_and_cover_required_patterns() {
+    fn detectors_are_deterministic_and_cover_required_patterns()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let artifact = |id: &str| -> Result<GraphNode, Box<dyn std::error::Error>> {
+            let path = RepoPath::new(format!("src/{id}.rs"))?;
+            Ok(GraphNode::Artifact(ArtifactNode {
+                id: GraphNodeId::new(id),
+                path: path.to_string(),
+                category: ArtifactCategory::SourceCode,
+                evidence: EvidenceRef::file(ArtifactId::from_path(&path), path),
+            }))
+        };
         let graph = Graph {
-            nodes: vec![GraphNode::Unresolved(UnresolvedNode {
-                id: GraphNodeId::new("orphan"),
-                value: "orphan".to_owned(),
-            })],
+            nodes: vec![
+                artifact("a")?,
+                artifact("b")?,
+                artifact("x")?,
+                artifact("y")?,
+                artifact("api")?,
+                artifact("data")?,
+                GraphNode::Unresolved(UnresolvedNode {
+                    id: GraphNodeId::new("orphan"),
+                    value: "orphan".to_owned(),
+                }),
+            ],
             relations: vec![
                 edge("ab", "a", "b", RelationKind::Calls),
                 edge("ba", "b", "a", RelationKind::Calls),
@@ -268,8 +286,16 @@ mod tests {
             HealthRule::LowCohesionCluster,
             HealthRule::ShotgunSurgery,
         ] {
-            assert!(findings.iter().any(|finding| finding.rule == rule));
+            assert!(
+                findings.iter().any(|finding| finding.rule == rule),
+                "missing {rule:?}; got {:?}",
+                findings
+                    .iter()
+                    .map(|finding| finding.rule)
+                    .collect::<Vec<_>>()
+            );
         }
         assert_eq!(findings, detect_health(&graph, &thresholds));
+        Ok(())
     }
 }

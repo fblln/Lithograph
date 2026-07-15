@@ -13,8 +13,8 @@ Directory       generated             4  af7c6864a5f8b357a9d86e0806a7739ea426ccb
 Directory       root                  6  d9b071b9e6f27ac2909415dc4c2590b2ba32e0fcab686075d2b79db574615771      78
 Directory       vendor                1  031399bb81b35a133503a3e11bf0af08d46a4064e5f34c019380e97d73812819      18
 Directory       web                  33  684e2e68e5213a8ace17ed654a9a177835e7045586aebf6808961cbcddf9379c     151
-Documentation   Documentation        13  072a11ff87434dd925fa9e1516a3e2271ed75b8cca6b7049bc82f65ac1584f09    1081
-Infrastructure  Infrastructure       19  b504fade04dddb8d546b8a78b5e1a16e0692f96f8e34c926def164672be19873     384
+Documentation   Documentation        14  072a11ff87434dd925fa9e1516a3e2271ed75b8cca6b7049bc82f65ac1584f09    1081
+Infrastructure  Infrastructure       12  8d883e4a0f20ba2bbe9de21524865f7fb1ae372fbdbd9c6b985cf6b2cd177650     253
 PythonPackage   python_app           19  e6b2ad1a1b9b13f6bb619843c76721d3af8d54ad49b5007add9f863090c72157     333
 RustCrate       fixture-worker       14  3326ff9d7b5b8c213d8e5329e3931e01e5fb4ad896fad50c7ca87ece04d4c69b     365
 ";

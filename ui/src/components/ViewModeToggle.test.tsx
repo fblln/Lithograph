@@ -8,20 +8,20 @@ describe('ViewModeToggle', () => {
     cleanup()
   })
 
-  it('calls onChange with "matrix" when the Matrix button is clicked', async () => {
+  it('calls onChange with "cluster" when the Cluster button is clicked', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
     render(<ViewModeToggle mode="radial" onChange={onChange} />)
 
-    await user.click(screen.getByText('Matrix'))
+    await user.click(screen.getByText('Cluster'))
 
-    expect(onChange).toHaveBeenCalledWith('matrix')
+    expect(onChange).toHaveBeenCalledWith('cluster')
   })
 
   it('calls onChange with "radial" when the Radial button is clicked', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
-    render(<ViewModeToggle mode="matrix" onChange={onChange} />)
+    render(<ViewModeToggle mode="cluster" onChange={onChange} />)
 
     await user.click(screen.getByText('Radial'))
 
@@ -32,15 +32,15 @@ describe('ViewModeToggle', () => {
     render(<ViewModeToggle mode="radial" onChange={vi.fn()} />)
 
     expect(screen.getByText('Radial')).toHaveAttribute('data-active', 'true')
-    expect(screen.getByText('Matrix')).toHaveAttribute('data-active', 'false')
+    expect(screen.getByText('Cluster')).toHaveAttribute('data-active', 'false')
   })
 
   it('flips which button is active when the mode prop changes', () => {
     const { rerender } = render(<ViewModeToggle mode="radial" onChange={vi.fn()} />)
-    expect(screen.getByText('Matrix')).toHaveAttribute('data-active', 'false')
+    expect(screen.getByText('Cluster')).toHaveAttribute('data-active', 'false')
 
-    rerender(<ViewModeToggle mode="matrix" onChange={vi.fn()} />)
-    expect(screen.getByText('Matrix')).toHaveAttribute('data-active', 'true')
+    rerender(<ViewModeToggle mode="cluster" onChange={vi.fn()} />)
+    expect(screen.getByText('Cluster')).toHaveAttribute('data-active', 'true')
     expect(screen.getByText('Radial')).toHaveAttribute('data-active', 'false')
   })
 })

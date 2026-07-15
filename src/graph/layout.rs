@@ -63,6 +63,10 @@ pub struct LayoutRequest {
     /// is always included regardless of this filter.
     #[serde(default)]
     pub node_labels: BTreeSet<String>,
+    /// Exact node-id allowlist, typically resolved from a tag expression.
+    /// Empty means no id filter. The resolved focus node is always included.
+    #[serde(default)]
+    pub node_ids: BTreeSet<GraphNodeId>,
     /// Relation kind allowlist restricting which edges are traversed and
     /// returned. Empty means no filter.
     #[serde(default)]
@@ -266,6 +270,11 @@ pub fn compute_layout(graph: &Graph, request: &LayoutRequest) -> Result<LayoutRe
     } else {
         Some(&request.edge_types)
     };
+    let id_filter: Option<&BTreeSet<GraphNodeId>> = if request.node_ids.is_empty() {
+        None
+    } else {
+        Some(&request.node_ids)
+    };
 
     let adjacency = build_adjacency(graph, edge_filter);
     let hops = match &origin {
@@ -287,11 +296,12 @@ pub fn compute_layout(graph: &Graph, request: &LayoutRequest) -> Result<LayoutRe
         .keys()
         .filter(|id| {
             origin.as_ref() == Some(*id)
-                || label_filter.as_ref().is_none_or(|labels| {
-                    node_by_id
-                        .get(*id)
-                        .is_some_and(|node| labels.contains(&node_label(node).to_lowercase()))
-                })
+                || (id_filter.is_none_or(|ids| ids.contains(*id))
+                    && label_filter.as_ref().is_none_or(|labels| {
+                        node_by_id
+                            .get(*id)
+                            .is_some_and(|node| labels.contains(&node_label(node).to_lowercase()))
+                    }))
         })
         .collect();
     // Deterministic priority: closest hop first, then most-connected, then
@@ -672,6 +682,26 @@ mod tests {
         assert!(!ids.contains("d"));
         assert!(ids.contains("c"));
         assert!(ids.contains("a"));
+        Ok(())
+    }
+
+    #[test]
+    fn node_id_filter_keeps_the_exact_budgeted_tag_scope() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let graph = chain_graph()?;
+        let request = LayoutRequest {
+            node_ids: BTreeSet::from([GraphNodeId::new("a"), GraphNodeId::new("c")]),
+            ..Default::default()
+        };
+        let result = compute_layout(&graph, &request)?;
+        let ids = result
+            .nodes
+            .iter()
+            .map(|node| node.id.as_str())
+            .collect::<BTreeSet<_>>();
+        assert_eq!(ids, BTreeSet::from(["a", "c"]));
+        assert_eq!(result.budget.nodes_available, 2);
+        assert!(result.edges.is_empty());
         Ok(())
     }
 

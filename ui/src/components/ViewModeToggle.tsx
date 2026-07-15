@@ -1,4 +1,4 @@
-export type ViewMode = 'radial' | 'matrix'
+export type ViewMode = 'cluster' | 'radial' | 'matrix'
 
 export interface ViewModeToggleProps {
   mode: ViewMode
@@ -6,6 +6,7 @@ export interface ViewModeToggleProps {
 }
 
 const OPTIONS: Array<{ mode: ViewMode; label: string }> = [
+  { mode: 'cluster', label: 'Cluster' },
   { mode: 'radial', label: 'Radial' },
   { mode: 'matrix', label: 'Matrix' },
 ]

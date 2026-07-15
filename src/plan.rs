@@ -903,7 +903,12 @@ mod tests {
     #[test]
     fn module_plan_fixture_snapshot() -> Result<(), Box<dyn std::error::Error>> {
         let root = fixture_root();
-        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
+        let artifacts = RepositoryWalker::new(WalkOptions {
+            include_hidden_directories: true,
+            include_tests: true,
+            ..WalkOptions::default()
+        })
+        .walk(&root)?;
         let graph = GraphBuilder.build(&root, &artifacts);
         let modules = ModulePlanner.plan(&graph, &artifacts);
 

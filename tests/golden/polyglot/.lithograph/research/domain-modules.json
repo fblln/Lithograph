@@ -72,7 +72,7 @@
     {
       "name": "Documentation",
       "kind": "Documentation",
-      "member_count": 13,
+      "member_count": 14,
       "evidence": [
         "artifact:LICENSE",
         "artifact:README.md",
@@ -83,12 +83,12 @@
     {
       "name": "Infrastructure",
       "kind": "Infrastructure",
-      "member_count": 19,
+      "member_count": 12,
       "evidence": [
-        "artifact:.github/workflows/ci.yml",
         "artifact:Dockerfile",
         "artifact:docker-compose.yml",
-        "command:.github/workflows/ci.yml#jobs.checks.steps[1]"
+        "command:Dockerfile#14",
+        "command:Dockerfile#4"
       ]
     },
     {
@@ -118,7 +118,6 @@
     "Makefile -[References]-> rust/Cargo.toml (Low)",
     "Makefile -[References]-> ghcr.io/example/route-api:dev (Low)",
     "Makefile -[References]-> ghcr.io/example/route-api:dev (Low)",
-    "README.md -[References]-> .github/workflows/ci.yml (High)",
     "README.md -[References]-> Dockerfile (High)",
     "README.md -[References]-> Makefile (High)",
     "README.md -[References]-> README.md (High)",
@@ -138,6 +137,7 @@
     "README.md -[References]-> vendor/example/lib.rs (High)",
     "README.md -[References]-> web/index.html (High)",
     "README.md -[References]-> web/src/App.tsx (High)",
+    "README.md -[References]-> .github/workflows/ci.yml (High)",
     "assets/logo.svg -[References]-> xmlns=\"http://www.w3.org/2000/svg (Low)",
     "assets/logo.svg -[References]-> xmlns=\"http://www.w3.org/2000/svg (Low)",
     "config/schema.json -[References]-> https://json-schema.org/draft/2020-12/schema (Low)",
@@ -158,9 +158,6 @@
   ],
   "evidence": [
     {
-      "reference": ".github/workflows/ci.yml"
-    },
-    {
       "reference": "Dockerfile"
     },
     {
@@ -180,6 +177,9 @@
     },
     {
       "reference": "config/settings.yaml"
+    },
+    {
+      "reference": "data/sample.bin"
     }
   ],
   "confidence": 85
