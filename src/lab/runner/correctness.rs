@@ -13,8 +13,8 @@ use super::{
 use crate::domain::Artifact;
 use crate::graph::{
     CommunitySnapshotStore, CommunitySummary, Graph, GraphBuildTraceConfig, GraphBuildTraceDetail,
-    GraphValidator, analyze_communities, architecture_aware_scope, environment_aware_scope,
-    filter_classes,
+    GraphStore, GraphValidator, analyze_communities, architecture_aware_scope,
+    environment_aware_scope, filter_classes,
 };
 use crate::inventory::{RepositoryWalker, WalkOptions};
 use crate::lab::model::*;
@@ -109,6 +109,19 @@ impl Lab {
         let semantic_start = Instant::now();
         let _semantic = filter_classes(&output.graph, "controller service persistence test");
         let semantic_ms = millis(semantic_start.elapsed());
+        // LIT-53: persistence was never measured here, so a save that grew
+        // quadratic with graph size -- twelve minutes on nestjs, against
+        // seconds to build it -- was invisible to the lab while every build
+        // phase stayed green. Saving into a scratch store per sample keeps the
+        // real repository untouched and the measurement honest.
+        let save_root = self.root.join("work/graph-save").join(&case.id);
+        if save_root.exists() {
+            std::fs::remove_dir_all(&save_root)?;
+        }
+        std::fs::create_dir_all(&save_root)?;
+        let save_start = Instant::now();
+        GraphStore::new(&save_root).save(&output.graph)?;
+        let graph_save_ms = millis(save_start.elapsed());
         let expectations: ExpectationSet = read_required(&self.corpus.expectation_path(case)?)?;
         if expectations.schema_version != LAB_SCHEMA_VERSION {
             return Err(LabError::Invalid(format!(
@@ -324,6 +337,7 @@ impl Lab {
         observations.insert("query_ms".to_owned(), query_ms);
         observations.insert("layout_ms".to_owned(), layout_ms);
         observations.insert("semantic_ms".to_owned(), semantic_ms);
+        observations.insert("graph_save_ms".to_owned(), graph_save_ms);
         observations.insert("peak_rss_kib".to_owned(), process_rss_kib());
         if !output.graph.nodes.is_empty() {
             observations.insert(
