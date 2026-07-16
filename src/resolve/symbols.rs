@@ -211,11 +211,17 @@ impl<'a> ImportMap<'a> {
             };
         }
         let normalized = name.replace('.', "::");
+        // The suffix must land on a `::` boundary, not anywhere in the string.
+        // A raw `ends_with` made `Ok` match `serve::JsonRpcOk` -- and by the
+        // same rule `Config` would match `MyConfig` and `Error` `ParseError`.
+        // On this repository that single character-level match fabricated 815
+        // `Ok(..)` call edges into an unrelated type (LIT-63).
+        let boundary_suffix = format!("::{normalized}");
         let suffix: BTreeSet<_> = self
             .registry
             .by_qualified_name
             .iter()
-            .filter(|(key, _)| key.ends_with(&normalized))
+            .filter(|(key, _)| *key == &normalized || key.ends_with(&boundary_suffix))
             .flat_map(|(_, ids)| ids.iter().cloned())
             .collect();
         if let Some(target) = (suffix.len() == 1)
@@ -330,6 +336,32 @@ mod tests {
             ImportLookup::Suffix { .. }
         ));
         assert_eq!(map.lookup(None, None, "missing"), ImportLookup::Unresolved);
+    }
+
+    /// LIT-63: the suffix match compared raw strings, so `Ok` matched
+    /// `serve::JsonRpcOk` because those characters end it. On this repository
+    /// that fabricated 815 call edges into an unrelated type. A suffix must
+    /// land on a `::` boundary to be a suffix of a path rather than of a word.
+    #[test]
+    fn suffix_lookup_matches_path_segments_not_substrings() {
+        let registry = registry(&[("symbol:ok", "crate::serve::JsonRpcOk", "crate::serve")]);
+        let map = ImportMap::new(&registry);
+
+        assert_eq!(
+            map.lookup(None, None, "Ok"),
+            ImportLookup::Unresolved,
+            "`Ok` is not a path suffix of `JsonRpcOk`, only a character suffix",
+        );
+        // The real segment still resolves.
+        assert!(matches!(
+            map.lookup(None, None, "JsonRpcOk"),
+            ImportLookup::Suffix { .. }
+        ));
+        // And so does a genuine multi-segment suffix.
+        assert!(matches!(
+            map.lookup(None, None, "serve::JsonRpcOk"),
+            ImportLookup::Suffix { .. }
+        ));
     }
 
     #[test]

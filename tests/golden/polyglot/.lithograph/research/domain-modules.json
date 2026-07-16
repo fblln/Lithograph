@@ -105,7 +105,7 @@
     {
       "name": "fixture-worker",
       "kind": "RustCrate",
-      "member_count": 14,
+      "member_count": 16,
       "evidence": [
         "artifact:rust/Cargo.toml",
         "artifact:rust/src/bin/worker.rs",
@@ -152,9 +152,9 @@
     "requirements.txt -[DependsOnPackage]-> pydantic (High)",
     "requirements.txt -[DependsOnPackage]-> pytest (High)",
     "rust/src/bin/worker.rs -[Imports]-> fixture_worker::bake_route (High)",
+    "rust/src/bin/worker.rs -[Calls]-> std::env::args (Low)",
     "rust/src/lib.rs -[Imports]-> std (High)",
-    "src/python_app/__init__.py -[Imports]-> src.python_app.service (High)",
-    "src/python_app/service.py -[Imports]-> __future__ (High)"
+    "rust/src/lib.rs -[Calls]-> RouteBaker::from_env (Low)"
   ],
   "evidence": [
     {

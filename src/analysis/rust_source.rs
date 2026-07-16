@@ -137,6 +137,10 @@ pub enum RustReferenceKind {
     Subprocess,
     /// A function or static declared inside an `extern "ABI" { ... }` block.
     Ffi,
+    /// A call whose callee is statically named: a bare `parse(..)` or a path
+    /// `flags::parse(..)`/`Type::new(..)`. Resolution is deferred to graph
+    /// construction, where the other files' symbols exist (LIT-63).
+    Call,
 }
 
 /// One heuristic reference extracted from a call expression.
@@ -657,6 +661,20 @@ fn classify_rust_call(
             rust_literal_or_dynamic(first_arg, source, RustReferenceKind::EnvRead)
         } else if canonical == "std::process::Command::new" {
             rust_literal_or_dynamic(first_arg, source, RustReferenceKind::Subprocess)
+        } else if is_prelude_constructor(&canonical) {
+            // `Ok(())`, `Some(x)`, `Err(e)` are enum-variant constructors that
+            // every Rust function uses. They are calls by the language's
+            // grammar and noise by any graph's measure: an edge every node has
+            // distinguishes nothing, and 647 `Some` edges appeared on this
+            // repository alone before this guard.
+            return None;
+        } else if is_statically_named_callee(function) {
+            // LIT-63: every other call was dropped here, so a 2753-function
+            // Rust repository produced zero Calls edges while three other
+            // tools recovered ~3000-4400 from the same source. A statically
+            // named callee is a fact the parser can see; whether it resolves
+            // is the graph builder's problem, not this function's.
+            (RustReferenceKind::Call, callee.to_owned(), Confidence::Low)
         } else {
             return None;
         };
@@ -667,6 +685,32 @@ fn classify_rust_call(
         confidence,
         evidence: evidence(artifact, node),
     })
+}
+
+/// Enum-variant constructors from the Rust prelude, which are grammatically
+/// calls but carry no information as graph edges.
+fn is_prelude_constructor(canonical: &str) -> bool {
+    matches!(
+        canonical,
+        "Ok" | "Err"
+            | "Some"
+            | "None"
+            | "Result::Ok"
+            | "Result::Err"
+            | "Option::Some"
+            | "Option::None"
+    )
+}
+
+/// Whether a call's callee names its target outright.
+///
+/// `parse(..)` and `flags::parse(..)`/`Type::new(..)` do. A method call
+/// (`value.parse(..)`, a `field_expression`) does not: its target depends on
+/// the receiver's type, which needs cross-file type propagation (LIT-57) and
+/// is not something this pass can honestly claim to know. A call through a
+/// closure or an expression names nothing at all.
+fn is_statically_named_callee(function: Node) -> bool {
+    matches!(function.kind(), "identifier" | "scoped_identifier")
 }
 
 fn rust_literal_or_dynamic(
@@ -914,6 +958,70 @@ pub enum Route {
         assert_eq!(route.name, "Route");
         assert_eq!(route.attributes, vec!["derive(Debug)"]);
         assert_eq!(route.doc.as_deref(), Some("Route table."));
+
+        Ok(())
+    }
+
+    /// LIT-63: the analyzer dropped every ordinary call, so a 2753-function
+    /// Rust repository produced zero Calls edges while three other tools
+    /// recovered ~3000-4400 from identical source.
+    #[test]
+    fn rust_analyzer_extracts_statically_named_calls() -> Result<(), Box<dyn std::error::Error>> {
+        let source = concat!(
+            "fn helper() -> usize { 1 }\n",
+            "fn run() -> Result<usize, ()> {\n",
+            "    let a = helper();\n",
+            "    let b = flags::parse::parse_low_raw(a);\n",
+            "    let c = Config::new(b);\n",
+            "    Ok(c.len())\n",
+            "}\n",
+        );
+        let analysis = RustAnalyzer.analyze(&rust_artifact("src/lib.rs")?, source);
+        let calls: Vec<&str> = analysis
+            .references
+            .iter()
+            .filter(|reference| reference.kind == super::RustReferenceKind::Call)
+            .map(|reference| reference.value.as_str())
+            .collect();
+
+        assert!(calls.contains(&"helper"), "bare call, got {calls:?}");
+        assert!(
+            calls.contains(&"flags::parse::parse_low_raw"),
+            "path call must keep its path, got {calls:?}",
+        );
+        assert!(
+            calls.contains(&"Config::new"),
+            "associated function, got {calls:?}",
+        );
+        // `c.len()` is a method call: its target depends on the receiver's
+        // type, which this pass cannot know (LIT-57).
+        assert!(
+            !calls.iter().any(|call| call.contains("len")),
+            "receiver method calls must not be guessed, got {calls:?}",
+        );
+        // `Ok(..)` is grammatically a call and worthless as an edge.
+        assert!(
+            !calls.contains(&"Ok"),
+            "prelude constructors must not be calls, got {calls:?}",
+        );
+
+        Ok(())
+    }
+
+    /// LIT-63: `Ok`/`Some`/`Err` are enum-variant constructors every function
+    /// uses. 647 `Some` edges appeared on this repository before the guard.
+    #[test]
+    fn rust_analyzer_skips_prelude_constructors() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "fn f() -> Option<Result<u8, ()>> {\n    Some(Ok(1))\n}\n";
+        let analysis = RustAnalyzer.analyze(&rust_artifact("src/lib.rs")?, source);
+
+        let calls: Vec<&str> = analysis
+            .references
+            .iter()
+            .filter(|reference| reference.kind == super::RustReferenceKind::Call)
+            .map(|reference| reference.value.as_str())
+            .collect();
+        assert!(calls.is_empty(), "expected no call edges, got {calls:?}");
 
         Ok(())
     }

@@ -341,6 +341,7 @@ impl ExtractionIr {
                     crate::analysis::RustReferenceKind::EnvRead => IrEdgeKind::ReadsEnv,
                     crate::analysis::RustReferenceKind::Subprocess => IrEdgeKind::RunsCommand,
                     crate::analysis::RustReferenceKind::Ffi => IrEdgeKind::References,
+                    crate::analysis::RustReferenceKind::Call => IrEdgeKind::Calls,
                 },
                 source: analysis.module_path.clone(),
                 target: IrTarget::Unresolved {

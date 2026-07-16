@@ -4,7 +4,7 @@
     "web (Directory) score 66",
     "python_app (PythonPackage) score 59",
     "Documentation (Documentation) score 45",
-    "fixture-worker (RustCrate) score 32",
+    "fixture-worker (RustCrate) score 36",
     "Infrastructure (Infrastructure) score 31",
     "root (Directory) score 14",
     "generated (Directory) score 11",

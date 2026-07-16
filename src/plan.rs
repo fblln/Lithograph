@@ -940,7 +940,7 @@ module-plan:directory:web|Directory|web|33|151
 module-plan:documentation:documentation|Documentation|Documentation|13|1081
 module-plan:infrastructure:infrastructure|Infrastructure|Infrastructure|19|384
 module-plan:python-package:python-app|PythonPackage|python_app|20|370
-module-plan:rust-crate:fixture-worker|RustCrate|fixture-worker|14|365"
+module-plan:rust-crate:fixture-worker|RustCrate|fixture-worker|16|365"
         );
 
         Ok(())
