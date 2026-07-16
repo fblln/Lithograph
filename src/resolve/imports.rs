@@ -71,12 +71,74 @@ pub(crate) fn extract_typescript_import_bindings(raw_text: &str) -> Vec<(String,
 /// itself extension-less (JS/TS's `from "./util"`) need this; the rest
 /// return an empty slice and rely on the exact-path fallback.
 fn candidate_extensions(language: &str) -> &'static [&'static str] {
+    // Ordered by which source the language most likely means: a `.ts` file's
+    // extensionless import is a sibling `.ts` far more often than a `.js`.
     match language {
-        "typescript" => &[".ts", ".tsx"],
-        "tsx" => &[".tsx", ".ts"],
-        "javascript" => &[".js", ".jsx"],
+        "typescript" => &[".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"],
+        "tsx" => &[".tsx", ".ts", ".mts", ".cts", ".jsx", ".js", ".mjs", ".cjs"],
+        "javascript" => &[".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"],
         _ => &[],
     }
+}
+
+/// Sources an import specifier's written extension may actually name.
+///
+/// TypeScript's ESM output keeps the specifier the author wrote, so
+/// `import "./util.js"` in a `.ts` file refers to `util.ts` -- the `.js` is
+/// what the *emitted* code will import, not what exists on disk. Without this
+/// the import resolves to nothing on any repository following the convention
+/// (LIT-45.1).
+fn remapped_extensions(extension: &str) -> &'static [&'static str] {
+    match extension {
+        ".js" => &[".ts", ".tsx"],
+        ".jsx" => &[".tsx"],
+        ".mjs" => &[".mts"],
+        ".cjs" => &[".cts"],
+        _ => &[],
+    }
+}
+
+/// Every path an import specifier could name, in the order they should win.
+///
+/// The order is the resolution rule, so it is spelled out rather than left to
+/// the caller's loop:
+///
+/// 1. the exact path, so a real `util.js` beats a same-named `util.ts`;
+/// 2. the extension remap above, for the TS ESM convention;
+/// 3. the specifier plus each candidate extension, covering extensionless
+///    imports and multi-dot names like `Foo.svelte.ts`;
+/// 4. directory index files -- last, because a file always beats a directory
+///    of the same name.
+fn import_candidates(candidate: &str, language: &str) -> Vec<String> {
+    let mut candidates = vec![candidate.to_owned()];
+
+    if let Some(extension_start) = file_extension_start(candidate) {
+        let (stem, extension) = candidate.split_at(extension_start);
+        for remapped in remapped_extensions(extension) {
+            candidates.push(format!("{stem}{remapped}"));
+        }
+    }
+
+    for extension in candidate_extensions(language) {
+        candidates.push(format!("{candidate}{extension}"));
+    }
+
+    for extension in candidate_extensions(language) {
+        candidates.push(format!("{candidate}/index{extension}"));
+    }
+
+    candidates.dedup();
+    candidates
+}
+
+/// Byte offset of the final `.` of `path`'s file name, when it has one.
+///
+/// Scoped to the file name so a dotted directory (`./.config/thing`) is not
+/// mistaken for an extension.
+fn file_extension_start(path: &str) -> Option<usize> {
+    let name_start = path.rfind('/').map_or(0, |index| index + 1);
+    let dot = path[name_start..].rfind('.')? + name_start;
+    (dot > name_start).then_some(dot)
 }
 
 fn quoted_literal(text: &str) -> Option<String> {
@@ -179,20 +241,13 @@ impl Resolver for LanguageImportResolver {
             let source_path = relation.source.as_str().strip_prefix("artifact:")?;
             let source_dir = Path::new(source_path).parent().unwrap_or(Path::new(""));
             let candidate = resolve_relative_path(source_dir, &reference);
-            for extension in candidate_extensions(language) {
-                let with_extension = format!("{candidate}{extension}");
-                if let Some(target) = context.artifacts_by_path.get(with_extension.as_str()) {
+            for path in import_candidates(&candidate, language) {
+                if let Some(target) = context.artifacts_by_path.get(path.as_str()) {
                     return Some(ResolvedTarget {
                         target: (*target).clone(),
                         confidence: Confidence::High,
                     });
                 }
-            }
-            if let Some(target) = context.artifacts_by_path.get(candidate.as_str()) {
-                return Some(ResolvedTarget {
-                    target: (*target).clone(),
-                    confidence: Confidence::High,
-                });
             }
         }
 
@@ -422,6 +477,138 @@ mod pipeline_tests {
         );
 
         Ok(())
+    }
+
+    /// LIT-45.1 AC1: TypeScript's ESM output keeps the specifier the author
+    /// wrote, so `./util.js` in a `.ts` file names `util.ts` on disk. Before
+    /// the remap this resolved to nothing on every repository following the
+    /// convention.
+    #[test]
+    fn js_suffixed_specifier_resolves_to_its_typescript_source()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(temp.path().join("src/util.ts"), "export const x = 1;\n")?;
+        std::fs::write(
+            temp.path().join("src/app.ts"),
+            "import { x } from \"./util.js\";\nexport const y = x;\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let relation = resolved_target(&graph, "src/app.ts").ok_or("missing import relation")?;
+        assert_eq!(relation.target.as_str(), "artifact:src/util.ts");
+
+        Ok(())
+    }
+
+    /// LIT-45.1: a specifier naming a file that really exists must win over
+    /// the remap -- the remap exists for a missing `.js`, not to redirect a
+    /// present one.
+    #[test]
+    fn an_existing_js_file_wins_over_its_typescript_namesake()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(temp.path().join("src/util.js"), "export const x = 1;\n")?;
+        std::fs::write(temp.path().join("src/util.ts"), "export const x = 2;\n")?;
+        std::fs::write(
+            temp.path().join("src/app.ts"),
+            "import { x } from \"./util.js\";\nexport const y = x;\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let relation = resolved_target(&graph, "src/app.ts").ok_or("missing import relation")?;
+        assert_eq!(relation.target.as_str(), "artifact:src/util.js");
+
+        Ok(())
+    }
+
+    /// LIT-45.1 AC3: a directory import resolves to its index, but only after
+    /// every file candidate fails -- a file always beats a directory of the
+    /// same name.
+    #[test]
+    fn directory_imports_resolve_to_index_only_when_no_file_matches()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src/models"))?;
+        std::fs::write(
+            temp.path().join("src/models/index.ts"),
+            "export const model = 1;\n",
+        )?;
+        std::fs::write(
+            temp.path().join("src/app.ts"),
+            "import { model } from \"./models\";\nexport const m = model;\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+        assert_eq!(
+            resolved_target(&graph, "src/app.ts")
+                .ok_or("missing import relation")?
+                .target
+                .as_str(),
+            "artifact:src/models/index.ts",
+        );
+
+        // With a sibling `models.ts` present, the file wins.
+        std::fs::write(
+            temp.path().join("src/models.ts"),
+            "export const model = 2;\n",
+        )?;
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+        assert_eq!(
+            resolved_target(&graph, "src/app.ts")
+                .ok_or("missing import relation")?
+                .target
+                .as_str(),
+            "artifact:src/models.ts",
+        );
+
+        Ok(())
+    }
+
+    /// LIT-45.1 AC2: the candidate order is the resolution rule, so it is
+    /// asserted directly rather than inferred from which file happens to win.
+    #[test]
+    fn import_candidate_order_is_documented_and_deterministic() {
+        let candidates = super::import_candidates("src/util.js", "typescript");
+
+        assert_eq!(
+            candidates[0], "src/util.js",
+            "the exact path is tried first"
+        );
+        assert_eq!(candidates[1], "src/util.ts", "then the ESM remap");
+        assert_eq!(candidates[2], "src/util.tsx");
+        assert!(
+            candidates.iter().position(|path| path == "src/util.js.ts")
+                > candidates.iter().position(|path| path == "src/util.ts"),
+            "appending to a specifier that already has an extension must not \
+             outrank remapping it",
+        );
+        assert!(
+            candidates
+                .iter()
+                .position(|path| path.starts_with("src/util.js/index"))
+                > candidates.iter().position(|path| path == "src/util.js.ts"),
+            "directory indexes are the last resort",
+        );
+        assert_eq!(
+            candidates,
+            super::import_candidates("src/util.js", "typescript"),
+            "the same specifier must always yield the same order",
+        );
+
+        // A dotted directory is not an extension.
+        assert_eq!(
+            super::import_candidates("src/.config/thing", "typescript")[1],
+            "src/.config/thing.ts",
+            "a leading-dot directory must not be read as a file extension",
+        );
     }
 
     #[test]

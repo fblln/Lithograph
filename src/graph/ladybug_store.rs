@@ -34,6 +34,12 @@ impl LadybugGraphStore {
         if self.load_payload()?.as_deref() == Some(payload.as_str()) {
             return Ok(false);
         }
+        // The snapshot id is a hash of this payload, so it is computed once
+        // here and handed to every row writer. Deriving it per row meant
+        // re-serializing the whole graph once per node and once per relation
+        // -- quadratic in graph size, and the reason saving the nestjs corpus
+        // took over twelve minutes while flask took seconds (LIT-53).
+        let snapshot_id = snapshot_id(&payload);
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -54,10 +60,10 @@ impl LadybugGraphStore {
             )?;
             write_snapshot(&connection, snapshot, &payload)?;
             for node in &snapshot.graph.nodes {
-                write_node(&connection, snapshot, node)?;
+                write_node(&connection, &snapshot_id, node)?;
             }
             for relation in &snapshot.graph.relations {
-                write_relation(&connection, snapshot, relation)?;
+                write_relation(&connection, &snapshot_id, relation)?;
             }
             Ok(())
         })();
@@ -151,20 +157,15 @@ fn write_snapshot(
     )
 }
 
-fn write_node(
-    connection: &Connection<'_>,
-    snapshot: &GraphSnapshot,
-    node: &GraphNode,
-) -> io::Result<()> {
+fn write_node(connection: &Connection<'_>, snapshot_id: &str, node: &GraphNode) -> io::Result<()> {
     let payload = serde_json::to_string(node).map_err(invalid_json)?;
-    let snapshot_id = snapshot_id(&serde_json::to_string(snapshot).map_err(invalid_json)?);
     let node_id = node.id().as_str();
     query(
         connection,
         &format!(
             "CREATE (:CodeNode {{node_key: {}, snapshot_id: {}, graph_node_id: {}, node_label: {}, node_kind: \"\", display_name: {}, artifact_path: \"\", language: \"\", is_external: false, is_dynamic: false, evidence_path: \"\", evidence_start_line: 0, evidence_end_line: 0, payload_json: {}}})",
-            cypher_string(&node_key(&snapshot_id, node_id)),
-            cypher_string(&snapshot_id),
+            cypher_string(&node_key(snapshot_id, node_id)),
+            cypher_string(snapshot_id),
             cypher_string(node_id),
             cypher_string(node_label(node)),
             cypher_string(node_id),
@@ -175,10 +176,9 @@ fn write_node(
 
 fn write_relation(
     connection: &Connection<'_>,
-    snapshot: &GraphSnapshot,
+    snapshot_id: &str,
     relation: &crate::graph::Relation,
 ) -> io::Result<()> {
-    let snapshot_id = snapshot_id(&serde_json::to_string(snapshot).map_err(invalid_json)?);
     let payload = serde_json::to_string(relation).map_err(invalid_json)?;
     let relation_key = format!("{}:{}", snapshot_id, relation.id);
     let resolution = relation
@@ -189,10 +189,10 @@ fn write_relation(
         connection,
         &format!(
             "MATCH (source:CodeNode {{node_key: {}}}), (target:CodeNode {{node_key: {}}}) CREATE (source)-[:GraphRelation {{relation_key: {}, snapshot_id: {}, relation_id: {}, relation_kind: {}, confidence: {}, resolution: {}, resolver_strategy: {}, provenance_language: {}, evidence_json: {}, payload_json: {}}}]->(target)",
-            cypher_string(&node_key(&snapshot_id, relation.source.as_str())),
-            cypher_string(&node_key(&snapshot_id, relation.target.as_str())),
+            cypher_string(&node_key(snapshot_id, relation.source.as_str())),
+            cypher_string(&node_key(snapshot_id, relation.target.as_str())),
             cypher_string(&relation_key),
-            cypher_string(&snapshot_id),
+            cypher_string(snapshot_id),
             cypher_string(&relation.id),
             cypher_string(&format!("{:?}", relation.kind)),
             cypher_string(&format!("{:?}", relation.confidence)),
