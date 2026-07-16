@@ -553,6 +553,12 @@
       "text": "src.python_app.service::run_worker Run the Rust worker and return its output."
     },
     {
+      "id": "symbol:std::env::args",
+      "kind": "Symbol",
+      "reference": "std::env::args",
+      "text": "std::env::args "
+    },
+    {
       "id": "symbol:web/index.html::element@L2",
       "kind": "Symbol",
       "reference": "web/index.html::element@L2",
