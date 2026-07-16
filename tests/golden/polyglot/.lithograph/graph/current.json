@@ -1,7 +1,7 @@
 {
   "metadata": {
     "schema_version": 1,
-    "graph_model_version": 2,
+    "graph_model_version": 3,
     "node_count": 149,
     "relation_count": 172,
     "migrations_applied": []

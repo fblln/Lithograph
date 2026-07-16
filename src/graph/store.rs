@@ -15,7 +15,12 @@ pub const GRAPH_STORE_SCHEMA_VERSION: u32 = 1;
 /// Current graph model version. This is separate from the store wrapper
 /// version so future graph shape changes can invalidate or migrate snapshots
 /// independently from the snapshot envelope.
-pub const GRAPH_MODEL_VERSION: u32 = 2;
+///
+/// 3: `SymbolKind::External` (LIT-56). Calls/Decorates/UsesType into an
+/// imported standard-library or declared-dependency name now land on an
+/// external symbol node instead of the package node, which the graph's own
+/// target-kind rule rejects for those relation kinds.
+pub const GRAPH_MODEL_VERSION: u32 = 3;
 
 /// Current portable graph artifact envelope version.
 pub const GRAPH_ARTIFACT_FORMAT_VERSION: u32 = 1;

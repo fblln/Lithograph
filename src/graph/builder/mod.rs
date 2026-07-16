@@ -764,6 +764,44 @@ impl BuilderState {
     /// per module name, deduplicated across the whole repo) instead of a
     /// per-file `Unresolved` node. Anything else -- a genuinely unknown or
     /// undeclared third-party module -- still becomes `Unresolved`.
+    /// Interns the symbol `name` imported from the external module
+    /// `module`, plus the `BelongsToPackage` edge tying it to its package
+    /// node.
+    ///
+    /// LIT-56: relation kinds like `Calls`, `Decorates`, and `UsesType`
+    /// accept only `Symbol` targets -- you call a package's member, never the
+    /// package. Pointing them at `package:<name>` produced graphs
+    /// `GraphValidator` rejects, which failed `init` outright on any
+    /// repository calling an imported name (e.g. `from multiprocessing import
+    /// cpu_count`). The symbol node keeps the same knowledge in a shape the
+    /// graph's own rules allow, and is more precise besides: `cpu_count`
+    /// rather than all of `multiprocessing`.
+    fn python_external_symbol(
+        &mut self,
+        module: &str,
+        name: &str,
+        evidence: EvidenceRef,
+    ) -> GraphNodeId {
+        let qualified_name = format!("{module}::{name}");
+        let symbol_id = self.insert(GraphNode::Symbol(SymbolNode {
+            id: GraphNodeId::new(format!("symbol:{qualified_name}")),
+            kind: SymbolKind::External,
+            qualified_name,
+            doc: None,
+            evidence: evidence.clone(),
+        }));
+        let top_level = module.split('.').next().unwrap_or(module);
+        let package_id = self.package(top_level, true);
+        self.relate(
+            symbol_id.clone(),
+            package_id,
+            RelationKind::BelongsToPackage,
+            Confidence::High,
+            vec![evidence],
+        );
+        symbol_id
+    }
+
     fn python_external_target(&mut self, dotted_name: &str) -> GraphNodeId {
         let top_level = dotted_name.split('.').next().unwrap_or(dotted_name);
         if is_python_stdlib_module(dotted_name)

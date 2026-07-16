@@ -34,7 +34,7 @@ impl BuilderState {
         // falling to `Unresolved`. Deliberately same-file only: no attempt to
         // trace which module a local variable like `app = FastAPI()` came
         // from, so `@app.get(...)` stays `Unresolved` exactly as before.
-        let mut imported_modules: BTreeMap<String, String> = BTreeMap::new();
+        let mut imported_modules: BTreeMap<String, PythonImportBinding> = BTreeMap::new();
         for import in &analysis.imports {
             match import.kind {
                 PythonImportKind::Import => {
@@ -42,7 +42,13 @@ impl BuilderState {
                         let bound = name.alias.clone().unwrap_or_else(|| {
                             name.name.split('.').next().unwrap_or(&name.name).to_owned()
                         });
-                        imported_modules.insert(bound, name.name.clone());
+                        imported_modules.insert(
+                            bound,
+                            PythonImportBinding {
+                                module: name.name.clone(),
+                                symbol: None,
+                            },
+                        );
                     }
                 }
                 PythonImportKind::ImportFrom => {
@@ -51,7 +57,13 @@ impl BuilderState {
                     {
                         for name in &import.names {
                             let bound = name.alias.clone().unwrap_or_else(|| name.name.clone());
-                            imported_modules.insert(bound, module.clone());
+                            imported_modules.insert(
+                                bound,
+                                PythonImportBinding {
+                                    module: module.clone(),
+                                    symbol: Some(name.name.clone()),
+                                },
+                            );
                         }
                     }
                 }
@@ -84,7 +96,7 @@ impl BuilderState {
                 .push(id.clone());
             for decorator in &class.decorators {
                 let target = self
-                    .same_file_import_external_target(&imported_modules, decorator)
+                    .same_file_import_external_symbol(&imported_modules, decorator, &class.evidence)
                     .unwrap_or_else(|| self.unresolved(decorator));
                 self.relate_with_provenance(
                     id.clone(),
@@ -143,7 +155,11 @@ impl BuilderState {
                 );
                 if let Some(return_type) = &method.return_type {
                     let target = self
-                        .same_file_import_external_target(&imported_modules, return_type)
+                        .same_file_import_external_symbol(
+                            &imported_modules,
+                            return_type,
+                            &method.evidence,
+                        )
                         .unwrap_or_else(|| self.unresolved(return_type));
                     self.relate_with_provenance(
                         method_id.clone(),
@@ -184,7 +200,11 @@ impl BuilderState {
             self.process_python_route_decorators(artifact, artifact_node, function, &id);
             for decorator in &function.decorators {
                 let target = self
-                    .same_file_import_external_target(&imported_modules, decorator)
+                    .same_file_import_external_symbol(
+                        &imported_modules,
+                        decorator,
+                        &function.evidence,
+                    )
                     .unwrap_or_else(|| self.unresolved(decorator));
                 self.relate_with_provenance(
                     id.clone(),
@@ -201,7 +221,11 @@ impl BuilderState {
             }
             if let Some(return_type) = &function.return_type {
                 let target = self
-                    .same_file_import_external_target(&imported_modules, return_type)
+                    .same_file_import_external_symbol(
+                        &imported_modules,
+                        return_type,
+                        &function.evidence,
+                    )
                     .unwrap_or_else(|| self.unresolved(return_type));
                 self.relate_with_provenance(
                     id.clone(),
@@ -259,7 +283,13 @@ impl BuilderState {
                 let target = symbol_ids
                     .get(base_name)
                     .cloned()
-                    .or_else(|| self.same_file_import_external_target(&imported_modules, base))
+                    .or_else(|| {
+                        self.same_file_import_external_symbol(
+                            &imported_modules,
+                            base,
+                            &class.evidence,
+                        )
+                    })
                     .unwrap_or_else(|| self.unresolved(base));
                 self.relate_with_provenance(
                     class_id.clone(),
@@ -405,7 +435,7 @@ impl BuilderState {
         reference: &crate::analysis::PythonReference,
         symbol_ids: &BTreeMap<String, GraphNodeId>,
         callable_ids: &BTreeMap<String, Vec<GraphNodeId>>,
-        imported_modules: &BTreeMap<String, String>,
+        imported_modules: &BTreeMap<String, PythonImportBinding>,
     ) {
         match reference.kind {
             PythonReferenceKind::Call => {
@@ -431,9 +461,15 @@ impl BuilderState {
                     // LIT-44.1: a bare call to a name this file imported
                     // directly (`Depends(...)` after `from fastapi import
                     // Depends`) resolves to the known stdlib/manifest package
-                    // instead of `Unresolved`; anything else is unchanged.
+                    // member instead of `Unresolved`; anything else is
+                    // unchanged. LIT-56: the target is the member's own
+                    // symbol, since `Calls` may not point at a package.
                     let target = self
-                        .same_file_import_external_target(imported_modules, &reference.value)
+                        .same_file_import_external_symbol(
+                            imported_modules,
+                            &reference.value,
+                            &reference.evidence,
+                        )
                         .unwrap_or_else(|| self.unresolved(&reference.value));
                     self.relate_with_provenance(
                         artifact_node.clone(),
@@ -586,22 +622,65 @@ impl BuilderState {
     /// unchanged -- when the leading identifier isn't an import in this file
     /// (e.g. a local variable like `app` in `app.get(...)`) or the import's
     /// origin module is neither stdlib nor a manifest-declared dependency.
-    fn same_file_import_external_target(
+    /// Resolves `text` to an external symbol node when the name it starts
+    /// with was imported from a standard-library or manifest-declared
+    /// package in this same file.
+    ///
+    /// LIT-56: this used to return the *package* node, which is an illegal
+    /// target for every relation kind that calls it (`Calls`, `Decorates`,
+    /// `UsesType` accept only `Symbol`), so real repositories failed
+    /// validation. It now names the member itself.
+    fn same_file_import_external_symbol(
         &mut self,
-        imported_modules: &BTreeMap<String, String>,
+        imported_modules: &BTreeMap<String, PythonImportBinding>,
         text: &str,
+        evidence: &EvidenceRef,
     ) -> Option<GraphNodeId> {
         let root = python_identifier_root(text);
-        let module = imported_modules.get(root)?;
-        let top_level = module.split('.').next().unwrap_or(module);
-        if is_python_stdlib_module(module)
-            || self
+        let binding = imported_modules.get(root)?;
+        let top_level = binding
+            .module
+            .split('.')
+            .next()
+            .unwrap_or(binding.module.as_str());
+        if !is_python_stdlib_module(&binding.module)
+            && !self
                 .python_manifest_packages
                 .contains(&normalize_python_package_name(top_level))
         {
-            Some(self.python_external_target(module))
-        } else {
-            None
+            return None;
+        }
+        let name = binding.symbol_name(text)?;
+        Some(self.python_external_symbol(&binding.module, &name, evidence.clone()))
+    }
+}
+
+/// One name a Python file's imports bind, and where it comes from.
+///
+/// Both halves matter for naming the external symbol (LIT-56): `symbol` keeps
+/// the name as the *package* declares it, so `from pydantic import Field as F`
+/// records `pydantic::Field` rather than the local alias `F`, and its absence
+/// marks a plain `import x` binding, where the member is instead the segment
+/// that follows the module in the reference text.
+#[derive(Debug, Clone)]
+struct PythonImportBinding {
+    /// Dotted module path the name resolves to.
+    module: String,
+    /// Name as declared by the module, for `from x import y` bindings.
+    /// `None` for `import x`, which binds the module itself.
+    symbol: Option<String>,
+}
+
+impl PythonImportBinding {
+    /// The external member `text` refers to, if any.
+    fn symbol_name(&self, text: &str) -> Option<String> {
+        match &self.symbol {
+            // `from multiprocessing import cpu_count` + `cpu_count()`: the
+            // bound name is the member; any `.attr` suffix is access on it.
+            Some(symbol) => Some(symbol.clone()),
+            // `import pydantic` + `pydantic.BaseModel`: the member is the
+            // segment after the module. A bare `pydantic` names no member.
+            None => python_identifier_path(text).nth(1).map(str::to_owned),
         }
     }
 }
@@ -612,12 +691,20 @@ impl BuilderState {
 /// -> `app`, `Optional[Item]` -> `Optional`, `validator("field")` ->
 /// `validator`, `pydantic.BaseModel` -> `pydantic`.
 fn python_identifier_root(text: &str) -> &str {
-    let leading = text
-        .find(|character: char| {
-            !(character.is_alphanumeric() || character == '_' || character == '.')
-        })
-        .map_or(text, |end| &text[..end]);
-    leading.split('.').next().unwrap_or(leading)
+    python_identifier_path(text).next().unwrap_or("")
+}
+
+/// The dotted segments of a decorator/base-class/return-type/call text:
+/// `pydantic.BaseModel` -> [`pydantic`, `BaseModel`], `app.get("/")` ->
+/// [`app`, `get`]. Shares [`python_identifier_root`]'s trimming rule so the
+/// root and the segments after it can never disagree.
+fn python_identifier_path(text: &str) -> impl Iterator<Item = &str> {
+    text.find(|character: char| {
+        !(character.is_alphanumeric() || character == '_' || character == '.')
+    })
+    .map_or(text, |end| &text[..end])
+    .split('.')
+    .filter(|segment| !segment.is_empty())
 }
 
 fn python_relative_target(
@@ -817,12 +904,16 @@ mod tests {
         Ok(())
     }
 
-    /// LIT-44.1 AC2: a base class, decorator, and bare call imported
-    /// directly in the same file (`from pydantic import BaseModel, Field,
-    /// validate_call`) resolve through that file's own import to the
-    /// manifest-declared `pydantic` package node -- not `Unresolved` --
-    /// while the same file's `@app.get` (a local-variable-mediated
-    /// reference, not a direct import) is left `Unresolved` as before.
+    /// LIT-44.1 AC2, as amended by LIT-56: a base class, decorator, and bare
+    /// call imported directly in the same file (`from pydantic import
+    /// BaseModel, Field, validate_call`) resolve through that file's own
+    /// import to `pydantic` rather than staying `Unresolved`.
+    ///
+    /// They land on the imported *member's* symbol, not on `package:pydantic`.
+    /// `Inherits`/`Decorates`/`Calls` accept only `Symbol` targets, so the
+    /// original package target built graphs `GraphValidator` rejects, failing
+    /// `init` on any repository that calls an imported name. The symbol is
+    /// also the more precise answer: `pydantic::Field`, not all of pydantic.
     #[test]
     fn python_same_file_import_resolves_base_class_decorator_and_call()
     -> Result<(), Box<dyn std::error::Error>> {
@@ -843,6 +934,36 @@ mod tests {
         let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
         let graph = GraphBuilder.build(temp.path(), &artifacts);
 
+        for (kind, member, what) in [
+            (
+                RelationKind::Inherits,
+                "pydantic::BaseModel",
+                "Item's base class",
+            ),
+            (
+                RelationKind::Decorates,
+                "pydantic::validate_call",
+                "@validate_call",
+            ),
+            (RelationKind::Calls, "pydantic::Field", "Field(...)"),
+        ] {
+            let target = GraphNodeId::new(format!("symbol:{member}"));
+            assert!(
+                graph
+                    .relations
+                    .iter()
+                    .any(|relation| relation.kind == kind && relation.target == target),
+                "expected {what} to resolve to symbol:{member}, got {:?}",
+                graph
+                    .relations
+                    .iter()
+                    .filter(|relation| relation.kind == kind)
+                    .map(|relation| relation.target.as_str())
+                    .collect::<Vec<_>>(),
+            );
+        }
+
+        // The package attribution LIT-44.1 wanted is kept, one hop away.
         let pydantic_package = graph
             .nodes
             .iter()
@@ -851,30 +972,87 @@ mod tests {
                 _ => None,
             })
             .ok_or("missing package:pydantic node")?;
+        assert!(
+            graph
+                .relations
+                .iter()
+                .any(|relation| relation.kind == RelationKind::BelongsToPackage
+                    && &relation.target == pydantic_package),
+            "expected the external symbols to belong to package:pydantic"
+        );
+
+        // The property that actually failed in production: builder output
+        // must satisfy the validator that gates `init`. Asserting graph
+        // shape alone is what let `Calls -> Package` ship green.
+        let invalid: Vec<_> = crate::graph::GraphValidator
+            .validate(&graph, &artifacts)
+            .into_iter()
+            .filter(|issue| issue.kind == crate::graph::GraphIssueKind::InvalidRelationTarget)
+            .collect();
+        assert!(
+            invalid.is_empty(),
+            "builder produced invalid targets: {invalid:?}"
+        );
+
+        Ok(())
+    }
+
+    /// LIT-56: an external symbol is named as the package declares it. An
+    /// aliased `from x import y as z` records `y`, and a plain `import x`
+    /// reference (`x.Member`) records the member rather than the module.
+    ///
+    /// This is also the ripgrep corpus regression: `from multiprocessing
+    /// import cpu_count` followed by `cpu_count()` produced `Calls ->
+    /// package:multiprocessing`, which failed `init` at graph validation.
+    #[test]
+    fn python_external_symbols_use_declared_names_not_local_aliases()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("app.py"),
+            concat!(
+                "import collections\n",
+                "from multiprocessing import cpu_count as cpus\n\n\n",
+                "class Counts(collections.OrderedDict):\n",
+                "    pass\n\n\n",
+                "def sizes():\n",
+                "    return cpus()\n",
+            ),
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let target_of = |kind: RelationKind| {
+            graph
+                .relations
+                .iter()
+                .filter(|relation| relation.kind == kind)
+                .map(|relation| relation.target.as_str().to_owned())
+                .collect::<Vec<_>>()
+        };
 
         assert!(
-            graph
-                .relations
-                .iter()
-                .any(|relation| relation.kind == RelationKind::Inherits
-                    && &relation.target == pydantic_package),
-            "expected Item's Inherits edge to resolve to package:pydantic"
+            target_of(RelationKind::Calls)
+                .contains(&"symbol:multiprocessing::cpu_count".to_owned()),
+            "aliased `cpus()` must record the declared name cpu_count, got {:?}",
+            target_of(RelationKind::Calls),
         );
         assert!(
-            graph
-                .relations
-                .iter()
-                .any(|relation| relation.kind == RelationKind::Decorates
-                    && &relation.target == pydantic_package),
-            "expected @validate_call's Decorates edge to resolve to package:pydantic"
+            target_of(RelationKind::Inherits)
+                .contains(&"symbol:collections::OrderedDict".to_owned()),
+            "`collections.OrderedDict` must name the member, not the module, got {:?}",
+            target_of(RelationKind::Inherits),
         );
+
+        let invalid: Vec<_> = crate::graph::GraphValidator
+            .validate(&graph, &artifacts)
+            .into_iter()
+            .filter(|issue| issue.kind == crate::graph::GraphIssueKind::InvalidRelationTarget)
+            .collect();
         assert!(
-            graph
-                .relations
-                .iter()
-                .any(|relation| relation.kind == RelationKind::Calls
-                    && &relation.target == pydantic_package),
-            "expected Field(...)'s Calls edge to resolve to package:pydantic"
+            invalid.is_empty(),
+            "builder produced invalid targets: {invalid:?}"
         );
 
         Ok(())
