@@ -34,8 +34,9 @@ pub use health::{HealthFinding, HealthRule, HealthSeverity, HealthThresholds, de
 pub use index::{
     ArchitectureAspect, ArchitectureCluster, ArchitectureClusterLink, ArchitectureClusterLinkKind,
     ArchitectureClusterRelation, ArchitectureSummary, DependencyMatrix, FileTreeNode, GraphSchema,
-    KnowledgeIndex, LabelCount, LanguageSummary, PackageSummary, SearchParams, SearchResult,
-    TraceDirection, TraceParams, TraceRelation, TraceResult, TypeCount,
+    KnowledgeIndex, LabelCount, LanguageSummary, Neighbor, NodeExplanation, PackageSummary,
+    PathHop, PathResult, SearchParams, SearchResult, TraceDirection, TraceParams, TraceRelation,
+    TraceResult, TypeCount,
 };
 pub use ladybug_schema::{
     LADYBUG_ALGORITHM_VERSION, LADYBUG_SCHEMA_VERSION, LADYBUG_TABLES_V1, LadybugTable,

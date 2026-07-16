@@ -5,6 +5,7 @@ mod clusters;
 mod common;
 mod dead_code;
 mod dependency_matrix;
+mod explain;
 mod package;
 mod schema;
 mod search;
@@ -18,10 +19,13 @@ pub use architecture::{
 pub use clusters::ArchitectureCluster;
 pub(crate) use common::{node_file_path, node_label, node_name};
 pub use dependency_matrix::DependencyMatrix;
+pub use explain::{Neighbor, NodeExplanation};
 pub use package::PackageSummary;
 pub use schema::{GraphSchema, LabelCount, TypeCount};
 pub use search::{SearchParams, SearchResult};
-pub use trace::{NodeHop, TraceDirection, TraceParams, TraceRelation, TraceResult};
+pub use trace::{
+    NodeHop, PathHop, PathResult, TraceDirection, TraceParams, TraceRelation, TraceResult,
+};
 
 use crate::graph::{Graph, GraphNode, GraphNodeId};
 use common::node_search_text;
@@ -99,6 +103,90 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot");
         let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
         Ok(GraphBuilder.build(&root, &artifacts))
+    }
+
+    /// LIT-47: a path is a minimal hop chain, is stable, and reports each
+    /// hop's relation kind and direction so a reader can tell a proven
+    /// connection from a syntax-only guess.
+    #[test]
+    fn shortest_path_is_minimal_stable_and_carries_hop_provenance()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let graph = fixture_graph()?;
+        let index = KnowledgeIndex::new(&graph);
+
+        let path = index
+            .shortest_path("service.py", "RouteService")
+            .ok_or("expected a path from the artifact to the symbol it contains")?;
+
+        assert_eq!(
+            path.hops.len(),
+            1,
+            "the artifact contains the symbol directly"
+        );
+        assert_eq!(path.hops[0].kind, crate::graph::RelationKind::Contains);
+        assert!(path.hops[0].forward, "Contains points artifact -> symbol");
+        assert!(path.hops[0].node.name.contains("RouteService"));
+        assert_eq!(
+            index.shortest_path("service.py", "RouteService"),
+            Some(path),
+            "the same query must yield the same path"
+        );
+
+        // Both ends resolving to one node is a zero-hop path, not a failure.
+        let self_path = index
+            .shortest_path("RouteService", "RouteService")
+            .ok_or("a node must reach itself")?;
+        assert!(self_path.hops.is_empty());
+
+        assert!(
+            index
+                .shortest_path("RouteService", "no-such-node")
+                .is_none()
+        );
+        assert!(
+            index
+                .shortest_path("no-such-node", "RouteService")
+                .is_none()
+        );
+
+        Ok(())
+    }
+
+    /// LIT-47: an explanation names the node, proves it with evidence, and
+    /// groups its neighbors by relation kind.
+    #[test]
+    fn explain_reports_evidence_and_groups_neighbors_by_kind()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let graph = fixture_graph()?;
+        let index = KnowledgeIndex::new(&graph);
+
+        let explanation = index.explain("RouteService").ok_or("expected a match")?;
+
+        assert_eq!(explanation.node.label, "Symbol");
+        assert!(
+            explanation.evidence.iter().any(|evidence| evidence
+                .path
+                .as_str()
+                .ends_with("service.py")
+                && evidence.span.is_some()),
+            "evidence must name the file and span that prove the symbol",
+        );
+        assert!(
+            explanation.inbound.contains_key("Contains"),
+            "the containing artifact must appear under its relation kind, got {:?}",
+            explanation.inbound.keys().collect::<Vec<_>>(),
+        );
+        assert!(
+            explanation
+                .inbound
+                .values()
+                .flatten()
+                .all(|neighbor| !neighbor.node.name.is_empty()),
+        );
+
+        assert!(index.explain("no-such-node").is_none());
+
+        Ok(())
     }
 
     #[test]

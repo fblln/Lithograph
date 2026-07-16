@@ -3,7 +3,7 @@
 use super::KnowledgeIndex;
 use super::common::search_result;
 use super::search::SearchResult;
-use crate::graph::{GraphNodeId, RelationKind};
+use crate::graph::{GraphNodeId, Relation, RelationKind, RelationResolution};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -50,6 +50,33 @@ pub struct NodeHop {
     pub node: SearchResult,
     /// Hop distance from the root.
     pub hop: usize,
+}
+
+/// Shortest chain of relations between two nodes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PathResult {
+    /// Node the path starts from.
+    pub start: SearchResult,
+    /// Each step away from `start`, in order. Empty when both ends resolve
+    /// to the same node.
+    pub hops: Vec<PathHop>,
+}
+
+/// One step along a [`PathResult`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PathHop {
+    /// Node reached by this step.
+    pub node: SearchResult,
+    /// Kind of the relation traversed.
+    pub kind: RelationKind,
+    /// Whether the relation points from the previous node to this one.
+    /// Paths follow relations in both directions, so a hop may traverse a
+    /// relation against its direction.
+    pub forward: bool,
+    /// How the traversed relation was resolved, when it records provenance.
+    /// Distinguishes a proven connection from a syntax-only guess, which is
+    /// the difference between trusting a path and checking it.
+    pub resolution: Option<RelationResolution>,
 }
 
 /// One relation included in a trace result.
@@ -118,6 +145,98 @@ impl<'a> KnowledgeIndex<'a> {
             visited,
             relations,
         })
+    }
+
+    /// Finds the shortest relation chain connecting the nodes matching
+    /// `from` and `to`, or `None` when either end matches no node or no
+    /// chain joins them.
+    ///
+    /// Relations are followed in both directions: "how do these two things
+    /// connect" is a question about the undirected shape of the graph, and a
+    /// caller can read each hop's [`PathHop::forward`] to see which way the
+    /// underlying relation actually points. Ties are broken by node id so a
+    /// given graph always yields the same path (LIT-47).
+    pub fn shortest_path(&self, from: &str, to: &str) -> Option<PathResult> {
+        let start = self.find_root(from)?;
+        let end = self.find_root(to)?;
+        let degree = self.degree_index();
+        let start_id = start.id().clone();
+        let end_id = end.id().clone();
+
+        // Breadth-first from `start`, remembering how each node was first
+        // reached so the chain can be walked back once `end` is found. BFS
+        // over an unweighted graph yields a minimal-hop chain.
+        let adjacency = self.adjacency(TraceDirection::Both);
+        let mut came_from: BTreeMap<GraphNodeId, GraphNodeId> = BTreeMap::new();
+        let mut seen: BTreeSet<GraphNodeId> = BTreeSet::new();
+        let mut queue = VecDeque::new();
+        seen.insert(start_id.clone());
+        queue.push_back(start_id.clone());
+        while let Some(id) = queue.pop_front() {
+            if id == end_id {
+                break;
+            }
+            for next in adjacency.get(&id).into_iter().flatten() {
+                if seen.insert(next.clone()) {
+                    came_from.insert(next.clone(), id.clone());
+                    queue.push_back(next.clone());
+                }
+            }
+        }
+        if start_id != end_id && !came_from.contains_key(&end_id) {
+            return None;
+        }
+
+        let mut ids = vec![end_id.clone()];
+        while let Some(previous) = came_from.get(ids.last()?) {
+            ids.push(previous.clone());
+        }
+        ids.reverse();
+
+        let hops = ids
+            .windows(2)
+            .filter_map(|pair| {
+                let relation = self.connecting_relation(&pair[0], &pair[1])?;
+                let node = self.graph.nodes.iter().find(|node| node.id() == &pair[1])?;
+                Some(PathHop {
+                    node: search_result(node, &degree),
+                    kind: relation.kind,
+                    forward: relation.source == pair[0],
+                    resolution: relation
+                        .provenance
+                        .as_ref()
+                        .map(|provenance| provenance.resolution),
+                })
+            })
+            .collect::<Vec<_>>();
+        if hops.len() + 1 != ids.len() {
+            return None;
+        }
+
+        Some(PathResult {
+            start: search_result(
+                self.graph
+                    .nodes
+                    .iter()
+                    .find(|node| node.id() == &start_id)?,
+                &degree,
+            ),
+            hops,
+        })
+    }
+
+    /// The relation joining two adjacent nodes, in either direction. Picks
+    /// the lowest relation id when several connect the same pair, so the
+    /// reported hop is stable rather than dependent on relation order.
+    fn connecting_relation(&self, left: &GraphNodeId, right: &GraphNodeId) -> Option<&'a Relation> {
+        self.graph
+            .relations
+            .iter()
+            .filter(|relation| {
+                (&relation.source == left && &relation.target == right)
+                    || (&relation.source == right && &relation.target == left)
+            })
+            .min_by(|a, b| a.id.cmp(&b.id))
     }
 
     /// Traces everything that (transitively) depends on the node matching

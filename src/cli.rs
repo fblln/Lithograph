@@ -49,6 +49,13 @@ pub enum Command {
     Serve(ServeArgs),
     /// Export or import team-shareable graph artifacts.
     Graph(GraphCommand),
+    /// Show the shortest chain of relations connecting two graph nodes.
+    Path(PathArgs),
+    /// Explain one graph node: its evidence, and what it connects to.
+    Explain(ExplainArgs),
+    /// List what depends on the given nodes or changed files -- "what breaks
+    /// if this changes".
+    Affected(AffectedArgs),
     /// Create, read, update, delete, and list architecture decision records.
     Adr(AdrCommand),
     /// Poll a repository for staleness against its last recorded snapshot.
@@ -237,6 +244,54 @@ pub enum GraphTarget {
     Export(GraphExportArgs),
     /// Import a compressed graph artifact into this repository's graph store.
     Import(GraphImportArgs),
+}
+
+/// Arguments for `path`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct PathArgs {
+    /// Repository path with a generated Lithograph graph store.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+    /// Node id, name, or substring to start from.
+    pub from: String,
+    /// Node id, name, or substring to reach.
+    pub to: String,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Arguments for `explain`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct ExplainArgs {
+    /// Repository path with a generated Lithograph graph store.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+    /// Node id, name, or substring to explain.
+    pub node: String,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Arguments for `affected`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct AffectedArgs {
+    /// Repository path with a generated Lithograph graph store.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+    /// Node ids, names, or changed file paths to analyze.
+    pub targets: Vec<String>,
+    /// Read targets from stdin, one per line, so a changed-file list can be
+    /// piped straight in: `git diff --name-only | lithograph affected --stdin`.
+    #[arg(long)]
+    pub stdin: bool,
+    /// How many relation hops of dependents to follow.
+    #[arg(long, default_value_t = 2)]
+    pub depth: usize,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
 }
 
 /// Arguments for `graph export`.

@@ -11,6 +11,7 @@ mod graph;
 mod inspect;
 mod integrate;
 mod quality;
+mod query;
 mod serve;
 
 #[cfg(test)]
@@ -39,6 +40,9 @@ where
         Some(Command::Viewer(args)) => serve::execute_viewer(args, writer),
         Some(Command::Serve(args)) => serve::execute_serve(args, writer),
         Some(Command::Graph(args)) => graph::execute_graph(args, writer),
+        Some(Command::Path(args)) => query::execute_path(args, writer),
+        Some(Command::Explain(args)) => query::execute_explain(args, writer),
+        Some(Command::Affected(args)) => query::execute_affected(args, writer),
         Some(Command::Adr(command)) => adr::execute_adr(command, writer),
         Some(Command::Watch(args)) => generate::execute_watch(args, writer),
         Some(Command::IntegrateMcp(args)) => integrate::execute_integrate_mcp(args, writer),
