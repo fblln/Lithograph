@@ -157,7 +157,9 @@
         "symbol:rust/src/lib.rs#::RouteBake",
         "symbol:rust/src/lib.rs#::RouteBaker",
         "symbol:rust/src/lib.rs#::bake_route",
-        "unresolved:fixture_worker::bake_route"
+        "unresolved:RouteBaker::from_env",
+        "unresolved:fixture_worker::bake_route",
+        "unresolved:std::env::args"
       ],
       "evidence": [
         {
@@ -329,7 +331,9 @@
         "symbol:rust/src/lib.rs#::RouteBake",
         "symbol:rust/src/lib.rs#::RouteBaker",
         "symbol:rust/src/lib.rs#::bake_route",
-        "unresolved:fixture_worker::bake_route"
+        "unresolved:RouteBaker::from_env",
+        "unresolved:fixture_worker::bake_route",
+        "unresolved:std::env::args"
       ],
       "evidence": [
         {
@@ -501,7 +505,9 @@
         "symbol:rust/src/lib.rs#::RouteBake",
         "symbol:rust/src/lib.rs#::RouteBaker",
         "symbol:rust/src/lib.rs#::bake_route",
-        "unresolved:fixture_worker::bake_route"
+        "unresolved:RouteBaker::from_env",
+        "unresolved:fixture_worker::bake_route",
+        "unresolved:std::env::args"
       ],
       "evidence": [
         {
@@ -512,7 +518,7 @@
         }
       ],
       "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
-      "output_hash": "448be87eea96c9f7dcc11a55e6238e559e0825fd1bc1ab325f063ed8d26ffe4a",
+      "output_hash": "ab14d29520996048ed6292110ed00ba0365996b79c2ec8b9a90b5fd440f918e1",
       "prompt_version": "v1",
       "context_schema_version": "boundaries-context-v1"
     },
@@ -673,7 +679,9 @@
         "symbol:rust/src/lib.rs#::RouteBake",
         "symbol:rust/src/lib.rs#::RouteBaker",
         "symbol:rust/src/lib.rs#::bake_route",
-        "unresolved:fixture_worker::bake_route"
+        "unresolved:RouteBaker::from_env",
+        "unresolved:fixture_worker::bake_route",
+        "unresolved:std::env::args"
       ],
       "evidence": [
         {
@@ -845,7 +853,9 @@
         "symbol:rust/src/lib.rs#::RouteBake",
         "symbol:rust/src/lib.rs#::RouteBaker",
         "symbol:rust/src/lib.rs#::bake_route",
-        "unresolved:fixture_worker::bake_route"
+        "unresolved:RouteBaker::from_env",
+        "unresolved:fixture_worker::bake_route",
+        "unresolved:std::env::args"
       ],
       "evidence": [
         {
@@ -1017,7 +1027,9 @@
         "symbol:rust/src/lib.rs#::RouteBake",
         "symbol:rust/src/lib.rs#::RouteBaker",
         "symbol:rust/src/lib.rs#::bake_route",
-        "unresolved:fixture_worker::bake_route"
+        "unresolved:RouteBaker::from_env",
+        "unresolved:fixture_worker::bake_route",
+        "unresolved:std::env::args"
       ],
       "evidence": [
         {
@@ -1372,7 +1384,9 @@
         "symbol:rust/src/lib.rs#::RouteBake",
         "symbol:rust/src/lib.rs#::RouteBaker",
         "symbol:rust/src/lib.rs#::bake_route",
-        "unresolved:fixture_worker::bake_route"
+        "unresolved:RouteBaker::from_env",
+        "unresolved:fixture_worker::bake_route",
+        "unresolved:std::env::args"
       ],
       "evidence": [
         {
@@ -1383,7 +1397,7 @@
         }
       ],
       "input_hash": "3326ff9d7b5b8c213d8e5329e3931e01e5fb4ad896fad50c7ca87ece04d4c69b",
-      "output_hash": "ee2d28c4245862c522bdbb4735449a4986c5543d6aa0f84aab1a4d186fa38651",
+      "output_hash": "7b100c26b67e83aee85d8b6a94d4f661c20e03045eff996a5c011e27c1b7ccc2",
       "prompt_version": "v1",
       "context_schema_version": "module-context-v1"
     },
@@ -1544,7 +1558,9 @@
         "symbol:rust/src/lib.rs#::RouteBake",
         "symbol:rust/src/lib.rs#::RouteBaker",
         "symbol:rust/src/lib.rs#::bake_route",
-        "unresolved:fixture_worker::bake_route"
+        "unresolved:RouteBaker::from_env",
+        "unresolved:fixture_worker::bake_route",
+        "unresolved:std::env::args"
       ],
       "evidence": [
         {
@@ -1716,7 +1732,9 @@
         "symbol:rust/src/lib.rs#::RouteBake",
         "symbol:rust/src/lib.rs#::RouteBaker",
         "symbol:rust/src/lib.rs#::bake_route",
-        "unresolved:fixture_worker::bake_route"
+        "unresolved:RouteBaker::from_env",
+        "unresolved:fixture_worker::bake_route",
+        "unresolved:std::env::args"
       ],
       "evidence": [
         {
@@ -1888,7 +1906,9 @@
         "symbol:rust/src/lib.rs#::RouteBake",
         "symbol:rust/src/lib.rs#::RouteBaker",
         "symbol:rust/src/lib.rs#::bake_route",
-        "unresolved:fixture_worker::bake_route"
+        "unresolved:RouteBaker::from_env",
+        "unresolved:fixture_worker::bake_route",
+        "unresolved:std::env::args"
       ],
       "evidence": [
         {

@@ -148,7 +148,7 @@ impl BuilderState {
         }
 
         for reference in &analysis.references {
-            self.process_rust_reference(artifact, artifact_node, reference);
+            self.process_rust_reference(artifact, artifact_node, reference, &symbol_ids);
         }
     }
     fn process_rust_reference(
@@ -156,6 +156,7 @@ impl BuilderState {
         artifact: &Artifact,
         artifact_node: &GraphNodeId,
         reference: &crate::analysis::RustReference,
+        symbol_ids: &BTreeMap<String, GraphNodeId>,
     ) {
         match reference.kind {
             RustReferenceKind::EnvRead => {
@@ -201,6 +202,32 @@ impl BuilderState {
                         RelationResolution::SyntaxOnly,
                         reference.confidence,
                     )),
+                );
+            }
+            // LIT-63: a call names its callee by its last path segment
+            // (`flags::parse` calls `parse`). A unique match among this
+            // file's own items is proof; anything else is left Unresolved for
+            // the hybrid resolver, which can see the whole graph.
+            RustReferenceKind::Call => {
+                let simple = reference
+                    .value
+                    .rsplit("::")
+                    .next()
+                    .unwrap_or(&reference.value);
+                let (target, resolution) = match symbol_ids.get(simple) {
+                    Some(id) => (id.clone(), RelationResolution::HybridResolved),
+                    None => (
+                        self.unresolved(&reference.value),
+                        RelationResolution::SyntaxOnly,
+                    ),
+                };
+                self.relate_with_provenance(
+                    artifact_node.clone(),
+                    target,
+                    RelationKind::Calls,
+                    reference.confidence,
+                    vec![reference.evidence.clone()],
+                    Some(format_provenance("rust", resolution, reference.confidence)),
                 );
             }
         }

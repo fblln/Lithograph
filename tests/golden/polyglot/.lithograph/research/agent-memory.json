@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "input_hash": "c4b6778e8eb58e684452c75f6f58c1f34e3962d3bdab49f1a6c750cf83d93d0d",
+  "input_hash": "fd7fccde22095d3eacacc8e25e1adb2e27b2b75ff8a40ac2cfdd6a1d6b414723",
   "produced_by_stage": "Research",
   "report_keys": [
     "system-context",
@@ -12,7 +12,7 @@
     "deployment"
   ],
   "system_context": {
-    "project_summary": "Repository contains 22 artifact(s), 150 graph node(s), 174 graph relation(s), and 11 documentation module(s).",
+    "project_summary": "Repository contains 22 artifact(s), 152 graph node(s), 176 graph relation(s), and 11 documentation module(s).",
     "included_components": [
       "Configuration (Configuration)",
       "assets (Directory)",
@@ -45,8 +45,8 @@
       "App",
       "None",
       "React",
-      "RouteSummary",
-      "assets/"
+      "RouteBaker::from_env",
+      "RouteSummary"
     ],
     "evidence": [
       {
@@ -183,7 +183,7 @@
       {
         "name": "fixture-worker",
         "kind": "RustCrate",
-        "member_count": 14,
+        "member_count": 16,
         "evidence": [
           "artifact:rust/Cargo.toml",
           "artifact:rust/src/bin/worker.rs",
@@ -230,9 +230,9 @@
       "requirements.txt -[DependsOnPackage]-> pydantic (High)",
       "requirements.txt -[DependsOnPackage]-> pytest (High)",
       "rust/src/bin/worker.rs -[Imports]-> fixture_worker::bake_route (High)",
+      "rust/src/bin/worker.rs -[Calls]-> std::env::args (Low)",
       "rust/src/lib.rs -[Imports]-> std (High)",
-      "src/python_app/__init__.py -[Imports]-> src.python_app.service (High)",
-      "src/python_app/service.py -[Imports]-> __future__ (High)"
+      "rust/src/lib.rs -[Calls]-> RouteBaker::from_env (Low)"
     ],
     "evidence": [
       {
@@ -512,7 +512,7 @@
       }
     ],
     "architecture_facts": [
-      "knowledge graph schema: 150 node(s), 174 relation(s)",
+      "knowledge graph schema: 152 node(s), 176 relation(s)",
       "container/component candidate: Configuration (Configuration)",
       "container/component candidate: assets (Directory)",
       "container/component candidate: data (Directory)",
@@ -529,7 +529,7 @@
       "web (Directory) score 66",
       "python_app (PythonPackage) score 59",
       "Documentation (Documentation) score 45",
-      "fixture-worker (RustCrate) score 32",
+      "fixture-worker (RustCrate) score 36",
       "Infrastructure (Infrastructure) score 31",
       "root (Directory) score 14",
       "generated (Directory) score 11",
@@ -614,7 +614,7 @@
         "reference": "relation:3"
       },
       {
-        "reference": "relation:150"
+        "reference": "relation:152"
       },
       {
         "reference": "relation:6"
@@ -672,6 +672,7 @@
       "unresolved reference: App",
       "unresolved reference: None",
       "unresolved reference: React",
+      "unresolved reference: RouteBaker::from_env",
       "unresolved reference: RouteSummary",
       "unresolved reference: assets/",
       "unresolved reference: body",
@@ -689,15 +690,14 @@
       "unresolved reference: lang",
       "unresolved reference: main",
       "unresolved reference: meta",
-      "unresolved reference: p",
-      "unresolved reference: route"
+      "unresolved reference: p"
     ],
     "evidence": [
       {
         "reference": "relation:3"
       },
       {
-        "reference": "relation:150"
+        "reference": "relation:152"
       },
       {
         "reference": "relation:6"
@@ -738,7 +738,7 @@
       "web (Directory) score 66",
       "python_app (PythonPackage) score 59",
       "Documentation (Documentation) score 45",
-      "fixture-worker (RustCrate) score 32",
+      "fixture-worker (RustCrate) score 36",
       "Infrastructure (Infrastructure) score 31",
       "root (Directory) score 14",
       "generated (Directory) score 11",
