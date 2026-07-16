@@ -1067,6 +1067,7 @@ fn node_evidence(node: &GraphNode) -> Vec<NodeEvidence> {
         GraphNode::Documentation(node) => Some(&node.evidence),
         GraphNode::Command(node) => Some(&node.evidence),
         GraphNode::Module(node) => Some(&node.evidence),
+        GraphNode::Rationale(node) => Some(&node.evidence),
         GraphNode::Container(_)
         | GraphNode::EnvVar(_)
         | GraphNode::Package(_)

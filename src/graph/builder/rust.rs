@@ -28,6 +28,9 @@ impl BuilderState {
         );
 
         let mut symbol_ids: BTreeMap<String, GraphNodeId> = BTreeMap::new();
+        // LIT-46: spans of every symbol here, so a rationale comment attaches
+        // to the item it sits inside.
+        let mut symbol_spans: Vec<super::rationale::SymbolSpan> = Vec::new();
 
         for item in analysis
             .structs
@@ -82,6 +85,12 @@ impl BuilderState {
                 doc: function.doc.clone(),
                 evidence: function.evidence.clone(),
             }));
+            if let Some(span) = function.evidence.span.clone() {
+                symbol_spans.push(super::rationale::SymbolSpan {
+                    id: id.clone(),
+                    span,
+                });
+            }
             self.relate(
                 artifact_node.clone(),
                 id,
@@ -90,6 +99,8 @@ impl BuilderState {
                 vec![function.evidence.clone()],
             );
         }
+
+        self.process_rationale(artifact, artifact_node, &analysis.comments, &symbol_spans);
 
         for imp in &analysis.impls {
             let Some(trait_name) = &imp.trait_name else {

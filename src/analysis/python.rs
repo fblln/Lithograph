@@ -26,6 +26,8 @@ pub struct PythonAnalysis {
     pub references: Vec<PythonReference>,
     /// True when the parse tree contains recovered syntax errors.
     pub has_syntax_errors: bool,
+    /// Every comment in the file, for rationale extraction (LIT-46).
+    pub comments: Vec<crate::analysis::TreeSitterComment>,
 }
 
 /// Import statement category.
@@ -169,7 +171,13 @@ impl PythonAnalyzer {
             return PythonAnalysis::default();
         };
 
-        build_python_analysis(artifact, tree.root_node(), text)
+        let mut analysis = build_python_analysis(artifact, tree.root_node(), text);
+        analysis.comments = crate::analysis::tree_sitter_adapter::collect_comments(
+            tree.root_node(),
+            text,
+            &["comment"],
+        );
+        analysis
     }
 }
 
@@ -212,6 +220,7 @@ fn build_python_analysis(artifact: &Artifact, root: Node, source: &str) -> Pytho
         functions,
         references,
         has_syntax_errors: root.has_error(),
+        comments: Vec::new(),
     }
 }
 

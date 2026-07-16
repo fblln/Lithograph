@@ -1210,6 +1210,7 @@ fn node_labels(graph: &Graph) -> BTreeMap<&str, String> {
         .map(|node| {
             let label = match node {
                 GraphNode::Artifact(node) => node.path.clone(),
+                GraphNode::Rationale(node) => node.text.clone(),
                 GraphNode::Symbol(node) => node.qualified_name.clone(),
                 GraphNode::Config(node) => node.name.clone(),
                 GraphNode::Documentation(node) => node.title.clone(),

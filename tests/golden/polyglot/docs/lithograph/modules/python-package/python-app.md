@@ -1,8 +1,8 @@
 # Module
 
-<!-- lithograph mock model: task=ModulePage model=mock prompt_version=v1 input_hash=e6b2ad1a1b9b13f6bb619843c76721d3af8d54ad49b5007add9f863090c72157 -->
+<!-- lithograph mock model: task=ModulePage model=mock prompt_version=v1 input_hash=27d76545f41a0cd2f9ff1d93205035bbeb138a484c95c82441a3471bb044c3aa -->
 
-Deterministic mock content generated from 113 line(s) of context.
+Deterministic mock content generated from 118 line(s) of context.
 
 ## Source Evidence
 - `src/python_app/__init__.py`

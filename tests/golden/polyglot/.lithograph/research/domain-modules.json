@@ -94,11 +94,11 @@
     {
       "name": "python_app",
       "kind": "PythonPackage",
-      "member_count": 19,
+      "member_count": 20,
       "evidence": [
         "artifact:src/python_app/__init__.py",
         "artifact:src/python_app/service.py",
-        "command:src/python_app/service.py#29",
+        "command:src/python_app/service.py#31",
         "env:RIDGELINE_WORKER"
       ]
     },

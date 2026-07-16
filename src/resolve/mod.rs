@@ -121,6 +121,7 @@ impl<'a> ResolverContext<'a> {
                 | GraphNode::Documentation(_)
                 | GraphNode::Container(_)
                 | GraphNode::Command(_)
+                | GraphNode::Rationale(_)
                 | GraphNode::EnvVar(_) => {}
             }
         }

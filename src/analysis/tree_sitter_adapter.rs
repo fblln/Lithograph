@@ -585,6 +585,45 @@ fn push_fact(
     }
 }
 
+/// Collects every comment under `root` whose node kind is in
+/// `comment_kinds`, at any depth.
+///
+/// Shared so the analyzers that parse a language themselves (Python, Rust)
+/// report comment spans by exactly the same rule as the generic adapter --
+/// including its end-of-file clamp (LIT-30/31) -- instead of each growing its
+/// own copy.
+pub(crate) fn collect_comments(
+    root: tree_sitter::Node<'_>,
+    source: &str,
+    comment_kinds: &[&str],
+) -> Vec<TreeSitterComment> {
+    let mut comments = Vec::new();
+    let mut cursor = root.walk();
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        for child in node.children(&mut cursor) {
+            if comment_kinds.contains(&child.kind())
+                && let Some(span) = node_span(child)
+            {
+                comments.push(TreeSitterComment {
+                    text: node_text(child, source),
+                    span,
+                });
+            }
+            stack.push(child);
+        }
+    }
+    // Depth-first order is an artifact of the traversal; source order is what
+    // a reader and a deterministic snapshot both expect.
+    comments.sort_by(|a, b| {
+        a.span
+            .start_line
+            .cmp(&b.span.start_line)
+            .then(a.text.cmp(&b.text))
+    });
+    comments
+}
+
 fn node_span(node: tree_sitter::Node<'_>) -> Option<SourceSpan> {
     let start_row = node.start_position().row as u32;
     let end_position = node.end_position();

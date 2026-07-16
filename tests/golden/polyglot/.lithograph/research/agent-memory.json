@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "input_hash": "e10f4342e712ad1f07d1e14611b0d701e26aa8f4e9bf8f4b85664246f369489b",
+  "input_hash": "c4b6778e8eb58e684452c75f6f58c1f34e3962d3bdab49f1a6c750cf83d93d0d",
   "produced_by_stage": "Research",
   "report_keys": [
     "system-context",
@@ -12,7 +12,7 @@
     "deployment"
   ],
   "system_context": {
-    "project_summary": "Repository contains 22 artifact(s), 149 graph node(s), 172 graph relation(s), and 11 documentation module(s).",
+    "project_summary": "Repository contains 22 artifact(s), 150 graph node(s), 174 graph relation(s), and 11 documentation module(s).",
     "included_components": [
       "Configuration (Configuration)",
       "assets (Directory)",
@@ -172,11 +172,11 @@
       {
         "name": "python_app",
         "kind": "PythonPackage",
-        "member_count": 19,
+        "member_count": 20,
         "evidence": [
           "artifact:src/python_app/__init__.py",
           "artifact:src/python_app/service.py",
-          "command:src/python_app/service.py#29",
+          "command:src/python_app/service.py#31",
           "env:RIDGELINE_WORKER"
         ]
       },
@@ -512,7 +512,7 @@
       }
     ],
     "architecture_facts": [
-      "knowledge graph schema: 149 node(s), 172 relation(s)",
+      "knowledge graph schema: 150 node(s), 174 relation(s)",
       "container/component candidate: Configuration (Configuration)",
       "container/component candidate: assets (Directory)",
       "container/component candidate: data (Directory)",
@@ -527,7 +527,7 @@
     "hotspots": [
       "Configuration (Configuration) score 99",
       "web (Directory) score 66",
-      "python_app (PythonPackage) score 56",
+      "python_app (PythonPackage) score 59",
       "Documentation (Documentation) score 45",
       "fixture-worker (RustCrate) score 32",
       "Infrastructure (Infrastructure) score 31",
@@ -614,7 +614,7 @@
         "reference": "relation:3"
       },
       {
-        "reference": "relation:148"
+        "reference": "relation:150"
       },
       {
         "reference": "relation:6"
@@ -697,7 +697,7 @@
         "reference": "relation:3"
       },
       {
-        "reference": "relation:148"
+        "reference": "relation:150"
       },
       {
         "reference": "relation:6"
@@ -736,7 +736,7 @@
     "modules": [
       "Configuration (Configuration) score 99",
       "web (Directory) score 66",
-      "python_app (PythonPackage) score 56",
+      "python_app (PythonPackage) score 59",
       "Documentation (Documentation) score 45",
       "fixture-worker (RustCrate) score 32",
       "Infrastructure (Infrastructure) score 31",

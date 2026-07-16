@@ -1,9 +1,9 @@
 {
   "metadata": {
     "schema_version": 1,
-    "graph_model_version": 3,
-    "node_count": 149,
-    "relation_count": 172,
+    "graph_model_version": 4,
+    "node_count": 150,
+    "relation_count": 174,
     "migrations_applied": []
   },
   "graph": {
@@ -425,14 +425,14 @@
       },
       {
         "node_type": "Command",
-        "id": "command:src/python_app/service.py#29",
+        "id": "command:src/python_app/service.py#31",
         "text": "[worker_path, \"--route\", str(route_file)]",
         "evidence": {
           "artifact_id": "artifact:src/python_app/service.py",
           "path": "src/python_app/service.py",
           "span": {
-            "start_line": 29,
-            "end_line": 34
+            "start_line": 31,
+            "end_line": 36
           },
           "structured_path": null
         }
@@ -1053,6 +1053,21 @@
         "is_external": true
       },
       {
+        "node_type": "Rationale",
+        "id": "rationale:src/python_app/service.py#L23",
+        "kind": "Why",
+        "text": "the worker runs out of process because baking is CPU bound and",
+        "evidence": {
+          "artifact_id": "artifact:src/python_app/service.py",
+          "path": "src/python_app/service.py",
+          "span": {
+            "start_line": 23,
+            "end_line": 23
+          },
+          "structured_path": null
+        }
+      },
+      {
         "node_type": "Symbol",
         "id": "symbol:generated/client.py#generated.client::call_route_api",
         "kind": "Function",
@@ -1143,7 +1158,7 @@
           "path": "src/python_app/service.py",
           "span": {
             "start_line": 11,
-            "end_line": 23
+            "end_line": 25
           },
           "structured_path": null
         }
@@ -1175,7 +1190,7 @@
           "path": "src/python_app/service.py",
           "span": {
             "start_line": 22,
-            "end_line": 23
+            "end_line": 25
           },
           "structured_path": null
         }
@@ -1206,8 +1221,8 @@
           "artifact_id": "artifact:src/python_app/service.py",
           "path": "src/python_app/service.py",
           "span": {
-            "start_line": 26,
-            "end_line": 35
+            "start_line": 28,
+            "end_line": 37
           },
           "structured_path": null
         }
@@ -1553,7 +1568,7 @@
         }
       },
       {
-        "id": "relation:148",
+        "id": "relation:150",
         "source": "artifact:Dockerfile",
         "target": "env:RIDGELINE_WORKER",
         "kind": "DefinesEnv",
@@ -2507,7 +2522,7 @@
         }
       },
       {
-        "id": "relation:153",
+        "id": "relation:155",
         "source": "artifact:config/schema.json",
         "target": "config-key:properties",
         "kind": "BindsConfig",
@@ -2528,7 +2543,7 @@
         }
       },
       {
-        "id": "relation:154",
+        "id": "relation:156",
         "source": "artifact:config/schema.json",
         "target": "config-key:properties.route.file",
         "kind": "BindsConfig",
@@ -2549,7 +2564,7 @@
         }
       },
       {
-        "id": "relation:155",
+        "id": "relation:157",
         "source": "artifact:config/schema.json",
         "target": "config-key:properties.route.file.description",
         "kind": "BindsConfig",
@@ -2570,7 +2585,7 @@
         }
       },
       {
-        "id": "relation:156",
+        "id": "relation:158",
         "source": "artifact:config/schema.json",
         "target": "config-key:properties.route.file.type",
         "kind": "BindsConfig",
@@ -2591,7 +2606,7 @@
         }
       },
       {
-        "id": "relation:157",
+        "id": "relation:159",
         "source": "artifact:config/schema.json",
         "target": "config-key:properties.worker.image",
         "kind": "BindsConfig",
@@ -2612,7 +2627,7 @@
         }
       },
       {
-        "id": "relation:158",
+        "id": "relation:160",
         "source": "artifact:config/schema.json",
         "target": "config-key:properties.worker.image.default",
         "kind": "BindsConfig",
@@ -2633,7 +2648,7 @@
         }
       },
       {
-        "id": "relation:159",
+        "id": "relation:161",
         "source": "artifact:config/schema.json",
         "target": "config-key:properties.worker.image.type",
         "kind": "BindsConfig",
@@ -2654,7 +2669,7 @@
         }
       },
       {
-        "id": "relation:160",
+        "id": "relation:162",
         "source": "artifact:config/schema.json",
         "target": "config-key:required",
         "kind": "BindsConfig",
@@ -2675,7 +2690,7 @@
         }
       },
       {
-        "id": "relation:161",
+        "id": "relation:163",
         "source": "artifact:config/schema.json",
         "target": "config-key:required.0",
         "kind": "BindsConfig",
@@ -2696,7 +2711,7 @@
         }
       },
       {
-        "id": "relation:162",
+        "id": "relation:164",
         "source": "artifact:config/schema.json",
         "target": "config-key:schema",
         "kind": "BindsConfig",
@@ -2717,7 +2732,7 @@
         }
       },
       {
-        "id": "relation:171",
+        "id": "relation:173",
         "source": "artifact:config/schema.json",
         "target": "config-key:title",
         "kind": "BindsConfig",
@@ -2738,7 +2753,7 @@
         }
       },
       {
-        "id": "relation:172",
+        "id": "relation:174",
         "source": "artifact:config/schema.json",
         "target": "config-key:type",
         "kind": "BindsConfig",
@@ -2990,7 +3005,7 @@
         }
       },
       {
-        "id": "relation:150",
+        "id": "relation:152",
         "source": "artifact:config/settings.yaml",
         "target": "config-key:paths",
         "kind": "BindsConfig",
@@ -3011,7 +3026,7 @@
         }
       },
       {
-        "id": "relation:151",
+        "id": "relation:153",
         "source": "artifact:config/settings.yaml",
         "target": "config-key:paths.schema",
         "kind": "BindsConfig",
@@ -3032,7 +3047,7 @@
         }
       },
       {
-        "id": "relation:152",
+        "id": "relation:154",
         "source": "artifact:config/settings.yaml",
         "target": "config-key:paths.static.assets",
         "kind": "BindsConfig",
@@ -3053,7 +3068,7 @@
         }
       },
       {
-        "id": "relation:163",
+        "id": "relation:165",
         "source": "artifact:config/settings.yaml",
         "target": "config-key:service",
         "kind": "BindsConfig",
@@ -3074,7 +3089,7 @@
         }
       },
       {
-        "id": "relation:164",
+        "id": "relation:166",
         "source": "artifact:config/settings.yaml",
         "target": "config-key:service.command",
         "kind": "BindsConfig",
@@ -3095,7 +3110,7 @@
         }
       },
       {
-        "id": "relation:165",
+        "id": "relation:167",
         "source": "artifact:config/settings.yaml",
         "target": "config-key:service.env",
         "kind": "BindsConfig",
@@ -3116,7 +3131,7 @@
         }
       },
       {
-        "id": "relation:166",
+        "id": "relation:168",
         "source": "artifact:config/settings.yaml",
         "target": "config-key:service.env.ridgeline.cache.dir",
         "kind": "BindsConfig",
@@ -3137,7 +3152,7 @@
         }
       },
       {
-        "id": "relation:167",
+        "id": "relation:169",
         "source": "artifact:config/settings.yaml",
         "target": "config-key:service.env.ridgeline.worker",
         "kind": "BindsConfig",
@@ -3158,7 +3173,7 @@
         }
       },
       {
-        "id": "relation:168",
+        "id": "relation:170",
         "source": "artifact:config/settings.yaml",
         "target": "config-key:service.image",
         "kind": "BindsConfig",
@@ -3179,7 +3194,7 @@
         }
       },
       {
-        "id": "relation:169",
+        "id": "relation:171",
         "source": "artifact:config/settings.yaml",
         "target": "config-key:service.name",
         "kind": "BindsConfig",
@@ -3200,7 +3215,7 @@
         }
       },
       {
-        "id": "relation:170",
+        "id": "relation:172",
         "source": "artifact:config/settings.yaml",
         "target": "config-key:service.port",
         "kind": "BindsConfig",
@@ -3845,6 +3860,30 @@
         }
       },
       {
+        "id": "relation:108",
+        "source": "artifact:src/python_app/service.py",
+        "target": "rationale:src/python_app/service.py#L23",
+        "kind": "Contains",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:src/python_app/service.py",
+            "path": "src/python_app/service.py",
+            "span": {
+              "start_line": 23,
+              "end_line": 23
+            },
+            "structured_path": null
+          }
+        ],
+        "provenance": {
+          "language": null,
+          "resolver_strategy": "graph-builder",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
         "id": "relation:88",
         "source": "artifact:src/python_app/service.py",
         "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
@@ -3856,7 +3895,7 @@
             "path": "src/python_app/service.py",
             "span": {
               "start_line": 11,
-              "end_line": 23
+              "end_line": 25
             },
             "structured_path": null
           }
@@ -3879,8 +3918,8 @@
             "artifact_id": "artifact:src/python_app/service.py",
             "path": "src/python_app/service.py",
             "span": {
-              "start_line": 26,
-              "end_line": 35
+              "start_line": 28,
+              "end_line": 37
             },
             "structured_path": null
           }
@@ -4034,7 +4073,7 @@
         }
       },
       {
-        "id": "relation:110",
+        "id": "relation:112",
         "source": "artifact:src/python_app/service.py",
         "target": "symbol:src/python_app/service.py#src.python_app.service::run_worker",
         "kind": "Calls",
@@ -4044,8 +4083,8 @@
             "artifact_id": "artifact:src/python_app/service.py",
             "path": "src/python_app/service.py",
             "span": {
-              "start_line": 23,
-              "end_line": 23
+              "start_line": 25,
+              "end_line": 25
             },
             "structured_path": null
           }
@@ -4058,7 +4097,7 @@
         }
       },
       {
-        "id": "relation:112",
+        "id": "relation:114",
         "source": "artifact:src/python_app/service.py",
         "target": "unresolved:str",
         "kind": "Calls",
@@ -4068,8 +4107,8 @@
             "artifact_id": "artifact:src/python_app/service.py",
             "path": "src/python_app/service.py",
             "span": {
-              "start_line": 30,
-              "end_line": 30
+              "start_line": 32,
+              "end_line": 32
             },
             "structured_path": null
           }
@@ -4082,7 +4121,7 @@
         }
       },
       {
-        "id": "relation:108",
+        "id": "relation:110",
         "source": "artifact:src/python_app/service.py",
         "target": "env:RIDGELINE_WORKER",
         "kind": "ReadsEnv",
@@ -4106,9 +4145,9 @@
         }
       },
       {
-        "id": "relation:111",
+        "id": "relation:113",
         "source": "artifact:src/python_app/service.py",
-        "target": "command:src/python_app/service.py#29",
+        "target": "command:src/python_app/service.py#31",
         "kind": "RunsCommand",
         "confidence": "Low",
         "evidence": [
@@ -4116,8 +4155,8 @@
             "artifact_id": "artifact:src/python_app/service.py",
             "path": "src/python_app/service.py",
             "span": {
-              "start_line": 29,
-              "end_line": 34
+              "start_line": 31,
+              "end_line": 36
             },
             "structured_path": null
           }
@@ -4130,7 +4169,7 @@
         }
       },
       {
-        "id": "relation:109",
+        "id": "relation:111",
         "source": "artifact:src/python_app/service.py",
         "target": "symbol:src/python_app/service.py#src.python_app.service::run_worker",
         "kind": "DataFlows",
@@ -4140,8 +4179,8 @@
             "artifact_id": "artifact:src/python_app/service.py",
             "path": "src/python_app/service.py",
             "span": {
-              "start_line": 23,
-              "end_line": 23
+              "start_line": 25,
+              "end_line": 25
             },
             "structured_path": null
           }
@@ -4154,7 +4193,7 @@
         }
       },
       {
-        "id": "relation:114",
+        "id": "relation:116",
         "source": "artifact:web/index.html",
         "target": "symbol:web/index.html::element@L2",
         "kind": "Contains",
@@ -4178,7 +4217,7 @@
         }
       },
       {
-        "id": "relation:115",
+        "id": "relation:117",
         "source": "artifact:web/index.html",
         "target": "symbol:web/index.html::element@L3",
         "kind": "Contains",
@@ -4202,7 +4241,7 @@
         }
       },
       {
-        "id": "relation:116",
+        "id": "relation:118",
         "source": "artifact:web/index.html",
         "target": "symbol:web/index.html::element@L4",
         "kind": "Contains",
@@ -4226,7 +4265,7 @@
         }
       },
       {
-        "id": "relation:117",
+        "id": "relation:119",
         "source": "artifact:web/index.html",
         "target": "symbol:web/index.html::element@L5",
         "kind": "Contains",
@@ -4250,7 +4289,7 @@
         }
       },
       {
-        "id": "relation:118",
+        "id": "relation:120",
         "source": "artifact:web/index.html",
         "target": "symbol:web/index.html::element@L7",
         "kind": "Contains",
@@ -4274,7 +4313,7 @@
         }
       },
       {
-        "id": "relation:119",
+        "id": "relation:121",
         "source": "artifact:web/index.html",
         "target": "symbol:web/index.html::element@L8",
         "kind": "Contains",
@@ -4298,7 +4337,7 @@
         }
       },
       {
-        "id": "relation:120",
+        "id": "relation:122",
         "source": "artifact:web/index.html",
         "target": "symbol:web/index.html::script_element@L9",
         "kind": "Contains",
@@ -4322,7 +4361,7 @@
         }
       },
       {
-        "id": "relation:113",
+        "id": "relation:115",
         "source": "artifact:web/index.html",
         "target": "module:web/index.html",
         "kind": "BelongsToModule",
@@ -4343,7 +4382,7 @@
         }
       },
       {
-        "id": "relation:127",
+        "id": "relation:129",
         "source": "artifact:web/index.html",
         "target": "unresolved:body",
         "kind": "Usages",
@@ -4367,7 +4406,7 @@
         }
       },
       {
-        "id": "relation:125",
+        "id": "relation:127",
         "source": "artifact:web/index.html",
         "target": "unresolved:charset",
         "kind": "Usages",
@@ -4391,7 +4430,7 @@
         }
       },
       {
-        "id": "relation:128",
+        "id": "relation:130",
         "source": "artifact:web/index.html",
         "target": "unresolved:div",
         "kind": "Usages",
@@ -4415,7 +4454,7 @@
         }
       },
       {
-        "id": "relation:123",
+        "id": "relation:125",
         "source": "artifact:web/index.html",
         "target": "unresolved:head",
         "kind": "Usages",
@@ -4439,7 +4478,7 @@
         }
       },
       {
-        "id": "relation:121",
+        "id": "relation:123",
         "source": "artifact:web/index.html",
         "target": "unresolved:html",
         "kind": "Usages",
@@ -4463,7 +4502,7 @@
         }
       },
       {
-        "id": "relation:129",
+        "id": "relation:131",
         "source": "artifact:web/index.html",
         "target": "unresolved:id",
         "kind": "Usages",
@@ -4487,7 +4526,7 @@
         }
       },
       {
-        "id": "relation:122",
+        "id": "relation:124",
         "source": "artifact:web/index.html",
         "target": "unresolved:lang",
         "kind": "Usages",
@@ -4511,7 +4550,7 @@
         }
       },
       {
-        "id": "relation:124",
+        "id": "relation:126",
         "source": "artifact:web/index.html",
         "target": "unresolved:meta",
         "kind": "Usages",
@@ -4535,7 +4574,7 @@
         }
       },
       {
-        "id": "relation:130",
+        "id": "relation:132",
         "source": "artifact:web/index.html",
         "target": "unresolved:script",
         "kind": "Usages",
@@ -4559,7 +4598,7 @@
         }
       },
       {
-        "id": "relation:132",
+        "id": "relation:134",
         "source": "artifact:web/index.html",
         "target": "unresolved:src",
         "kind": "Usages",
@@ -4583,7 +4622,7 @@
         }
       },
       {
-        "id": "relation:126",
+        "id": "relation:128",
         "source": "artifact:web/index.html",
         "target": "unresolved:title",
         "kind": "Usages",
@@ -4607,7 +4646,7 @@
         }
       },
       {
-        "id": "relation:131",
+        "id": "relation:133",
         "source": "artifact:web/index.html",
         "target": "unresolved:type",
         "kind": "Usages",
@@ -4631,7 +4670,7 @@
         }
       },
       {
-        "id": "relation:133",
+        "id": "relation:135",
         "source": "artifact:web/package.json",
         "target": "package:@vitejs/plugin-react",
         "kind": "DependsOnPackage",
@@ -4652,7 +4691,7 @@
         }
       },
       {
-        "id": "relation:134",
+        "id": "relation:136",
         "source": "artifact:web/package.json",
         "target": "package:typescript",
         "kind": "DependsOnPackage",
@@ -4673,7 +4712,7 @@
         }
       },
       {
-        "id": "relation:135",
+        "id": "relation:137",
         "source": "artifact:web/package.json",
         "target": "package:vite",
         "kind": "DependsOnPackage",
@@ -4694,7 +4733,7 @@
         }
       },
       {
-        "id": "relation:137",
+        "id": "relation:139",
         "source": "artifact:web/src/App.tsx",
         "target": "symbol:web/src/App.tsx#web/src/App.tsx::App",
         "kind": "Contains",
@@ -4718,7 +4757,7 @@
         }
       },
       {
-        "id": "relation:138",
+        "id": "relation:140",
         "source": "artifact:web/src/App.tsx",
         "target": "symbol:web/src/App.tsx::type_alias_declaration@L3",
         "kind": "Contains",
@@ -4742,7 +4781,7 @@
         }
       },
       {
-        "id": "relation:136",
+        "id": "relation:138",
         "source": "artifact:web/src/App.tsx",
         "target": "module:web/src/App.tsx",
         "kind": "BelongsToModule",
@@ -4763,7 +4802,7 @@
         }
       },
       {
-        "id": "relation:139",
+        "id": "relation:141",
         "source": "artifact:web/src/App.tsx",
         "target": "unresolved:import React from \"react\";",
         "kind": "Imports",
@@ -4787,7 +4826,7 @@
         }
       },
       {
-        "id": "relation:141",
+        "id": "relation:143",
         "source": "artifact:web/src/App.tsx",
         "target": "unresolved:RouteSummary",
         "kind": "TypeRefs",
@@ -4811,7 +4850,7 @@
         }
       },
       {
-        "id": "relation:143",
+        "id": "relation:145",
         "source": "artifact:web/src/App.tsx",
         "target": "unresolved:App",
         "kind": "Usages",
@@ -4835,7 +4874,7 @@
         }
       },
       {
-        "id": "relation:140",
+        "id": "relation:142",
         "source": "artifact:web/src/App.tsx",
         "target": "unresolved:React",
         "kind": "Usages",
@@ -4859,7 +4898,7 @@
         }
       },
       {
-        "id": "relation:145",
+        "id": "relation:147",
         "source": "artifact:web/src/App.tsx",
         "target": "unresolved:h1",
         "kind": "Usages",
@@ -4883,7 +4922,7 @@
         }
       },
       {
-        "id": "relation:144",
+        "id": "relation:146",
         "source": "artifact:web/src/App.tsx",
         "target": "unresolved:main",
         "kind": "Usages",
@@ -4907,7 +4946,7 @@
         }
       },
       {
-        "id": "relation:146",
+        "id": "relation:148",
         "source": "artifact:web/src/App.tsx",
         "target": "unresolved:p",
         "kind": "Usages",
@@ -4931,7 +4970,7 @@
         }
       },
       {
-        "id": "relation:142",
+        "id": "relation:144",
         "source": "artifact:web/src/App.tsx",
         "target": "unresolved:route",
         "kind": "Usages",
@@ -4976,7 +5015,7 @@
         }
       },
       {
-        "id": "relation:149",
+        "id": "relation:151",
         "source": "config:docker-compose.yml#services.api",
         "target": "env:RIDGELINE_WORKER",
         "kind": "DefinesEnv",
@@ -5102,6 +5141,30 @@
         }
       },
       {
+        "id": "relation:109",
+        "source": "rationale:src/python_app/service.py#L23",
+        "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
+        "kind": "RationaleFor",
+        "confidence": "High",
+        "evidence": [
+          {
+            "artifact_id": "artifact:src/python_app/service.py",
+            "path": "src/python_app/service.py",
+            "span": {
+              "start_line": 23,
+              "end_line": 23
+            },
+            "structured_path": null
+          }
+        ],
+        "provenance": {
+          "language": "rationale",
+          "resolver_strategy": "syntax-extraction",
+          "resolution": "SyntaxOnly",
+          "confidence": "High"
+        }
+      },
+      {
         "id": "relation:68",
         "source": "symbol:generated/client.py#generated.client::call_route_api",
         "target": "unresolved:str",
@@ -5185,7 +5248,7 @@
             "path": "src/python_app/service.py",
             "span": {
               "start_line": 22,
-              "end_line": 23
+              "end_line": 25
             },
             "structured_path": null
           }
@@ -5257,7 +5320,7 @@
             "path": "src/python_app/service.py",
             "span": {
               "start_line": 22,
-              "end_line": 23
+              "end_line": 25
             },
             "structured_path": null
           }
@@ -5294,7 +5357,7 @@
         }
       },
       {
-        "id": "relation:147",
+        "id": "relation:149",
         "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
         "target": "env:RIDGELINE_WORKER",
         "kind": "ReadsEnv",
@@ -5377,7 +5440,7 @@
             "path": "src/python_app/service.py",
             "span": {
               "start_line": 22,
-              "end_line": 23
+              "end_line": 25
             },
             "structured_path": null
           }
@@ -5401,7 +5464,7 @@
             "path": "src/python_app/service.py",
             "span": {
               "start_line": 22,
-              "end_line": 23
+              "end_line": 25
             },
             "structured_path": null
           }
@@ -5472,8 +5535,8 @@
             "artifact_id": "artifact:src/python_app/service.py",
             "path": "src/python_app/service.py",
             "span": {
-              "start_line": 26,
-              "end_line": 35
+              "start_line": 28,
+              "end_line": 37
             },
             "structured_path": null
           }

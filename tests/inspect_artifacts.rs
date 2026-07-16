@@ -74,7 +74,7 @@ rust/Cargo.toml             PackageManifest      toml              StructuredFor
 rust/src/bin/worker.rs      SourceCode           rust              DeepLanguage           242  9ec6e1d0b7b81a95e57d14c7844b97c0ffbd705c558a2efc051ff25578f643b9  Text        Allowed        0    0
 rust/src/lib.rs             SourceCode           rust              DeepLanguage           797  44e5ed502724f66f09646458be7be4970e502193ef8d801a7fba3ace1a81b0b0  Text        Allowed        0    0
 src/python_app/__init__.py  SourceCode           python            DeepLanguage           148  0195b39eb6f54786cd7f39a8933088d1f0ca55f158606bebcbe1a65c4f7711a6  Text        Allowed        0    0
-src/python_app/service.py   SourceCode           python            DeepLanguage          1016  47f33f5acc8a1405a414e3d86233b99ab84dd4e4689935a882eda448bb225845  Text        Allowed        0    0
+src/python_app/service.py   SourceCode           python            DeepLanguage          1146  f2478c8fbf2191bd9e6bf1ebfc0319ad7d297853466163915e8eda719fa84b58  Text        Allowed        0    0
 vendor/example/lib.rs       SourceCode           rust              Opaque                  61  141b99647806161d5853cb47f24bc1c1e8c9d0a82171e005c90fb44df36b5095  Text        ExcerptOnly    0  100
 web/index.html              Template             html              StructuredFormat       226  a21fc9744cb5854209131f4da1ddc04e34540c2ae842e5b5c43a3e95630458a5  Text        Allowed        0    0
 web/package.json            PackageManifest      npm               StructuredFormat       197  4aced8c963a538dbea1dc59803e09983ffba07a77b41b774b04becf486f071c1  Text        Allowed        0    0

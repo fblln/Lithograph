@@ -15,7 +15,7 @@ Directory       vendor                1  031399bb81b35a133503a3e11bf0af08d46a406
 Directory       web                  33  684e2e68e5213a8ace17ed654a9a177835e7045586aebf6808961cbcddf9379c     151
 Documentation   Documentation        14  072a11ff87434dd925fa9e1516a3e2271ed75b8cca6b7049bc82f65ac1584f09    1081
 Infrastructure  Infrastructure       12  8d883e4a0f20ba2bbe9de21524865f7fb1ae372fbdbd9c6b985cf6b2cd177650     253
-PythonPackage   python_app           19  e6b2ad1a1b9b13f6bb619843c76721d3af8d54ad49b5007add9f863090c72157     333
+PythonPackage   python_app           20  27d76545f41a0cd2f9ff1d93205035bbeb138a484c95c82441a3471bb044c3aa     370
 RustCrate       fixture-worker       14  3326ff9d7b5b8c213d8e5329e3931e01e5fb4ad896fad50c7ca87ece04d4c69b     365
 ";
 

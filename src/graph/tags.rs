@@ -199,6 +199,7 @@ fn artifact_path(node: &GraphNode) -> Option<&str> {
         GraphNode::Documentation(doc) => Some(doc.evidence.path.as_str()),
         GraphNode::Command(command) => Some(command.evidence.path.as_str()),
         GraphNode::Module(module) => Some(module.evidence.path.as_str()),
+        GraphNode::Rationale(rationale) => Some(rationale.evidence.path.as_str()),
         GraphNode::Container(_) | GraphNode::EnvVar(_) | GraphNode::Package(_) => None,
         GraphNode::Unresolved(_) => None,
     }

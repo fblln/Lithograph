@@ -30,6 +30,9 @@ impl BuilderState {
         // same-file names and leave ambiguous calls for the conservative
         // post-build resolver instead of choosing a plausible-but-wrong one.
         let mut callable_ids: BTreeMap<String, Vec<GraphNodeId>> = BTreeMap::new();
+        // LIT-46: spans of the symbols this pass creates, so rationale
+        // comments attach to the class or method they sit inside.
+        let mut typed_symbols: Vec<super::rationale::SymbolSpan> = Vec::new();
         for class in &analysis.classes {
             let qualified = format!("{}::{}", artifact.path, class.name);
             let class_id = self.insert(GraphNode::Symbol(SymbolNode {
@@ -39,6 +42,12 @@ impl BuilderState {
                 doc: None,
                 evidence: class.evidence.clone(),
             }));
+            if let Some(span) = class.evidence.span.clone() {
+                typed_symbols.push(super::rationale::SymbolSpan {
+                    id: class_id.clone(),
+                    span,
+                });
+            }
             self.relate_with_provenance(
                 artifact_node.clone(),
                 class_id.clone(),
@@ -60,6 +69,12 @@ impl BuilderState {
                     doc: None,
                     evidence: method.evidence.clone(),
                 }));
+                if let Some(span) = method.evidence.span.clone() {
+                    typed_symbols.push(super::rationale::SymbolSpan {
+                        id: method_id.clone(),
+                        span,
+                    });
+                }
                 self.relate_with_provenance(
                     class_id.clone(),
                     method_id.clone(),
@@ -152,6 +167,7 @@ impl BuilderState {
                 "generator_function_declaration",
                 "method_definition",
             ],
+            typed_symbols,
         );
     }
 }

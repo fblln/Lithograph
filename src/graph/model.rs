@@ -1,5 +1,6 @@
 //! Typed semantic graph: nodes, relations, and the exported graph shape.
 
+use crate::analysis::RationaleKind;
 use crate::domain::{ArtifactCategory, Confidence, EvidenceRef};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
@@ -58,6 +59,8 @@ pub enum GraphNode {
     Package(PackageNode),
     /// A reference Lithograph could not resolve to another node.
     Unresolved(UnresolvedNode),
+    /// Author-recorded intent: why the code is the way it is (LIT-46).
+    Rationale(RationaleNode),
 }
 
 impl GraphNode {
@@ -74,6 +77,7 @@ impl GraphNode {
             Self::Module(node) => &node.id,
             Self::Package(node) => &node.id,
             Self::Unresolved(node) => &node.id,
+            Self::Rationale(node) => &node.id,
         }
     }
 }
@@ -255,11 +259,31 @@ pub struct UnresolvedNode {
     pub value: String,
 }
 
+/// Author-recorded intent extracted from a rationale-prefixed comment.
+///
+/// A parser recovers what the code does; this is the author saying why, in
+/// their own words, next to the code it explains. It is a node rather than a
+/// field so it can be cited as evidence, queried, and attached to whichever
+/// symbol it actually sits inside.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RationaleNode {
+    /// Node identifier.
+    pub id: GraphNodeId,
+    /// Why the author flagged the comment.
+    pub kind: RationaleKind,
+    /// The note itself, with comment syntax and prefix removed.
+    pub text: String,
+    /// Source span of the comment.
+    pub evidence: EvidenceRef,
+}
+
 /// Relation category between two graph nodes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum RelationKind {
     /// The source node contains or owns the target node.
     Contains,
+    /// A rationale note explains the target node (LIT-46).
+    RationaleFor,
     /// An artifact belongs to a module.
     BelongsToModule,
     /// An artifact or module belongs to a package.

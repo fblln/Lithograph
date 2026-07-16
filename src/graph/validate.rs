@@ -146,6 +146,7 @@ pub(crate) enum NodeKindTag {
     Module,
     Package,
     Unresolved,
+    Rationale,
 }
 
 pub(crate) fn node_kind_tag(node: &GraphNode) -> NodeKindTag {
@@ -160,6 +161,7 @@ pub(crate) fn node_kind_tag(node: &GraphNode) -> NodeKindTag {
         GraphNode::Module(_) => NodeKindTag::Module,
         GraphNode::Package(_) => NodeKindTag::Package,
         GraphNode::Unresolved(_) => NodeKindTag::Unresolved,
+        GraphNode::Rationale(_) => NodeKindTag::Rationale,
     }
 }
 
@@ -171,6 +173,7 @@ fn node_evidence(node: &GraphNode) -> Vec<&crate::domain::EvidenceRef> {
         GraphNode::Documentation(node) => vec![&node.evidence],
         GraphNode::Command(node) => vec![&node.evidence],
         GraphNode::Module(node) => vec![&node.evidence],
+        GraphNode::Rationale(node) => vec![&node.evidence],
         GraphNode::Container(_)
         | GraphNode::EnvVar(_)
         | GraphNode::Package(_)
@@ -188,6 +191,11 @@ pub(crate) fn target_kind_allowed(kind: RelationKind, target: NodeKindTag) -> bo
     }
     match kind {
         RelationKind::Contains => true,
+        // A note explains the code it sits inside: the enclosing symbol
+        // when one can be determined, else the artifact holding it.
+        RelationKind::RationaleFor => {
+            matches!(target, NodeKindTag::Symbol | NodeKindTag::Artifact)
+        }
         RelationKind::BelongsToModule => target == NodeKindTag::Module,
         RelationKind::BelongsToPackage | RelationKind::DependsOnPackage => {
             target == NodeKindTag::Package

@@ -11,6 +11,7 @@ pub mod packages;
 pub mod profiles;
 pub mod protocols;
 pub mod python;
+pub mod rationale;
 pub mod rust_metadata;
 pub mod rust_source;
 pub mod structured;
@@ -52,6 +53,9 @@ pub use protocols::{GraphQlAnalyzer, ProtoAnalyzer, ProtocolFormat, ProtocolRout
 pub use python::{
     PythonAnalysis, PythonAnalyzer, PythonClass, PythonFunction, PythonImport, PythonImportKind,
     PythonImportName, PythonReference, PythonReferenceKind,
+};
+pub use rationale::{
+    Rationale, RationaleKind, classify as classify_rationale, is_generated_source,
 };
 pub use rust_metadata::{
     RustDependency, RustDependencyKind, RustFeature, RustPackage, RustTarget,

@@ -406,6 +406,7 @@ fn node_kind_label(node: &GraphNode) -> &'static str {
         GraphNode::Module(_) => "module",
         GraphNode::Package(_) => "package",
         GraphNode::Unresolved(_) => "unresolved",
+        GraphNode::Rationale(_) => "rationale",
     }
 }
 
