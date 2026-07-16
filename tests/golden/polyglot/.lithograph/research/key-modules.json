@@ -2,7 +2,7 @@
   "modules": [
     "Configuration (Configuration) score 99",
     "web (Directory) score 66",
-    "python_app (PythonPackage) score 56",
+    "python_app (PythonPackage) score 59",
     "Documentation (Documentation) score 45",
     "fixture-worker (RustCrate) score 32",
     "Infrastructure (Infrastructure) score 31",

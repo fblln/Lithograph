@@ -594,6 +594,7 @@ fn service_context(graph: &Graph, node_id: &GraphNodeId) -> Option<String> {
 fn node_display_name(node: &GraphNode) -> String {
     match node {
         GraphNode::Artifact(node) => node.path.clone(),
+        GraphNode::Rationale(node) => node.text.clone(),
         GraphNode::Symbol(node) => node.qualified_name.clone(),
         GraphNode::Config(node) => node.name.clone(),
         GraphNode::Documentation(node) => node.title.clone(),

@@ -152,7 +152,14 @@ impl BuilderState {
             vec![file_evidence(artifact)],
         );
 
-        self.process_syntax_indexed_facts(artifact, language, output, artifact_node, &[]);
+        self.process_syntax_indexed_facts(
+            artifact,
+            language,
+            output,
+            artifact_node,
+            &[],
+            Vec::new(),
+        );
     }
     /// Applies syntax-level facts after a language-specific declaration pass.
     /// `typed_definition_kinds` suppresses generic `Definition` symbols for
@@ -164,8 +171,15 @@ impl BuilderState {
         output: TreeSitterAdapterOutput,
         artifact_node: &GraphNodeId,
         typed_definition_kinds: &[&str],
+        typed_symbols: Vec<super::rationale::SymbolSpan>,
     ) {
         let registry_id = language.registry_id();
+
+        // LIT-46: every symbol in the file, so a note can be attached to the
+        // one it sits inside rather than only to the file. Seeded with the
+        // symbols a language-specific pass already created, since those are
+        // skipped below and their ids are the ones actually in the graph.
+        let mut symbol_spans = typed_symbols;
 
         for definition in &output.definitions {
             if typed_definition_kinds.contains(&definition.kind.as_str()) {
@@ -183,6 +197,10 @@ impl BuilderState {
                 doc: None,
                 evidence: evidence.clone(),
             }));
+            symbol_spans.push(super::rationale::SymbolSpan {
+                id: symbol_id.clone(),
+                span: definition.span.clone(),
+            });
             self.relate_with_provenance(
                 artifact_node.clone(),
                 symbol_id,
@@ -196,6 +214,8 @@ impl BuilderState {
                 )),
             );
         }
+
+        self.process_rationale(artifact, artifact_node, &output.comments, &symbol_spans);
 
         for import in &output.imports {
             let evidence = syntax_fact_evidence(artifact, import.span.clone());
@@ -340,7 +360,10 @@ fn generic_finding_evidence(artifact: &Artifact, line: u32) -> EvidenceRef {
     }
 }
 
-fn syntax_fact_evidence(artifact: &Artifact, span: crate::domain::SourceSpan) -> EvidenceRef {
+pub(super) fn syntax_fact_evidence(
+    artifact: &Artifact,
+    span: crate::domain::SourceSpan,
+) -> EvidenceRef {
     EvidenceRef::file(ArtifactId::from_path(&artifact.path), artifact.path.clone()).with_span(span)
 }
 

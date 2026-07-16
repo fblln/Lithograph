@@ -90,7 +90,7 @@ impl ArtifactClassifier {
             text_fallback()
         };
 
-        classification = apply_origin_scores(path, classification);
+        classification = apply_origin_scores(path, classification, input.text);
         if input.text_status == TextStatus::Binary {
             classification.with_model_policy(ModelExposurePolicy::Never)
         } else {
@@ -221,8 +221,23 @@ fn content_signature_rule(text: Option<&str>) -> Option<Classification> {
     None
 }
 
-fn apply_origin_scores(path: &str, classification: Classification) -> Classification {
+fn apply_origin_scores(
+    path: &str,
+    classification: Classification,
+    text: Option<&str>,
+) -> Classification {
     if has_component(path, "generated") {
+        return Classification {
+            category: ArtifactCategory::GeneratedSource,
+            generated_score: 100,
+            ..classification
+        };
+    }
+    // LIT-46: generators announce themselves, and most do not live under a
+    // `generated/` directory. A file that says it is machine-written is
+    // machine-written wherever it sits, and its category must say so before
+    // anything downstream mistakes a template's TODO for an author's intent.
+    if text.is_some_and(crate::analysis::is_generated_source) {
         return Classification {
             category: ArtifactCategory::GeneratedSource,
             generated_score: 100,

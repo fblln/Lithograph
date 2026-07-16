@@ -35,6 +35,8 @@ pub struct RustAnalysis {
     pub references: Vec<RustReference>,
     /// True when the parse tree contains recovered syntax errors.
     pub has_syntax_errors: bool,
+    /// Every comment in the file, for rationale extraction (LIT-46).
+    pub comments: Vec<crate::analysis::TreeSitterComment>,
 }
 
 /// One flattened `use` path.
@@ -179,7 +181,13 @@ impl RustAnalyzer {
             return RustAnalysis::default();
         };
 
-        build_rust_analysis(artifact, tree.root_node(), text)
+        let mut analysis = build_rust_analysis(artifact, tree.root_node(), text);
+        analysis.comments = crate::analysis::tree_sitter_adapter::collect_comments(
+            tree.root_node(),
+            text,
+            &["line_comment", "block_comment"],
+        );
+        analysis
     }
 }
 
@@ -273,6 +281,7 @@ fn build_rust_analysis(artifact: &Artifact, root: Node, source: &str) -> RustAna
         macro_invocations,
         references,
         has_syntax_errors: root.has_error(),
+        comments: Vec::new(),
     }
 }
 

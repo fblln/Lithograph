@@ -939,7 +939,7 @@ module-plan:directory:vendor|Directory|vendor|1|18
 module-plan:directory:web|Directory|web|33|151
 module-plan:documentation:documentation|Documentation|Documentation|13|1081
 module-plan:infrastructure:infrastructure|Infrastructure|Infrastructure|19|384
-module-plan:python-package:python-app|PythonPackage|python_app|19|333
+module-plan:python-package:python-app|PythonPackage|python_app|20|370
 module-plan:rust-crate:fixture-worker|RustCrate|fixture-worker|14|365"
         );
 

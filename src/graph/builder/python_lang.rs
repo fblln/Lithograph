@@ -72,6 +72,9 @@ impl BuilderState {
 
         let mut symbol_ids: BTreeMap<String, GraphNodeId> = BTreeMap::new();
         let mut callable_ids: BTreeMap<String, Vec<GraphNodeId>> = BTreeMap::new();
+        // LIT-46: spans of every symbol here, so a rationale comment attaches
+        // to the class, method, or function it sits inside.
+        let mut symbol_spans: Vec<super::rationale::SymbolSpan> = Vec::new();
 
         for class in &analysis.classes {
             let qualified = format!("{}::{}", analysis.module_path, class.name);
@@ -90,6 +93,12 @@ impl BuilderState {
                 vec![class.evidence.clone()],
             );
             symbol_ids.insert(class.name.clone(), id.clone());
+            if let Some(span) = class.evidence.span.clone() {
+                symbol_spans.push(super::rationale::SymbolSpan {
+                    id: id.clone(),
+                    span,
+                });
+            }
             callable_ids
                 .entry(class.name.clone())
                 .or_default()
@@ -174,6 +183,12 @@ impl BuilderState {
                         )),
                     );
                 }
+                if let Some(span) = method.evidence.span.clone() {
+                    symbol_spans.push(super::rationale::SymbolSpan {
+                        id: method_id.clone(),
+                        span,
+                    });
+                }
                 callable_ids
                     .entry(method.name.clone())
                     .or_default()
@@ -241,6 +256,12 @@ impl BuilderState {
                 );
             }
             symbol_ids.insert(function.name.clone(), id.clone());
+            if let Some(span) = function.evidence.span.clone() {
+                symbol_spans.push(super::rationale::SymbolSpan {
+                    id: id.clone(),
+                    span,
+                });
+            }
             callable_ids
                 .entry(function.name.clone())
                 .or_default()
@@ -256,6 +277,8 @@ impl BuilderState {
                 import,
             );
         }
+
+        self.process_rationale(artifact, artifact_node, &analysis.comments, &symbol_spans);
 
         for reference in &analysis.references {
             self.process_python_reference(

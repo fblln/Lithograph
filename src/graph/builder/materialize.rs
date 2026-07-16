@@ -37,6 +37,7 @@ mod tests {
         let mut seen_module = false;
         let mut seen_package = false;
         let mut seen_unresolved = false;
+        let mut seen_rationale = false;
         for node in &graph.nodes {
             match node {
                 GraphNode::Artifact(_) => seen_artifact = true,
@@ -49,11 +50,18 @@ mod tests {
                 GraphNode::Module(_) => seen_module = true,
                 GraphNode::Package(_) => seen_package = true,
                 GraphNode::Unresolved(_) => seen_unresolved = true,
+                GraphNode::Rationale(_) => seen_rationale = true,
             }
         }
         assert!(seen_artifact && seen_symbol && seen_config && seen_documentation);
         assert!(seen_container && seen_command && seen_env_var && seen_module);
         assert!(seen_package && seen_unresolved);
+        // LIT-46: the fixture carries authored rationale, and the materialized
+        // graph must round-trip it like every other node kind.
+        assert!(
+            seen_rationale,
+            "expected a Rationale node in the fixture graph"
+        );
 
         assert!(!graph.relations.is_empty());
         assert!(

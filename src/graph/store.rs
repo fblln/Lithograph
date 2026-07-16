@@ -20,7 +20,11 @@ pub const GRAPH_STORE_SCHEMA_VERSION: u32 = 1;
 /// imported standard-library or declared-dependency name now land on an
 /// external symbol node instead of the package node, which the graph's own
 /// target-kind rule rejects for those relation kinds.
-pub const GRAPH_MODEL_VERSION: u32 = 3;
+///
+/// 4: `GraphNode::Rationale` and `RelationKind::RationaleFor` (LIT-46).
+/// Rationale-prefixed comments become nodes explaining the symbol or
+/// artifact they sit inside.
+pub const GRAPH_MODEL_VERSION: u32 = 4;
 
 /// Current portable graph artifact envelope version.
 pub const GRAPH_ARTIFACT_FORMAT_VERSION: u32 = 1;

@@ -251,6 +251,7 @@ fn node_label(node: &GraphNode) -> &'static str {
         GraphNode::Module(_) => "Module",
         GraphNode::Package(_) => "Package",
         GraphNode::Unresolved(_) => "Unresolved",
+        GraphNode::Rationale(_) => "Rationale",
     }
 }
 

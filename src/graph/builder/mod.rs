@@ -61,6 +61,7 @@ mod evidence;
 mod materialize;
 mod packages;
 mod python_lang;
+mod rationale;
 mod rust;
 mod typescript;
 

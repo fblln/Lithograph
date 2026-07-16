@@ -31,6 +31,7 @@ pub(crate) fn node_label(node: &GraphNode) -> &'static str {
         GraphNode::Module(_) => "Module",
         GraphNode::Package(_) => "Package",
         GraphNode::Unresolved(_) => "Unresolved",
+        GraphNode::Rationale(_) => "Rationale",
     }
 }
 
@@ -46,6 +47,7 @@ pub(crate) fn node_name(node: &GraphNode) -> String {
         GraphNode::Module(node) => node.path.clone(),
         GraphNode::Package(node) => node.name.clone(),
         GraphNode::Unresolved(node) => node.value.clone(),
+        GraphNode::Rationale(node) => node.text.clone(),
     }
 }
 

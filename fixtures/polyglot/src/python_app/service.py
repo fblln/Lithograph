@@ -20,6 +20,8 @@ class RouteService:
         return json.loads(settings_path.read_text(encoding="utf-8"))
 
     def bake_route(self, route_file: Path) -> str:
+        # WHY: the worker runs out of process because baking is CPU bound and
+        # would otherwise block the request thread.
         return run_worker(self.worker_path, route_file)
 
 

@@ -133,6 +133,23 @@ impl ContextBuilder {
                         }
                     }
                 }
+                // LIT-46: the author's own words about why the code is
+                // this way -- the one input no parser can recover, so it is
+                // quoted verbatim with its source span rather than
+                // summarized.
+                GraphNode::Rationale(rationale) => {
+                    summary_lines.push(format!(
+                        "- {} `{}` ({}): {}",
+                        rationale.kind.id(),
+                        rationale.evidence.path,
+                        rationale
+                            .evidence
+                            .span
+                            .as_ref()
+                            .map_or_else(|| "whole file".to_owned(), |span| span.to_string()),
+                        rationale.text
+                    ));
+                }
                 GraphNode::Symbol(symbol) => {
                     let doc = symbol.doc.as_deref().unwrap_or("(no docstring)");
                     symbol_lines.push(format!(
@@ -1194,6 +1211,7 @@ fn node_label(id: &GraphNodeId, node_by_id: &BTreeMap<&GraphNodeId, &GraphNode>)
         Some(GraphNode::Module(module)) => module.path.clone(),
         Some(GraphNode::Package(package)) => package.name.clone(),
         Some(GraphNode::Unresolved(unresolved)) => unresolved.value.clone(),
+        Some(GraphNode::Rationale(rationale)) => rationale.text.clone(),
         None => display_id(id).to_owned(),
     }
 }

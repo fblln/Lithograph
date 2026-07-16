@@ -126,7 +126,7 @@
         "image:rust:1.96",
         "artifact:src/python_app/__init__.py",
         "artifact:src/python_app/service.py",
-        "command:src/python_app/service.py#29",
+        "command:src/python_app/service.py#31",
         "env:RIDGELINE_WORKER",
         "module:src.python_app",
         "module:src.python_app.service",
@@ -135,6 +135,7 @@
         "package:os",
         "package:pathlib",
         "package:subprocess",
+        "rationale:src/python_app/service.py#L23",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
@@ -166,8 +167,8 @@
           "structured_path": null
         }
       ],
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
-      "output_hash": "1d4ce997e37cac1378b17a416246cf9d8658bd5fc2c93b2efc05763ffa1aa201",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
+      "output_hash": "91944a3651e7311b3ea6dafc339a02664803a99511b15dfda587b4827f201fcd",
       "prompt_version": "v1",
       "context_schema_version": "adr-drift-context-v1"
     },
@@ -297,7 +298,7 @@
         "image:rust:1.96",
         "artifact:src/python_app/__init__.py",
         "artifact:src/python_app/service.py",
-        "command:src/python_app/service.py#29",
+        "command:src/python_app/service.py#31",
         "env:RIDGELINE_WORKER",
         "module:src.python_app",
         "module:src.python_app.service",
@@ -306,6 +307,7 @@
         "package:os",
         "package:pathlib",
         "package:subprocess",
+        "rationale:src/python_app/service.py#L23",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
@@ -337,8 +339,8 @@
           "structured_path": null
         }
       ],
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
-      "output_hash": "1c16ae9bda6197fb1728a4e76e2e801155bbf4339e90eb79d2c6ea900fa41721",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
+      "output_hash": "8093c0c312790f33e801cbbc25e9d011b7168d2009b7f45612a474532612458d",
       "prompt_version": "v1",
       "context_schema_version": "architecture-context-v1"
     },
@@ -468,7 +470,7 @@
         "image:rust:1.96",
         "artifact:src/python_app/__init__.py",
         "artifact:src/python_app/service.py",
-        "command:src/python_app/service.py#29",
+        "command:src/python_app/service.py#31",
         "env:RIDGELINE_WORKER",
         "module:src.python_app",
         "module:src.python_app.service",
@@ -477,6 +479,7 @@
         "package:os",
         "package:pathlib",
         "package:subprocess",
+        "rationale:src/python_app/service.py#L23",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
@@ -508,8 +511,8 @@
           "structured_path": null
         }
       ],
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
-      "output_hash": "d3d9ca72bad59ae2dc14cb9f8b3188dbcd84579f77cbc4542b097e53a571125e",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
+      "output_hash": "448be87eea96c9f7dcc11a55e6238e559e0825fd1bc1ab325f063ed8d26ffe4a",
       "prompt_version": "v1",
       "context_schema_version": "boundaries-context-v1"
     },
@@ -639,7 +642,7 @@
         "image:rust:1.96",
         "artifact:src/python_app/__init__.py",
         "artifact:src/python_app/service.py",
-        "command:src/python_app/service.py#29",
+        "command:src/python_app/service.py#31",
         "env:RIDGELINE_WORKER",
         "module:src.python_app",
         "module:src.python_app.service",
@@ -648,6 +651,7 @@
         "package:os",
         "package:pathlib",
         "package:subprocess",
+        "rationale:src/python_app/service.py#L23",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
@@ -679,8 +683,8 @@
           "structured_path": null
         }
       ],
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
-      "output_hash": "2d430082cc94ce547c9a717a58e5172378ba979546646f2bcd77180cdb900aff",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
+      "output_hash": "d5c26aacf3b989e26477bbad42f162b702f433624204abc7e4b7b997a507c9ee",
       "prompt_version": "v1",
       "context_schema_version": "configuration-context-v1"
     },
@@ -810,7 +814,7 @@
         "image:rust:1.96",
         "artifact:src/python_app/__init__.py",
         "artifact:src/python_app/service.py",
-        "command:src/python_app/service.py#29",
+        "command:src/python_app/service.py#31",
         "env:RIDGELINE_WORKER",
         "module:src.python_app",
         "module:src.python_app.service",
@@ -819,6 +823,7 @@
         "package:os",
         "package:pathlib",
         "package:subprocess",
+        "rationale:src/python_app/service.py#L23",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
@@ -850,8 +855,8 @@
           "structured_path": null
         }
       ],
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
-      "output_hash": "8df6bad2ecb919dad2bfd0f0a32ffccc561649154b94d70c2b8c6270431f484f",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
+      "output_hash": "70c8cf7a50e72a65e682359c926a34f25984386ed43a596821489f5ad197313f",
       "prompt_version": "v1",
       "context_schema_version": "database-context-v1"
     },
@@ -981,7 +986,7 @@
         "image:rust:1.96",
         "artifact:src/python_app/__init__.py",
         "artifact:src/python_app/service.py",
-        "command:src/python_app/service.py#29",
+        "command:src/python_app/service.py#31",
         "env:RIDGELINE_WORKER",
         "module:src.python_app",
         "module:src.python_app.service",
@@ -990,6 +995,7 @@
         "package:os",
         "package:pathlib",
         "package:subprocess",
+        "rationale:src/python_app/service.py#L23",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
@@ -1021,8 +1027,8 @@
           "structured_path": null
         }
       ],
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
-      "output_hash": "fb2b6ef3280041e2744510d33836e40d8651e736f1e39d96a9a5c1e177f54e85",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
+      "output_hash": "a1fb0743d50f57b28951c25548bad1eab33f83b788fa4d4986c150a85f699f5c",
       "prompt_version": "v1",
       "context_schema_version": "key-modules-context-v1"
     },
@@ -1316,7 +1322,7 @@
       "dependencies": [
         "artifact:src/python_app/__init__.py",
         "artifact:src/python_app/service.py",
-        "command:src/python_app/service.py#29",
+        "command:src/python_app/service.py#31",
         "env:RIDGELINE_WORKER",
         "module:src.python_app",
         "module:src.python_app.service",
@@ -1325,6 +1331,7 @@
         "package:os",
         "package:pathlib",
         "package:subprocess",
+        "rationale:src/python_app/service.py#L23",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
@@ -1342,8 +1349,8 @@
           "structured_path": null
         }
       ],
-      "input_hash": "e6b2ad1a1b9b13f6bb619843c76721d3af8d54ad49b5007add9f863090c72157",
-      "output_hash": "e476f393e33a217890921d5dfec4d5fc919f3bf25a6c5ea0cc5777855e463f0a",
+      "input_hash": "27d76545f41a0cd2f9ff1d93205035bbeb138a484c95c82441a3471bb044c3aa",
+      "output_hash": "b89665a3bc00b1460863eddbccefee31308c531425c28948e0c4bc6a2ecb45ac",
       "prompt_version": "v1",
       "context_schema_version": "module-context-v1"
     },
@@ -1506,7 +1513,7 @@
         "image:rust:1.96",
         "artifact:src/python_app/__init__.py",
         "artifact:src/python_app/service.py",
-        "command:src/python_app/service.py#29",
+        "command:src/python_app/service.py#31",
         "env:RIDGELINE_WORKER",
         "module:src.python_app",
         "module:src.python_app.service",
@@ -1515,6 +1522,7 @@
         "package:os",
         "package:pathlib",
         "package:subprocess",
+        "rationale:src/python_app/service.py#L23",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
@@ -1546,8 +1554,8 @@
           "structured_path": null
         }
       ],
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
-      "output_hash": "e81e1ffd9401b488100502f0e42f7f75c3d33816472927547e03ab4d1e7100d6",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
+      "output_hash": "2805081d177d40cee15db4df86fbb293b4966a84a8f0c39b2d2795bad52c3606",
       "prompt_version": "v1",
       "context_schema_version": "overview-context-v1"
     },
@@ -1677,7 +1685,7 @@
         "image:rust:1.96",
         "artifact:src/python_app/__init__.py",
         "artifact:src/python_app/service.py",
-        "command:src/python_app/service.py#29",
+        "command:src/python_app/service.py#31",
         "env:RIDGELINE_WORKER",
         "module:src.python_app",
         "module:src.python_app.service",
@@ -1686,6 +1694,7 @@
         "package:os",
         "package:pathlib",
         "package:subprocess",
+        "rationale:src/python_app/service.py#L23",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
@@ -1717,8 +1726,8 @@
           "structured_path": null
         }
       ],
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
-      "output_hash": "fc6a21420364cdb8c768fd72effd5ecd5f92d734b810bfa48a8f5f0c9e00c6cc",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
+      "output_hash": "e2c089fc846718f4d94c3de4e6f723968939d07cb636a0ec53ad0c0e4345381f",
       "prompt_version": "v1",
       "context_schema_version": "quickstart-context-v1"
     },
@@ -1848,7 +1857,7 @@
         "image:rust:1.96",
         "artifact:src/python_app/__init__.py",
         "artifact:src/python_app/service.py",
-        "command:src/python_app/service.py#29",
+        "command:src/python_app/service.py#31",
         "env:RIDGELINE_WORKER",
         "module:src.python_app",
         "module:src.python_app.service",
@@ -1857,6 +1866,7 @@
         "package:os",
         "package:pathlib",
         "package:subprocess",
+        "rationale:src/python_app/service.py#L23",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
         "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
@@ -1888,8 +1898,8 @@
           "structured_path": null
         }
       ],
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
-      "output_hash": "17d5c8ded3d741c0c27cd4fe5e8801a10bb29ba547fe1d0d97b62620c8fe6a17",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
+      "output_hash": "30bfc18a7b67a0f63dc18c046fc27369abcb30f5c0e11be35dcf79f5c24147e1",
       "prompt_version": "v1",
       "context_schema_version": "workflows-context-v1"
     }
@@ -1899,7 +1909,7 @@
       "id": "task:page:adr-drift",
       "kind": "AdrDrift",
       "page_id": "page:adr-drift",
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
       "prompt_version": "v1",
       "context_schema_version": "adr-drift-context-v1",
       "model": "mock"
@@ -1908,7 +1918,7 @@
       "id": "task:page:architecture",
       "kind": "Architecture",
       "page_id": "page:architecture",
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
       "prompt_version": "v1",
       "context_schema_version": "architecture-context-v1",
       "model": "mock"
@@ -1917,7 +1927,7 @@
       "id": "task:page:boundaries",
       "kind": "Boundaries",
       "page_id": "page:boundaries",
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
       "prompt_version": "v1",
       "context_schema_version": "boundaries-context-v1",
       "model": "mock"
@@ -1926,7 +1936,7 @@
       "id": "task:page:configuration",
       "kind": "Configuration",
       "page_id": "page:configuration",
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
       "prompt_version": "v1",
       "context_schema_version": "configuration-context-v1",
       "model": "mock"
@@ -1935,7 +1945,7 @@
       "id": "task:page:database",
       "kind": "Database",
       "page_id": "page:database",
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
       "prompt_version": "v1",
       "context_schema_version": "database-context-v1",
       "model": "mock"
@@ -1944,7 +1954,7 @@
       "id": "task:page:key-modules",
       "kind": "KeyModules",
       "page_id": "page:key-modules",
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
       "prompt_version": "v1",
       "context_schema_version": "key-modules-context-v1",
       "model": "mock"
@@ -2034,7 +2044,7 @@
       "id": "task:page:module:module-plan:python-package:python-app",
       "kind": "ModulePage",
       "page_id": "page:module:module-plan:python-package:python-app",
-      "input_hash": "e6b2ad1a1b9b13f6bb619843c76721d3af8d54ad49b5007add9f863090c72157",
+      "input_hash": "27d76545f41a0cd2f9ff1d93205035bbeb138a484c95c82441a3471bb044c3aa",
       "prompt_version": "v1",
       "context_schema_version": "module-context-v1",
       "model": "mock"
@@ -2052,7 +2062,7 @@
       "id": "task:page:overview",
       "kind": "Overview",
       "page_id": "page:overview",
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
       "prompt_version": "v1",
       "context_schema_version": "overview-context-v1",
       "model": "mock"
@@ -2061,7 +2071,7 @@
       "id": "task:page:quickstart",
       "kind": "Quickstart",
       "page_id": "page:quickstart",
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
       "prompt_version": "v1",
       "context_schema_version": "quickstart-context-v1",
       "model": "mock"
@@ -2070,7 +2080,7 @@
       "id": "task:page:workflows",
       "kind": "Workflows",
       "page_id": "page:workflows",
-      "input_hash": "549b6b21cd889addd225929b7256f0886428b5d793f13c67319673a28cad459a",
+      "input_hash": "1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468",
       "prompt_version": "v1",
       "context_schema_version": "workflows-context-v1",
       "model": "mock"
