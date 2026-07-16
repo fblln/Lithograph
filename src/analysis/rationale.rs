@@ -179,12 +179,31 @@ const GENERATED_SCAN_BYTES: usize = 2_048;
 
 /// Whether `text` looks machine-written and should contribute no rationale.
 pub fn is_generated_source(text: &str) -> bool {
-    let head = &text[..text.len().min(GENERATED_SCAN_BYTES)];
+    let head = head_bytes(text);
     let head_lower = head.to_lowercase();
     GENERATED_MARKERS
         .iter()
         .any(|marker| head_lower.contains(&marker.to_lowercase()))
         || is_framework_migration(head)
+}
+
+/// The first [`GENERATED_SCAN_BYTES`] of `text`, truncated at a character
+/// boundary.
+///
+/// Slicing to a fixed byte offset panics when that offset lands inside a
+/// multi-byte character, which is not hypothetical: a Markdown report whose
+/// box-drawing characters straddled byte 2048 crashed `init` outright. The
+/// cut is approximate by design -- it only bounds how far a banner search
+/// reads -- so moving it to the nearest boundary below costs nothing.
+fn head_bytes(text: &str) -> &str {
+    if text.len() <= GENERATED_SCAN_BYTES {
+        return text;
+    }
+    let mut end = GENERATED_SCAN_BYTES;
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
 }
 
 /// Framework-generated migration files, which carry no banner but whose
@@ -311,5 +330,20 @@ mod tests {
     fn only_scans_the_head_for_generated_markers() {
         let text = format!("{}\n// DO NOT EDIT\n", "x".repeat(4_000));
         assert!(!is_generated_source(&text));
+    }
+
+    /// The head cut is a byte offset, and slicing to one that lands inside a
+    /// multi-byte character panics. A Markdown report whose box-drawing
+    /// characters straddled byte 2048 crashed `init` outright.
+    #[test]
+    fn head_cut_never_splits_a_multibyte_character() {
+        // Pad so the 2048-byte boundary falls inside a 3-byte character.
+        for padding in 2_040..2_050 {
+            let text = format!("{}{}", "x".repeat(padding), "│".repeat(20));
+            assert!(!is_generated_source(&text), "padding {padding}");
+        }
+        // The same text is still searched for a banner within the head.
+        let text = format!("// DO NOT EDIT\n{}{}", "x".repeat(2_040), "│".repeat(20));
+        assert!(is_generated_source(&text));
     }
 }
