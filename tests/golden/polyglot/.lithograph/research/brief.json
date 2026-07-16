@@ -1,6 +1,6 @@
 {
   "system_context": [
-    "Repository contains 22 artifact(s), 152 graph node(s), 176 graph relation(s), and 11 documentation module(s).",
+    "Repository contains 22 artifact(s), 152 graph node(s), 177 graph relation(s), and 11 documentation module(s).",
     "Configuration (Configuration) owns 46 graph member(s)",
     "assets (Directory) owns 2 graph member(s)",
     "data (Directory) owns 1 graph member(s)",
@@ -152,7 +152,7 @@
     "web (Directory) score 66",
     "python_app (PythonPackage) score 59",
     "Documentation (Documentation) score 45",
-    "fixture-worker (RustCrate) score 36",
+    "fixture-worker (RustCrate) score 37",
     "Infrastructure (Infrastructure) score 31",
     "root (Directory) score 14",
     "generated (Directory) score 11",
@@ -161,7 +161,7 @@
   ],
   "agent_memory": {
     "system_context": {
-      "project_summary": "Repository contains 22 artifact(s), 152 graph node(s), 176 graph relation(s), and 11 documentation module(s).",
+      "project_summary": "Repository contains 22 artifact(s), 152 graph node(s), 177 graph relation(s), and 11 documentation module(s).",
       "included_components": [
         "Configuration (Configuration)",
         "assets (Directory)",
@@ -661,7 +661,7 @@
         }
       ],
       "architecture_facts": [
-        "knowledge graph schema: 152 node(s), 176 relation(s)",
+        "knowledge graph schema: 152 node(s), 177 relation(s)",
         "container/component candidate: Configuration (Configuration)",
         "container/component candidate: assets (Directory)",
         "container/component candidate: data (Directory)",
@@ -678,7 +678,7 @@
         "web (Directory) score 66",
         "python_app (PythonPackage) score 59",
         "Documentation (Documentation) score 45",
-        "fixture-worker (RustCrate) score 36",
+        "fixture-worker (RustCrate) score 37",
         "Infrastructure (Infrastructure) score 31",
         "root (Directory) score 14",
         "generated (Directory) score 11",
@@ -763,7 +763,7 @@
           "reference": "relation:3"
         },
         {
-          "reference": "relation:152"
+          "reference": "relation:153"
         },
         {
           "reference": "relation:6"
@@ -846,7 +846,7 @@
           "reference": "relation:3"
         },
         {
-          "reference": "relation:152"
+          "reference": "relation:153"
         },
         {
           "reference": "relation:6"
@@ -887,7 +887,7 @@
         "web (Directory) score 66",
         "python_app (PythonPackage) score 59",
         "Documentation (Documentation) score 45",
-        "fixture-worker (RustCrate) score 36",
+        "fixture-worker (RustCrate) score 37",
         "Infrastructure (Infrastructure) score 31",
         "root (Directory) score 14",
         "generated (Directory) score 11",
@@ -979,5 +979,5 @@
       "confidence": 85
     }
   },
-  "input_hash": "fd7fccde22095d3eacacc8e25e1adb2e27b2b75ff8a40ac2cfdd6a1d6b414723"
+  "input_hash": "0001a207e93d1e18cb1d20b2f4f90205de9cc3aa6752559f3a33fb149a920742"
 }

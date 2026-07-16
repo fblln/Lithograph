@@ -151,6 +151,50 @@ impl BuilderState {
             self.process_rust_reference(artifact, artifact_node, reference, &symbol_ids);
         }
     }
+    /// Interns the external symbol a Rust path names, when its root crate is
+    /// the standard library or a Cargo-declared dependency, plus the
+    /// `BelongsToPackage` edge tying it to that crate.
+    ///
+    /// Mirrors LIT-56's Python equivalent: the member is named, not the whole
+    /// package, because `Calls` may not target a `Package` and because
+    /// `memchr::memchr_iter` is a more useful answer than `memchr`.
+    /// Returns `None` for a path rooted at anything undeclared, which stays
+    /// Unresolved rather than being assumed external.
+    fn rust_external_symbol(&mut self, path: &str, evidence: &EvidenceRef) -> Option<GraphNodeId> {
+        let trimmed = path.strip_prefix("::").unwrap_or(path);
+        let root = trimmed.split("::").next()?;
+        // A bare name has no crate root to attribute it to.
+        if root == trimmed {
+            return None;
+        }
+        // A crate that lives in this repository is never external, however
+        // its manifest happens to declare it.
+        if self.rust_local_crates.contains(root) {
+            return None;
+        }
+        let crate_name = match rust_std_crate(trimmed) {
+            Some(name) => name,
+            None if self.rust_manifest_packages.contains(root) => root,
+            None => return None,
+        };
+        let symbol_id = self.insert(GraphNode::Symbol(SymbolNode {
+            id: GraphNodeId::new(format!("symbol:{trimmed}")),
+            kind: SymbolKind::External,
+            qualified_name: trimmed.to_owned(),
+            doc: None,
+            evidence: evidence.clone(),
+        }));
+        let package_id = self.package(crate_name, true);
+        self.relate(
+            symbol_id.clone(),
+            package_id,
+            RelationKind::BelongsToPackage,
+            Confidence::High,
+            vec![evidence.clone()],
+        );
+        Some(symbol_id)
+    }
+
     fn process_rust_reference(
         &mut self,
         artifact: &Artifact,
@@ -216,10 +260,20 @@ impl BuilderState {
                     .unwrap_or(&reference.value);
                 let (target, resolution) = match symbol_ids.get(simple) {
                     Some(id) => (id.clone(), RelationResolution::HybridResolved),
-                    None => (
-                        self.unresolved(&reference.value),
-                        RelationResolution::SyntaxOnly,
-                    ),
+                    // LIT-66: a path rooted at std or a Cargo-declared crate
+                    // names code that is not in this repository and never will
+                    // be. That is a fact about a dependency, not a gap in
+                    // resolution, and leaving it Unresolved says the resolver
+                    // failed at something it was never going to find.
+                    None => {
+                        match self.rust_external_symbol(&reference.value, &reference.evidence) {
+                            Some(id) => (id, RelationResolution::HybridResolved),
+                            None => (
+                                self.unresolved(&reference.value),
+                                RelationResolution::SyntaxOnly,
+                            ),
+                        }
+                    }
                 };
                 self.relate_with_provenance(
                     artifact_node.clone(),
@@ -277,6 +331,75 @@ mod tests {
                 && relation.target.as_str() == "module:"
         });
         assert!(lib_belongs_to_root);
+
+        Ok(())
+    }
+
+    /// LIT-66: a call path rooted at std or a declared crate names code
+    /// outside this repository -- a fact about a dependency, not a resolution
+    /// gap. A path rooted at an in-repository crate, or at nothing declared,
+    /// must not be called external.
+    #[test]
+    fn rust_calls_into_std_and_declared_crates_become_external_symbols()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(
+            temp.path().join("Cargo.toml"),
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\nmemchr = \"2\"\n",
+        )?;
+        std::fs::write(
+            temp.path().join("src/lib.rs"),
+            concat!(
+                "pub fn run() {\n",
+                "    let _ = std::cmp::max(1, 2);\n",
+                "    let _ = memchr::memchr_iter(b'x', b\"y\");\n",
+                "    let _ = undeclared_crate::helper();\n",
+                "}\n",
+            ),
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let external: Vec<&str> = graph
+            .nodes
+            .iter()
+            .filter_map(|node| match node {
+                GraphNode::Symbol(symbol) if symbol.kind == SymbolKind::External => {
+                    Some(symbol.qualified_name.as_str())
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(
+            external.contains(&"std::cmp::max"),
+            "stdlib path must be external, got {external:?}",
+        );
+        assert!(
+            external.contains(&"memchr::memchr_iter"),
+            "declared crate path must be external, got {external:?}",
+        );
+        assert!(
+            !external
+                .iter()
+                .any(|name| name.starts_with("undeclared_crate")),
+            "an undeclared root must stay Unresolved, got {external:?}",
+        );
+        assert!(
+            graph.relations.iter().any(|relation| {
+                relation.kind == RelationKind::BelongsToPackage
+                    && relation.target.as_str() == "package:memchr"
+            }),
+            "an external symbol must be tied to its package",
+        );
+
+        let invalid: Vec<_> = GraphValidator
+            .validate(&graph, &artifacts)
+            .into_iter()
+            .filter(|issue| issue.kind == crate::graph::GraphIssueKind::InvalidRelationTarget)
+            .collect();
+        assert!(invalid.is_empty(), "invalid targets: {invalid:?}");
 
         Ok(())
     }

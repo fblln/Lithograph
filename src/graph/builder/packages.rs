@@ -248,6 +248,31 @@ impl BuilderState {
     /// segment. Called from a pre-pass before any Python file is indexed, so
     /// order relative to `pyproject.toml`/`requirements.txt` in `artifacts`
     /// doesn't matter -- see `python_external_target`.
+    /// Records the crate names Cargo.toml declares, so a Rust path rooted at
+    /// one is known to leave this repository (LIT-66). Underscores and
+    /// hyphens are interchangeable between a Cargo name and its `use` path
+    /// (`tree-sitter` is used as `tree_sitter`), so both spellings are kept.
+    pub(super) fn register_rust_manifest_packages(&mut self, output: &AnalyzerOutput) {
+        if let AnalyzerOutput::Cargo(profile) = output {
+            for dependency in &profile.dependencies {
+                // A `path:` dependency is a crate in this very repository --
+                // ripgrep declares `grep`, `globset`, and `ignore` that way.
+                // Calling those external would be a lie, and would hide real
+                // intra-workspace edges behind a dependency node.
+                if dependency
+                    .requirement
+                    .as_deref()
+                    .is_some_and(|requirement| requirement.starts_with("path:"))
+                {
+                    continue;
+                }
+                self.rust_manifest_packages.insert(dependency.name.clone());
+                self.rust_manifest_packages
+                    .insert(dependency.name.replace('-', "_"));
+            }
+        }
+    }
+
     pub(super) fn register_python_manifest_packages(&mut self, output: &AnalyzerOutput) {
         match output {
             AnalyzerOutput::PyProject(profile) => {

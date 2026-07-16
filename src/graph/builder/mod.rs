@@ -174,8 +174,9 @@ impl GraphBuilder {
         // reflecting any real reuse. Manifests are small; re-parsing them
         // once here is cheap.
         for artifact in artifacts {
-            let Some(kind @ (AnalyzerKind::PyProject | AnalyzerKind::Requirements)) =
-                analyzer_kind(artifact)
+            let Some(
+                kind @ (AnalyzerKind::PyProject | AnalyzerKind::Requirements | AnalyzerKind::Cargo),
+            ) = analyzer_kind(artifact)
             else {
                 continue;
             };
@@ -189,6 +190,7 @@ impl GraphBuilder {
             };
             let output = compute_fresh(artifact, &text, repo_root, kind);
             state.register_python_manifest_packages(&output);
+            state.register_rust_manifest_packages(&output);
         }
 
         for artifact in artifacts {
@@ -546,12 +548,16 @@ struct BuilderState {
     /// compute a file's true crate-relative module path instead of
     /// `rust_source::module_path`'s naive whole-repo-relative guess.
     rust_crate_roots: BTreeSet<String>,
+    /// Crate names that live in this repository (LIT-66).
+    rust_local_crates: BTreeSet<String>,
     /// Normalized ([`normalize_python_package_name`]) dependency names
     /// declared by this repo's `pyproject.toml`/`requirements.txt` (LIT-44.1),
     /// populated by a pre-pass before any Python file is indexed so
     /// `python_external_target` can classify a third-party import as a known
     /// project dependency regardless of artifact walk order.
     python_manifest_packages: BTreeSet<String>,
+    /// Crate names declared in Cargo.toml (LIT-66).
+    rust_manifest_packages: BTreeSet<String>,
 }
 
 impl BuilderState {
@@ -570,7 +576,9 @@ impl BuilderState {
             python_modules: BTreeMap::new(),
             rust_modules: BTreeMap::new(),
             rust_crate_roots: BTreeSet::new(),
+            rust_local_crates: BTreeSet::new(),
             python_manifest_packages: BTreeSet::new(),
+            rust_manifest_packages: BTreeSet::new(),
         }
     }
     /// Records each resolved Cargo target's source root directory, so
@@ -578,6 +586,14 @@ impl BuilderState {
     /// Safe to call more than once for the same workspace (a `BTreeSet`).
     fn register_rust_crate_roots(&mut self, workspace: &RustWorkspaceAnalysis) {
         for package in &workspace.packages {
+            // LIT-66: `cargo metadata` is authoritative about which crates
+            // live here. ripgrep declares its own `grep` crate as
+            // `{ version = "0.3.2", path = "crates/grep" }`, and the manifest
+            // pass records only the version -- so a name-based check would
+            // call an in-repository crate a third-party dependency.
+            self.rust_local_crates.insert(package.name.clone());
+            self.rust_local_crates
+                .insert(package.name.replace('-', "_"));
             // Workspace roots do not have a `[package]` table, so the raw
             // TOML pass cannot materialize their members. Cargo metadata is
             // the authoritative source for every in-repository member.
