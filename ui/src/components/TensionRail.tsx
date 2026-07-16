@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { impactAnalysis, tracePath, type TraceResult } from '../api/trace'
 import { getRepositoryTensions, type RepositoryTension } from '../api/tensions'
+import { ProvenanceTags } from './ProvenanceTags'
 
 type HeatmapMode = 'severity' | 'category' | 'confidence' | 'blast' | 'coupling' | 'cycles' | 'boundary'
 const EMPTY_SCOPE: string[] = []
@@ -68,6 +69,7 @@ function TensionDetail({ tension, trace, traceError, onFocus, onInspect, onUseQu
   return <section className="mt-2 border-t pt-2 text-[10px]" style={{ borderColor: 'var(--atlas-border)' }}>
     <h3>Why this hotspot matters</h3><p>{tension.explanation}</p>
     <p>{tension.category} · {tension.severity} severity · {tension.confidence} confidence</p>
+    <ProvenanceTags tags={tension.tags ?? []} label={`Tension provenance tags for ${tension.id}`} />
     <h4 className="mt-1 font-semibold">Affected nodes</h4><ul>{tension.affected_nodes.length ? tension.affected_nodes.map((id) => <li key={id}><button type="button" onClick={() => onInspect(id)}>{id}</button></li>) : <li>Cluster-level tension</li>}</ul>
     <h4 className="mt-1 font-semibold">Contributing metrics</h4><p>{metrics.length ? metrics.map(([name, value]) => `${name}=${value}`).join(', ') : 'No metric inputs recorded.'}</p>
     <h4 className="mt-1 font-semibold">Evidence</h4><ul>{tension.evidence_references.length ? tension.evidence_references.map((evidence) => <li key={evidence}>{evidence}</li>) : <li>No direct evidence reference recorded.</li>}</ul>

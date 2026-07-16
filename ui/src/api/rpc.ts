@@ -17,8 +17,14 @@ export class RpcError extends Error {
 }
 
 let nextId = 1
+let activeProjectId: string | undefined
 
-export async function callTool<T>(name: string, args: unknown = {}, signal?: AbortSignal): Promise<T> {
+/** Selects the allowlisted project attached to subsequent tool calls. */
+export function setActiveProjectId(projectId: string | undefined) {
+  activeProjectId = projectId && projectId !== 'primary' ? projectId : undefined
+}
+
+async function callToolForProject<T>(name: string, args: unknown, signal: AbortSignal | undefined, projectId: string | undefined): Promise<T> {
   const id = nextId++
   const response = await fetch('/rpc', {
     method: 'POST',
@@ -28,7 +34,7 @@ export async function callTool<T>(name: string, args: unknown = {}, signal?: Abo
       jsonrpc: '2.0',
       id,
       method: 'tools/call',
-      params: { name, arguments: args },
+      params: { name, arguments: args, ...(projectId ? { project_id: projectId } : {}) },
     }),
   })
   if (!response.ok) {
@@ -43,4 +49,13 @@ export async function callTool<T>(name: string, args: unknown = {}, signal?: Abo
     throw new RpcError(`malformed response from ${name}`, -32603)
   }
   return JSON.parse(text) as T
+}
+
+export async function callTool<T>(name: string, args: unknown = {}, signal?: AbortSignal): Promise<T> {
+  return callToolForProject<T>(name, args, signal, activeProjectId)
+}
+
+/** Calls a server-wide tool such as project discovery without project routing. */
+export async function callServerTool<T>(name: string, args: unknown = {}, signal?: AbortSignal): Promise<T> {
+  return callToolForProject<T>(name, args, signal, undefined)
 }

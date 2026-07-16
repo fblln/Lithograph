@@ -1,4 +1,5 @@
 import { callTool } from './rpc'
+import type { GraphTag } from './tags'
 
 export interface SubsystemDocument {
   subsystem_id: string
@@ -10,7 +11,7 @@ export interface SubsystemDocument {
   source_spans: string[]
   unresolved_assumptions: string[]
   markdown: string
-  resolved_tags: Array<{ id: string; namespace: string; value: string; source: string }>
+  resolved_tags: GraphTag[]
   tag_expression?: string
 }
 

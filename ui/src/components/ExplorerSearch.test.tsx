@@ -83,4 +83,20 @@ describe('ExplorerSearch', () => {
 
     expect(focusCluster).toHaveBeenCalledWith(cluster)
   })
+
+  it('hides a derived hash root while focusing the full node id', async () => {
+    const hash = '0123456789abcdef0123456789abcdef'
+    const id = `symbol:.cache/${hash}/src/app.ts#run`
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ result: { content: [{ text: JSON.stringify([{ id, label: 'Symbol', name: `.cache/${hash}/src/app.ts#run`, file_path: `.cache/${hash}/src/app.ts`, in_degree: 1, out_degree: 0 }]) }] } }) }))
+    const focus = vi.fn()
+    const user = userEvent.setup()
+    render(<ExplorerSearch onFocus={focus} displayRootPrefix={`.cache/${hash}/`} />)
+
+    await user.type(screen.getByLabelText('Search graph'), 'run')
+    const result = await screen.findByRole('button', { name: /src\/app\.ts#run.*Symbol/ })
+    expect(result).toHaveAttribute('title', expect.stringContaining(id))
+    expect(screen.queryByText(new RegExp(hash))).not.toBeInTheDocument()
+    await user.click(result)
+    expect(focus).toHaveBeenCalledWith(id)
+  })
 })

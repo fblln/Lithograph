@@ -54,7 +54,7 @@ describe('Sidebar', () => {
     )
     expect(screen.getByText('How this application is organized')).toBeInTheDocument()
     expect(screen.getByText('Major areas')).toBeInTheDocument()
-    expect(screen.getByText('bounded graph slice')).toBeInTheDocument()
+    expect(screen.getByText('Current bounded graph slice · complete')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Browse files and directories →' }))
     expect(screen.getByRole('button', { name: /a.rs.*Artifact/ })).toBeInTheDocument()
   })
@@ -75,5 +75,29 @@ describe('Sidebar', () => {
 
     expect(screen.getByText('Edge kinds')).toBeInTheDocument()
     expect(screen.queryByText('Node kinds')).not.toBeInTheDocument()
+  })
+
+  it('labels node counts as current-slice values and updates them with a new layout', async () => {
+    const user = userEvent.setup()
+    const first = layout()
+    first.budget.nodes_truncated = true
+    const { rerender } = render(
+      <Sidebar layout={first} activeLabels={new Set()} onToggleLabel={vi.fn()} maxNodes={undefined} onApplyMaxNodes={vi.fn()} />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    expect(screen.getByText('Counts describe returned nodes in the current slice; additional nodes are truncated.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Artifact: 1 in current slice' })).toBeInTheDocument()
+
+    const next = layout()
+    next.nodes = [
+      { ...next.nodes[0], id: 's1', label: 'Symbol' },
+      { ...next.nodes[0], id: 's2', label: 'Symbol' },
+    ]
+    next.budget = { ...next.budget, nodes_returned: 2, nodes_available: 2 }
+    rerender(<Sidebar layout={next} activeLabels={new Set()} onToggleLabel={vi.fn()} maxNodes={undefined} onApplyMaxNodes={vi.fn()} />)
+
+    expect(screen.queryByRole('button', { name: 'Artifact: 1 in current slice' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Symbol: 2 in current slice' })).toBeInTheDocument()
   })
 })

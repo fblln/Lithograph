@@ -1,4 +1,5 @@
 import { callTool, RpcError } from './rpc'
+import type { GraphTag } from './tags'
 
 export interface NodeEvidence {
   path: string
@@ -20,6 +21,7 @@ export interface RelatedRelation {
   evidence: NodeEvidence[]
   resolver_strategy: string | null
   confidence: 'Low' | 'High'
+  tags?: GraphTag[]
 }
 
 export interface NodeDetail {
@@ -31,7 +33,7 @@ export interface NodeDetail {
   definitions: RelatedNode[]
   references: RelatedRelation[]
   related_docs: RelatedNode[]
-  tags: Array<{ id: string; namespace: string; value: string; source: string; confidence: string; evidence: string[]; inherited_from: string | null }>
+  tags: GraphTag[]
 }
 
 export async function getNodeDetail(nodeId: string): Promise<NodeDetail> {

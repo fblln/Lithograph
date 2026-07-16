@@ -16,7 +16,7 @@ const result = {
     graph_snapshot_id: 'snapshot-old',
     schema_version: 1,
     sections: [
-      { id: 'overview', kind: 'SystemOverview', title: 'System Overview', source_query_ids: ['graph:overview'], evidence_references: ['artifact:README.md'], affected_nodes: ['artifact:README.md'], affected_edges: [], confidence: 'High', graph_snapshot_id: 'snapshot-old', deep_link_target: 'graph://focus?section=overview', tags: [{ id: 'tag:system', namespace: 'topic', value: 'system', source: 'Architecture', confidence: 'High' }] },
+      { id: 'overview', kind: 'SystemOverview', title: 'System Overview', source_query_ids: ['graph:overview'], evidence_references: ['artifact:README.md'], affected_nodes: ['artifact:README.md'], affected_edges: [], confidence: 'High', graph_snapshot_id: 'snapshot-old', deep_link_target: 'graph://focus?section=overview', tags: [{ id: 'tag:system', entity_id: 'overview', namespace: 'topic', value: 'system', source: 'Architecture', confidence: 'High', evidence: ['artifact:README.md'], inherited_from: null, graph_snapshot_id: 'snapshot-old' }] },
       { id: 'risks', kind: 'Risk', title: 'Risk / Tension Summary', source_query_ids: ['graph:tensions'], evidence_references: [], affected_nodes: ['symbol:risk'], affected_edges: [], confidence: 'High', graph_snapshot_id: 'snapshot-old', deep_link_target: 'graph://focus?section=risks', tags: [] },
     ],
   },
@@ -68,5 +68,6 @@ describe('DocsWorkspace', () => {
     expect(screen.queryByRole('button', { name: 'Risk / Tension Summary' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'topic:system' }))
     expect(onTagScope).toHaveBeenCalledWith('topic:system', ['artifact:README.md'])
+    expect(screen.getByLabelText('Document provenance tags')).toHaveTextContent('Architecture · High')
   })
 })

@@ -2,6 +2,7 @@ import type { ArchitectureNodeSummary } from './api/architecture'
 import type { RepositoryTension } from './api/tensions'
 import type { ClusterLink, VisualCluster } from './graph/clusterLayout'
 import type { PositionedNode } from './graph/types'
+import { deriveDisplayRootPrefix, stripDisplayRoot } from './displayRoot'
 
 export interface ClusterIdentity {
   id: string
@@ -27,13 +28,15 @@ export function deriveClusterIdentities(
   entryPoints: ArchitectureNodeSummary[] = [],
   tensions: RepositoryTension[] = [],
 ): Map<string, ClusterIdentity> {
-  const nodesById = new Map(nodes.map((node) => [node.id, node]))
+  const displayRootPrefix = deriveDisplayRootPrefix(nodes)
+  const displayNodes = nodes.map((node) => ({ ...node, name: stripDisplayRoot(node.name, displayRootPrefix), file_path: node.file_path ? stripDisplayRoot(node.file_path, displayRootPrefix) : null }))
+  const nodesById = new Map(displayNodes.map((node) => [node.id, node]))
   const entryPointsById = new Map(entryPoints.map((node) => [node.id, node]))
   const membership = new Map<string, string>()
   for (const cluster of visualClusters) for (const member of cluster.members) membership.set(member, cluster.id)
 
   const derived = visualClusters.map((cluster) => {
-    const visibleNodes = cluster.members.map((id) => nodesById.get(id)).filter((node): node is PositionedNode => node !== undefined)
+    const visibleNodes = (cluster.renderedMembers ?? cluster.members).map((id) => nodesById.get(id)).filter((node): node is PositionedNode => node !== undefined)
     const paths = visibleNodes.map((node) => node.file_path).filter((path): path is string => Boolean(path))
     const kindCounts = countBy(visibleNodes.map((node) => node.label))
     const dominantKinds = [...kindCounts]
@@ -55,7 +58,7 @@ export function deriveClusterIdentities(
       name,
       responsibility: responsibilityFor(name, paths, dominantKinds, clusterEntryPoints.length),
       memberCount: cluster.totalMembers,
-      visibleMemberCount: cluster.members.length,
+      visibleMemberCount: (cluster.renderedMembers ?? cluster.members).length,
       fileCount: new Set(paths).size,
       dominantKinds,
       entryPoints: clusterEntryPoints,
@@ -96,7 +99,9 @@ export function humanClusterNameFromEvidence(
       outgoing_pressure: 0,
     },
   }
-  const nodes = topNodes(cluster.top_nodes).map((node) => ({ ...node, x: 0, y: 0, hop: 0 }))
+  const rawNodes = topNodes(cluster.top_nodes).map((node) => ({ ...node, x: 0, y: 0, hop: 0 }))
+  const displayRootPrefix = deriveDisplayRootPrefix(rawNodes)
+  const nodes = rawNodes.map((node) => ({ ...node, name: stripDisplayRoot(node.name, displayRootPrefix), file_path: node.file_path ? stripDisplayRoot(node.file_path, displayRootPrefix) : null }))
   return clusterName(pseudoVisual, nodes)
 }
 
@@ -112,10 +117,10 @@ function clusterName(cluster: VisualCluster, nodes: PositionedNode[]): string {
   if (/\btests?|specs?|fixtures?\b/.test(joined)) return 'Tests and fixtures'
   const pathParts = paths.flatMap((path) => path.split('/').slice(0, -1)).filter((part) => !['src', 'lib', 'app'].includes(part.toLowerCase()))
   const dominantPath = mostCommon(pathParts)
-  if (dominantPath) return `${titleCase(dominantPath)} subsystem`
+  if (dominantPath) return `${dominantPath} subsystem`
   const representative = nodes
     .sort((a, b) => (b.in_degree + b.out_degree) - (a.in_degree + a.out_degree) || a.id.localeCompare(b.id))[0]
-  if (representative) return `${titleCase(shortName(representative.name))} subsystem`
+  if (representative) return `${shortName(representative.name)} subsystem`
   const rawFallback = cluster.id.split(/[/:#]/).filter(Boolean).at(-1)
   return rawFallback ? `${titleCase(rawFallback)} subsystem` : 'Architecture subsystem'
 }
@@ -127,11 +132,10 @@ function fallbackName(key: string): string {
   if (key === 'documentation-tooling') return 'Documentation and tooling'
   if (key === 'path:repository-root') return 'Repository root'
   const value = key.replace(/^(path|kind):/, '').split('/').at(-1) ?? key
-  const titled = titleCase(value)
   if (/web|frontend|client|ui/i.test(value)) return 'Web frontend'
   if (/python|api|backend/i.test(value)) return 'Python API'
   if (/worker|job|queue/i.test(value)) return 'Worker runtime'
-  return `${titled} area`
+  return `${value} area`
 }
 
 function clusterQualifier(cluster: VisualCluster, nodesById: Map<string, PositionedNode>): string {
@@ -145,7 +149,7 @@ function clusterQualifier(cluster: VisualCluster, nodesById: Map<string, Positio
     ?? cluster.id.split(/[/:#]/).filter(Boolean).at(-1)
     ?? 'region'
   const withoutExtension = source.replace(/\.(tsx?|jsx?|py|rs|toml|json|ya?ml|md|html|css)$/i, '')
-  return titleCase(withoutExtension.replace(/^_+|_+$/g, '').replace(/\./g, ' ')) || 'Region'
+  return withoutExtension.replace(/^_+|_+$/g, '') || 'Region'
 }
 
 function responsibilityFor(name: string, paths: string[], kinds: string[], entryPointCount: number): string {

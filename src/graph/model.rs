@@ -199,8 +199,30 @@ pub struct CommandNode {
     pub id: GraphNodeId,
     /// Command text.
     pub text: String,
+    /// Whether this is a repository command or an example shown in docs.
+    #[serde(default, skip_serializing_if = "CommandProvenance::is_executable")]
+    pub provenance: CommandProvenance,
     /// Evidence for this command.
     pub evidence: EvidenceRef,
+}
+
+/// Origin context for a command recovered from repository text.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CommandProvenance {
+    /// A command declared by executable repository configuration or code.
+    #[default]
+    Executable,
+    /// A command shown as an example in documentation context.
+    DocumentationExample,
+    /// A repository build or automation step, not a runtime entry point.
+    BuildAutomation,
+}
+
+impl CommandProvenance {
+    fn is_executable(&self) -> bool {
+        *self == Self::Executable
+    }
 }
 
 /// Environment variable node, deduplicated by name across the repository.
@@ -418,5 +440,41 @@ impl Graph {
         let mut json = serde_json::to_string_pretty(self)?;
         json.push('\n');
         Ok(json)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CommandNode, CommandProvenance, GraphNodeId};
+    use crate::domain::{ArtifactId, EvidenceRef, RepoPath};
+
+    #[test]
+    fn command_provenance_is_backward_compatible_and_documentation_is_explicit()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let path = RepoPath::new("Makefile")?;
+        let command = CommandNode {
+            id: GraphNodeId::new("command:Makefile#1"),
+            text: "make test".to_owned(),
+            provenance: CommandProvenance::Executable,
+            evidence: EvidenceRef::file(ArtifactId::from_path(&path), path),
+        };
+        let mut old_json = serde_json::to_value(&command)?;
+        assert!(old_json.get("provenance").is_none());
+        old_json
+            .as_object_mut()
+            .ok_or("command must serialize as an object")?
+            .remove("provenance");
+        let restored: CommandNode = serde_json::from_value(old_json)?;
+        assert_eq!(restored.provenance, CommandProvenance::Executable);
+
+        let documented = CommandNode {
+            provenance: CommandProvenance::DocumentationExample,
+            ..command
+        };
+        assert_eq!(
+            serde_json::to_value(documented)?["provenance"],
+            "documentation_example"
+        );
+        Ok(())
     }
 }

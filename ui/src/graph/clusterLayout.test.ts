@@ -30,7 +30,8 @@ describe('computeClusterLayout', () => {
       totalMembers: 3,
     })
     expect(result.clusters.some((cluster) => cluster.id === 'visual:path:web')).toBe(true)
-    expect(result.clusters.some((cluster) => cluster.id === 'visual:dependencies')).toBe(true)
+    expect(result.clusters.some((cluster) => cluster.id === 'visual:dependencies')).toBe(false)
+    expect(result.membership.get('d')).toBe('visual:dependencies')
     for (const position of result.positions.values()) expect(position.every(Number.isFinite)).toBe(true)
   })
 
@@ -68,6 +69,27 @@ describe('computeClusterLayout', () => {
 
   it('retains the compatibility positions API', () => {
     expect(computeClusterPositions(nodes, clusters, edges)).toEqual(computeClusterLayout(nodes, clusters, edges).positions)
+  })
+
+  it('keeps noise membership and positions while excluding it from hulls', () => {
+    const unresolved: PositionedNode = { id: 'u', label: 'Unresolved', name: 'unknown', file_path: null, in_degree: 1, out_degree: 0, x: 0, y: 0, hop: 0 }
+    const mixed = [{ ...clusters[0], members: ['a', 'd', 'u'] }]
+    const result = computeClusterLayout([...nodes, unresolved], mixed, edges)
+    const core = result.clusters.find((cluster) => cluster.id === 'core')
+
+    expect(core).toMatchObject({ members: ['a', 'd', 'u'], renderedMembers: ['a'], mutedMemberCount: 2 })
+    expect(result.membership.get('d')).toBe('core')
+    expect(result.membership.get('u')).toBe('core')
+    expect(result.positions.has('d')).toBe(true)
+    expect(result.positions.has('u')).toBe(true)
+  })
+
+  it('omits clusters with no renderable hull members', () => {
+    const onlyNoise = [{ ...clusters[0], id: 'noise', members: ['d'] }]
+    const result = computeClusterLayout(nodes, onlyNoise, edges)
+    expect(result.clusters.some((cluster) => cluster.id === 'noise')).toBe(false)
+    expect(result.membership.get('d')).toBe('noise')
+    expect(result.positions.has('d')).toBe(true)
   })
 
   it('keeps a realistic 1,000-node bounded graph complete and stable', () => {

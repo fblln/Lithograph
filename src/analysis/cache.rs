@@ -19,7 +19,7 @@ use std::path::PathBuf;
 
 /// Bump when analyzer output semantics or serialization change in a way that
 /// should force fresh analyzer output instead of reusing old cache entries.
-pub const ANALYSIS_CACHE_VERSION: u32 = 8;
+pub const ANALYSIS_CACHE_VERSION: u32 = 12;
 
 /// Tags which analyzer produced an [`AnalyzerOutput`], so a cache lookup can
 /// reject a stale entry whose artifact has since been reclassified to a

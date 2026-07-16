@@ -40,4 +40,13 @@ describe('TopBar', () => {
     rerender(<TopBar centerLabel="overview" status="error" onFocus={() => {}} />)
     expect(screen.getByText('Error')).toHaveStyle({ color: 'var(--atlas-danger)' })
   })
+
+  it('shortens hash-root breadcrumbs but preserves the full tooltip', () => {
+    const hash = '0123456789abcdef0123456789abcdef'
+    const crumb = `.cache/${hash}/src/api.ts`
+    render(<TopBar centerLabel={crumb} breadcrumbs={['Overview', crumb]} displayRootPrefix={`.cache/${hash}/`} status="ready" onFocus={() => {}} />)
+    const button = screen.getByRole('button', { name: 'src/api.ts' })
+    expect(button).toHaveAttribute('title', crumb)
+    expect(screen.queryByText(new RegExp(hash))).not.toBeInTheDocument()
+  })
 })

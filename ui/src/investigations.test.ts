@@ -19,4 +19,10 @@ describe('saved investigations', () => {
     expect(report).toContain('"graphSnapshotId": "g1"')
     expect(report).toContain('"healthFindings"')
   })
+  it('isolates saved investigations by project id', () => {
+    saveInvestigation({ version: 1, id: 'primary:x', name: 'Main', graphSnapshotId: 'g1', urlState: { projectId: 'primary', viewMode: 'cluster' }, activeLabels: [], notes: '' })
+    saveInvestigation({ version: 1, id: 'web:x', name: 'Web', graphSnapshotId: 'g2', urlState: { projectId: 'web', viewMode: 'cluster' }, activeLabels: [], notes: '' })
+    expect(loadInvestigations('primary').map((item) => item.name)).toEqual(['Main'])
+    expect(loadInvestigations('web').map((item) => item.name)).toEqual(['Web'])
+  })
 })

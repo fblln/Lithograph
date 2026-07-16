@@ -7,6 +7,9 @@
 //! resolved into a matching graph fact.
 
 use crate::analysis::{DriftKind as MarkdownDriftKind, MarkdownAnalyzer, MarkdownDrift};
+use crate::documentation_claims::{
+    DocumentSectionClaims, extract_section_claims, is_human_authored_markdown,
+};
 use crate::domain::{Artifact, EvidenceRef, SourceSpan};
 use crate::graph::{ConfigNodeKind, Graph, GraphNode};
 use serde::{Deserialize, Serialize};
@@ -67,6 +70,9 @@ pub struct DriftFinding {
 pub struct DriftReport {
     /// All findings, in scan order.
     pub findings: Vec<DriftFinding>,
+    /// Canonical claims from human-authored Markdown sections.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub section_claims: Vec<DocumentSectionClaims>,
 }
 
 /// Scans Markdown documentation for likely drift against the current
@@ -100,6 +106,7 @@ impl DriftDetector {
             .collect();
 
         let mut findings = Vec::new();
+        let mut section_claims = Vec::new();
         let mut markdown_corpus = String::new();
         for artifact in artifacts {
             if artifact.detected_format.as_deref() != Some("markdown") {
@@ -108,6 +115,9 @@ impl DriftDetector {
             let Ok(text) = std::fs::read_to_string(repo_root.join(artifact.path.as_str())) else {
                 continue;
             };
+            if is_human_authored_markdown(artifact.path.as_str()) {
+                section_claims.extend(extract_section_claims(artifact.path.as_str(), &text));
+            }
             let analysis = MarkdownAnalyzer.analyze(artifact, &text, repo_root);
 
             for drift in &analysis.drift {
@@ -206,7 +216,15 @@ impl DriftDetector {
             }
         }
 
-        DriftReport { findings }
+        section_claims.sort_by(|left, right| {
+            left.artifact_path
+                .cmp(&right.artifact_path)
+                .then_with(|| left.section_fingerprint.cmp(&right.section_fingerprint))
+        });
+        DriftReport {
+            findings,
+            section_claims,
+        }
     }
 }
 

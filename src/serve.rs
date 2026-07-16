@@ -30,9 +30,10 @@ use axum::routing::post;
 use axum::{BoxError, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::io::Write;
 use std::net::{Ipv4Addr, SocketAddr};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tower::ServiceBuilder;
 use tower::timeout::TimeoutLayer;
@@ -47,6 +48,96 @@ const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; script-src 'self'; st
      connect-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none'; \
      base-uri 'none'; frame-ancestors 'none'";
 
+const PRIMARY_PROJECT_ID: &str = "primary";
+
+/// One additional repository root explicitly allowlisted at server start.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NamedProjectRoot {
+    id: String,
+    path: PathBuf,
+}
+
+impl NamedProjectRoot {
+    /// Creates a named root. Validation occurs when the registry is built.
+    pub fn new(id: impl Into<String>, path: PathBuf) -> Self {
+        Self {
+            id: id.into(),
+            path,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct ProjectMetadata {
+    id: String,
+    name: String,
+    is_primary: bool,
+}
+
+#[derive(Debug, Clone)]
+struct ProjectRegistry {
+    servers: BTreeMap<String, WikiMcpServer>,
+    metadata: Vec<ProjectMetadata>,
+}
+
+impl ProjectRegistry {
+    fn build(primary: &Path, additional: Vec<NamedProjectRoot>) -> std::io::Result<Self> {
+        let mut additional = additional;
+        additional.sort_by(|left, right| left.id.cmp(&right.id));
+        let mut roots = vec![NamedProjectRoot::new(
+            PRIMARY_PROJECT_ID,
+            primary.to_path_buf(),
+        )];
+        roots.extend(additional);
+        let mut servers = BTreeMap::new();
+        let mut metadata = Vec::new();
+        for root in roots {
+            if !valid_project_id(&root.id) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("invalid project id `{}`", root.id),
+                ));
+            }
+            if servers.contains_key(&root.id) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("duplicate project id `{}`", root.id),
+                ));
+            }
+            let is_primary = root.id == PRIMARY_PROJECT_ID;
+            let name = if is_primary {
+                root.path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .filter(|name| !name.is_empty())
+                    .unwrap_or(root.id.as_str())
+                    .to_owned()
+            } else {
+                root.id.clone()
+            };
+            metadata.push(ProjectMetadata {
+                id: root.id.clone(),
+                name,
+                is_primary,
+            });
+            servers.insert(root.id, WikiMcpServer::new(&root.path));
+        }
+        Ok(Self { servers, metadata })
+    }
+
+    fn server(&self, id: Option<&str>) -> Option<WikiMcpServer> {
+        self.servers.get(id.unwrap_or(PRIMARY_PROJECT_ID)).cloned()
+    }
+}
+
+fn valid_project_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 64
+        && id.bytes().enumerate().all(|(index, byte)| {
+            byte.is_ascii_alphanumeric() || (index > 0 && matches!(byte, b'-' | b'_'))
+        })
+}
+
 /// Binds the server's listening socket without accepting connections yet,
 /// returning the bound address (the real port when `port` is `0`) and the
 /// configured router. Split from [`run`] so tests and callers that need
@@ -60,6 +151,19 @@ pub async fn bind(
     let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, port)).await?;
     let addr = listener.local_addr()?;
     Ok((listener, addr, router(repo_root, assets_dir)))
+}
+
+/// Multi-project variant of [`bind`], restricted to explicitly named roots.
+pub async fn bind_projects(
+    primary_root: &Path,
+    projects: Vec<NamedProjectRoot>,
+    assets_dir: &Path,
+    port: u16,
+) -> std::io::Result<(tokio::net::TcpListener, SocketAddr, Router)> {
+    let registry = ProjectRegistry::build(primary_root, projects)?;
+    let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, port)).await?;
+    let addr = listener.local_addr()?;
+    Ok((listener, addr, router_with_registry(registry, assets_dir)))
 }
 
 /// Binds and serves until the process receives `Ctrl-C`, writing the bound
@@ -77,6 +181,21 @@ pub async fn run(
         .await
 }
 
+/// Serves a primary repository plus explicitly named additional roots.
+pub async fn run_projects(
+    primary_root: &Path,
+    projects: Vec<NamedProjectRoot>,
+    assets_dir: &Path,
+    port: u16,
+    writer: &mut impl Write,
+) -> std::io::Result<()> {
+    let (listener, addr, app) = bind_projects(primary_root, projects, assets_dir, port).await?;
+    writeln!(writer, "Lithograph graph explorer serving on http://{addr}")?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+}
+
 async fn shutdown_signal() {
     let _ = tokio::signal::ctrl_c().await;
 }
@@ -86,7 +205,27 @@ async fn shutdown_signal() {
 /// not exist -- missing files simply 404 rather than the server refusing
 /// to start, so the graph API stays usable before a UI bundle is built.
 fn router(repo_root: &Path, assets_dir: &Path) -> Router {
-    let server = WikiMcpServer::new(repo_root);
+    // The compatibility single-project path has no user-supplied ID to
+    // validate, so construct its fixed registry directly without a fallible
+    // branch or panic.
+    let name = repo_root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(PRIMARY_PROJECT_ID)
+        .to_owned();
+    let registry = ProjectRegistry {
+        servers: BTreeMap::from([(PRIMARY_PROJECT_ID.to_owned(), WikiMcpServer::new(repo_root))]),
+        metadata: vec![ProjectMetadata {
+            id: PRIMARY_PROJECT_ID.to_owned(),
+            name,
+            is_primary: true,
+        }],
+    };
+    router_with_registry(registry, assets_dir)
+}
+
+fn router_with_registry(registry: ProjectRegistry, assets_dir: &Path) -> Router {
     Router::new()
         .route("/rpc", post(rpc_handler))
         .fallback_service(ServeDir::new(assets_dir))
@@ -97,7 +236,7 @@ fn router(repo_root: &Path, assets_dir: &Path) -> Router {
                 .layer(HandleErrorLayer::new(handle_layer_error))
                 .layer(TimeoutLayer::new(REQUEST_TIMEOUT)),
         )
-        .with_state(server)
+        .with_state(registry)
 }
 
 async fn handle_layer_error(error: BoxError) -> (StatusCode, String) {
@@ -201,6 +340,8 @@ struct JsonRpcCallParams {
     name: String,
     #[serde(default)]
     arguments: Value,
+    #[serde(default)]
+    project_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -252,7 +393,7 @@ fn json_rpc_error(id: Value, code: i32, message: String) -> Response {
 /// async reactor thread, and is bounded by this router's request-timeout
 /// layer rather than a bespoke per-tool cancellation mechanism.
 async fn rpc_handler(
-    State(server): State<WikiMcpServer>,
+    State(registry): State<ProjectRegistry>,
     body: Result<Json<JsonRpcCall>, JsonRejection>,
 ) -> Response {
     let Json(call) = match body {
@@ -266,6 +407,36 @@ async fn rpc_handler(
             format!("unknown method `{}`; expected `tools/call`", call.method),
         );
     }
+    if call.params.name == "list_projects" {
+        let text = match serde_json::to_string(&registry.metadata) {
+            Ok(text) => text,
+            Err(error) => {
+                return json_rpc_error(
+                    call.id,
+                    -32603,
+                    format!("failed to serialize project metadata: {error}"),
+                );
+            }
+        };
+        return Json(JsonRpcOk {
+            jsonrpc: "2.0",
+            id: call.id,
+            result: JsonRpcToolResult {
+                content: vec![JsonRpcContentBlock { kind: "text", text }],
+            },
+        })
+        .into_response();
+    }
+    let Some(server) = registry.server(call.params.project_id.as_deref()) else {
+        return json_rpc_error(
+            call.id,
+            -32602,
+            format!(
+                "unknown project id `{}`",
+                call.params.project_id.as_deref().unwrap_or_default()
+            ),
+        );
+    };
     let request = McpRequest {
         id: call.id,
         tool: call.params.name,
@@ -385,6 +556,112 @@ mod tests {
             .ok_or("expected result.content[0].text")?;
         let schema: Value = serde_json::from_str(text)?;
         assert!(schema.get("node_labels").is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn project_registry_rejects_duplicate_and_invalid_ids() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let primary = tempfile::TempDir::new()?;
+        let other = tempfile::TempDir::new()?;
+        let duplicate = ProjectRegistry::build(
+            primary.path(),
+            vec![NamedProjectRoot::new("primary", other.path().to_path_buf())],
+        );
+        let Err(duplicate_error) = duplicate else {
+            return Err("duplicate project id was accepted".into());
+        };
+        assert_eq!(duplicate_error.kind(), std::io::ErrorKind::InvalidInput);
+        let invalid = ProjectRegistry::build(
+            primary.path(),
+            vec![NamedProjectRoot::new(
+                "../escape",
+                other.path().to_path_buf(),
+            )],
+        );
+        let Err(invalid_error) = invalid else {
+            return Err("invalid project id was accepted".into());
+        };
+        assert_eq!(invalid_error.kind(), std::io::ErrorKind::InvalidInput);
+        Ok(())
+    }
+
+    #[test]
+    fn project_listing_is_safe_and_does_not_disclose_roots()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let primary = tempfile::TempDir::new()?;
+        let other = tempfile::TempDir::new()?;
+        let registry = ProjectRegistry::build(
+            primary.path(),
+            vec![
+                NamedProjectRoot::new("zeta", other.path().to_path_buf()),
+                NamedProjectRoot::new("alpha", other.path().to_path_buf()),
+            ],
+        )?;
+        let app = router_with_registry(registry, &primary.path().join("assets"));
+        let (_, body) = runtime().block_on(rpc_request(
+            app,
+            json!({
+                "jsonrpc": "2.0", "id": 7, "method": "tools/call",
+                "params": { "name": "list_projects", "arguments": {} }
+            }),
+        ));
+        let text = body["result"]["content"][0]["text"]
+            .as_str()
+            .ok_or("missing project metadata")?;
+        assert!(!text.contains(primary.path().to_string_lossy().as_ref()));
+        assert!(!text.contains(other.path().to_string_lossy().as_ref()));
+        let projects: Vec<ProjectMetadata> = serde_json::from_str(text)?;
+        assert_eq!(
+            projects
+                .iter()
+                .map(|project| project.id.as_str())
+                .collect::<Vec<_>>(),
+            ["primary", "alpha", "zeta"]
+        );
+        assert_eq!(projects[1].name, "alpha");
+        Ok(())
+    }
+
+    #[test]
+    fn rpc_routes_only_to_the_selected_allowlisted_project()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let primary = fixture_repo()?;
+        let empty = tempfile::TempDir::new()?;
+        let registry = ProjectRegistry::build(
+            primary.path(),
+            vec![NamedProjectRoot::new("empty", empty.path().to_path_buf())],
+        )?;
+        let app = router_with_registry(registry, &primary.path().join("assets"));
+        let (_, primary_body) = runtime().block_on(rpc_request(
+            app.clone(),
+            json!({
+                "jsonrpc": "2.0", "id": 8, "method": "tools/call",
+                "params": { "name": "get_graph_schema", "arguments": {}, "project_id": "primary" }
+            }),
+        ));
+        assert!(primary_body.get("result").is_some());
+        let (_, empty_body) = runtime().block_on(rpc_request(
+            app.clone(),
+            json!({
+                "jsonrpc": "2.0", "id": 9, "method": "tools/call",
+                "params": { "name": "get_graph_schema", "arguments": {}, "project_id": "empty" }
+            }),
+        ));
+        assert!(empty_body.get("error").is_some());
+        let (_, unknown_body) = runtime().block_on(rpc_request(
+            app,
+            json!({
+                "jsonrpc": "2.0", "id": 10, "method": "tools/call",
+                "params": { "name": "get_graph_schema", "arguments": {}, "project_id": "unknown" }
+            }),
+        ));
+        assert_eq!(unknown_body["error"]["code"], json!(-32602));
+        assert!(
+            !unknown_body
+                .to_string()
+                .contains(primary.path().to_string_lossy().as_ref())
+        );
         Ok(())
     }
 

@@ -19,7 +19,7 @@ const layout: LayoutResult = {
   budget: { node_budget: 3, edge_budget: 2, nodes_available: 5, edges_available: 2, nodes_returned: 3, edges_returned: 2, nodes_truncated: true, edges_truncated: false },
 }
 const clusters: ArchitectureCluster[] = [
-  { id: 'cluster-a', members: ['a', 'b', 'hidden'], top_nodes: [{ name: 'b' }], packages: ['core'], edge_types: ['Contains', 'Calls'], cohesion: 0.75, incoming_pressure: 0, outgoing_pressure: 1 },
+  { id: 'cluster-a', members: ['a', 'b', 'hidden'], top_nodes: [{ name: 'b' }], packages: ['core'], edge_types: ['Contains', 'Calls'], cohesion: 0.75, incoming_pressure: 0, outgoing_pressure: 1, tags: [{ id: 'tag:cluster', entity_id: 'cluster-a', namespace: 'kind', value: 'cluster', source: 'Architecture', confidence: 'High', evidence: ['a'], inherited_from: null, graph_snapshot_id: 'g1' }] },
   { id: 'cluster-b', members: ['c'], top_nodes: [{ name: 'c' }], packages: ['web'], edge_types: ['Calls'], cohesion: 1, incoming_pressure: 1, outgoing_pressure: 0 },
 ]
 
@@ -40,17 +40,18 @@ describe('ClusterExplorer', () => {
     const onFocus = vi.fn()
     const onInterClusterOnly = vi.fn()
     render(<ClusterExplorer layout={layout} clusters={clusters} interClusterOnly={false} onScope={onScope} onInterClusterOnly={onInterClusterOnly} onFocus={onFocus} onRelatedEntity={() => {}} />)
-    await user.click(screen.getByRole('button', { name: 'Expand B subsystem' }))
+    await user.click(screen.getByRole('button', { name: 'Expand b subsystem' }))
     expect(screen.getByRole('status')).toHaveTextContent('1 members are outside')
+    expect(screen.getByLabelText('Cluster provenance tags for cluster-a')).toHaveTextContent('Architecture · High · evidence 1')
     await user.click(screen.getAllByRole('button', { name: 'b' })[0])
     expect(onFocus).toHaveBeenCalledWith('b')
-    await user.click(screen.getByRole('button', { name: 'B subsystem' }))
+    await user.click(screen.getByRole('button', { name: 'b subsystem' }))
     expect(onScope).toHaveBeenCalledWith(clusters[0])
-    await user.click(screen.getByRole('button', { name: 'Pin B subsystem' }))
-    expect(screen.getByRole('button', { name: 'Unpin B subsystem' })).toHaveAttribute('aria-pressed', 'true')
-    await user.click(screen.getByRole('button', { name: 'Compare B subsystem' }))
-    await user.click(screen.getByRole('button', { name: 'Compare C subsystem' }))
-    expect(screen.getByLabelText('Cluster comparison')).toHaveTextContent('B subsystem vs C subsystem')
+    await user.click(screen.getByRole('button', { name: 'Pin b subsystem' }))
+    expect(screen.getByRole('button', { name: 'Unpin b subsystem' })).toHaveAttribute('aria-pressed', 'true')
+    await user.click(screen.getByRole('button', { name: 'Compare b subsystem' }))
+    await user.click(screen.getByRole('button', { name: 'Compare c subsystem' }))
+    expect(screen.getByLabelText('Cluster comparison')).toHaveTextContent('b subsystem vs c subsystem')
     await user.click(screen.getByRole('button', { name: 'Boundary edges' }))
     expect(onInterClusterOnly).toHaveBeenCalledWith(true)
   })

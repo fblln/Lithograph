@@ -1,7 +1,7 @@
 //! `graph`: export or import team-shareable graph artifacts.
 
-use crate::cli::{GraphCommand, GraphExportArgs, GraphImportArgs, GraphTarget};
-use crate::graph::{GraphArtifactReport, GraphStore};
+use crate::cli::{GraphCommand, GraphExportArgs, GraphImportArgs, GraphReportArgs, GraphTarget};
+use crate::graph::{GraphArtifactReport, GraphReport, GraphStore};
 use std::io::Write;
 
 pub(crate) fn execute_graph<W>(
@@ -14,7 +14,20 @@ where
     match command.target {
         GraphTarget::Export(args) => execute_graph_export(args, writer),
         GraphTarget::Import(args) => execute_graph_import(args, writer),
+        GraphTarget::Report(args) => execute_graph_report(args, writer),
     }
+}
+
+fn execute_graph_report<W>(
+    args: GraphReportArgs,
+    writer: &mut W,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    let graph = GraphStore::new(&args.path).load()?.graph;
+    writer.write_all(GraphReport::build(&graph).render_markdown().as_bytes())?;
+    Ok(())
 }
 
 fn execute_graph_export<W>(

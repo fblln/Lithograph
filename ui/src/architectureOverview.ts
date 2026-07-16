@@ -1,6 +1,7 @@
 import type { ArchitectureNodeSummary } from './api/architecture'
 import type { RepositoryTension } from './api/tensions'
 import type { LayoutResult, PositionedNode } from './graph/types'
+import { deriveDisplayRootPrefix, stripDisplayRoot } from './displayRoot'
 
 export interface RepositoryArea {
   id: string
@@ -16,6 +17,7 @@ export interface RepositoryArea {
 }
 
 export function deriveRepositoryAreas(layout: LayoutResult, entryPoints: ArchitectureNodeSummary[], tensions: RepositoryTension[]): RepositoryArea[] {
+  const displayRootPrefix = deriveDisplayRootPrefix(layout.nodes)
   const areaByNode = new Map<string, string>()
   const groups = new Map<string, PositionedNode[]>()
   for (const node of layout.nodes) {
@@ -23,7 +25,7 @@ export function deriveRepositoryAreas(layout: LayoutResult, entryPoints: Archite
     // They still participate in the graph, but presenting them as a giant
     // fictional "root" subsystem would hide the application's real shape.
     if (!node.file_path) continue
-    const area = areaForPath(node.file_path)
+    const area = areaForPath(stripDisplayRoot(node.file_path, displayRootPrefix))
     areaByNode.set(node.id, area)
     groups.set(area, [...(groups.get(area) ?? []), node])
   }
@@ -46,11 +48,13 @@ export function deriveRepositoryAreas(layout: LayoutResult, entryPoints: Archite
       name: humanAreaName(id),
       nodeIds,
       nodeCount: nodes.length,
-      fileCount: new Set(nodes.map((node) => node.file_path).filter((path): path is string => Boolean(path))).size,
+      fileCount: new Set(nodes.map((node) => node.file_path && stripDisplayRoot(node.file_path, displayRootPrefix)).filter((path): path is string => Boolean(path))).size,
       incoming,
       outgoing,
       connectedAreas: [...connected].sort().map(humanAreaName),
-      entryPoints: entryPoints.filter((entry) => areaForPath(entry.file_path) === id),
+      entryPoints: entryPoints
+        .filter((entry) => areaForPath(entry.file_path ? stripDisplayRoot(entry.file_path, displayRootPrefix) : null) === id)
+        .map((entry) => ({ ...entry, name: stripDisplayRoot(entry.name, displayRootPrefix), file_path: entry.file_path ? stripDisplayRoot(entry.file_path, displayRootPrefix) : null })),
       tensionCount: tensions.filter((tension) => tension.affected_nodes.some((nodeId) => ids.has(nodeId))).length,
     }
   }).sort((a, b) => b.nodeCount - a.nodeCount || a.id.localeCompare(b.id))

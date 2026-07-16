@@ -16,6 +16,7 @@ pub mod rust_metadata;
 pub mod rust_source;
 pub mod structured;
 pub mod tree_sitter_adapter;
+pub mod tsconfig;
 pub mod typescript;
 
 pub use cache::{ANALYSIS_CACHE_VERSION, AnalysisCache, AnalyzerKind, AnalyzerOutput};
@@ -51,8 +52,8 @@ pub use profiles::{
 };
 pub use protocols::{GraphQlAnalyzer, ProtoAnalyzer, ProtocolFormat, ProtocolRoute};
 pub use python::{
-    PythonAnalysis, PythonAnalyzer, PythonClass, PythonFunction, PythonImport, PythonImportKind,
-    PythonImportName, PythonReference, PythonReferenceKind,
+    PythonAnalysis, PythonAnalyzer, PythonBinding, PythonClass, PythonFunction, PythonImport,
+    PythonImportKind, PythonImportName, PythonMemberCall, PythonReference, PythonReferenceKind,
 };
 pub use rationale::{
     Rationale, RationaleKind, classify as classify_rationale, is_generated_source,
@@ -74,7 +75,9 @@ pub use tree_sitter_adapter::{
     TreeSitterParserAdapter, TreeSitterSyntaxError, TreeSitterSyntaxFact,
     parse_with_optional_adapter,
 };
+pub use tsconfig::{TsConfigProfile, parse_tsconfig};
 pub use typescript::{
-    TypeScriptAnalysis, TypeScriptAnalyzer, TypeScriptCall, TypeScriptClass, TypeScriptEnvRead,
-    TypeScriptFunction, TypeScriptLanguage,
+    TypeScriptAnalysis, TypeScriptAnalyzer, TypeScriptBinding, TypeScriptCall, TypeScriptClass,
+    TypeScriptEnvRead, TypeScriptFunction, TypeScriptLanguage, TypeScriptMemberCall,
+    TypeScriptReExport, TypeScriptReExportKind,
 };

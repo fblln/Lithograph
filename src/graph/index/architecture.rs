@@ -7,7 +7,9 @@ use super::common::search_result;
 use super::package::PackageSummary;
 use super::schema::GraphSchema;
 use super::search::SearchResult;
-use crate::graph::{ConfigNodeKind, Graph, GraphNode, GraphNodeId, RelationKind};
+use crate::graph::{
+    CommandProvenance, ConfigNodeKind, Graph, GraphNode, GraphNodeId, RelationKind,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -162,6 +164,7 @@ impl<'a> KnowledgeIndex<'a> {
         let mut languages: BTreeMap<String, usize> = BTreeMap::new();
         let mut packages = Vec::new();
         let mut entry_points = Vec::new();
+        let mut command_entry_points = BTreeMap::<String, SearchResult>::new();
         let mut boundaries = Vec::new();
         let mut architecture_docs = Vec::new();
         let mut service_links = Vec::new();
@@ -193,10 +196,21 @@ impl<'a> KnowledgeIndex<'a> {
                 {
                     service_links.push(result.clone());
                 }
-                GraphNode::Command(_) | GraphNode::Container(_)
-                    if wants(ArchitectureAspect::EntryPoints) =>
+                GraphNode::Command(command)
+                    if wants(ArchitectureAspect::EntryPoints)
+                        && command.provenance == CommandProvenance::Executable =>
                 {
-                    entry_points.push(result.clone())
+                    command_entry_points
+                        .entry(command.text.clone())
+                        .and_modify(|current| {
+                            if result.id < current.id {
+                                *current = result.clone();
+                            }
+                        })
+                        .or_insert_with(|| result.clone());
+                }
+                GraphNode::Container(_) if wants(ArchitectureAspect::EntryPoints) => {
+                    entry_points.push(result.clone());
                 }
                 GraphNode::EnvVar(_) | GraphNode::Unresolved(_)
                     if wants(ArchitectureAspect::Boundaries) =>
@@ -229,7 +243,8 @@ impl<'a> KnowledgeIndex<'a> {
         });
         let mut hotspots = all_results;
         hotspots.truncate(10);
-        entry_points.sort_by(|a, b| a.name.cmp(&b.name));
+        entry_points.extend(command_entry_points.into_values());
+        entry_points.sort_by(|a, b| a.name.cmp(&b.name).then(a.id.cmp(&b.id)));
         entry_points.truncate(20);
         boundaries.sort_by(|a, b| a.label.cmp(&b.label).then(a.name.cmp(&b.name)));
         boundaries.truncate(30);
@@ -416,6 +431,7 @@ mod cluster_link_tests {
             cohesion: 0.0,
             incoming_pressure: 0,
             outgoing_pressure: 0,
+            tags: vec![],
         };
         let relation = |id: &str, source: &str, target: &str, kind| Relation {
             id: id.to_owned(),
@@ -459,5 +475,74 @@ mod cluster_link_tests {
             vec![(RelationKind::Contains, 1), (RelationKind::Calls, 1)]
         );
         assert_eq!(links, build_cluster_links(&graph, &clusters));
+    }
+}
+
+#[cfg(test)]
+mod entry_point_tests {
+    use super::*;
+    use crate::domain::{ArtifactId, EvidenceRef, RepoPath};
+    use crate::graph::{CommandNode, CommandProvenance};
+
+    fn command(
+        id: &str,
+        text: &str,
+        provenance: CommandProvenance,
+        path: &str,
+    ) -> Result<GraphNode, Box<dyn std::error::Error>> {
+        let path = RepoPath::new(path)?;
+        Ok(GraphNode::Command(CommandNode {
+            id: GraphNodeId::new(id),
+            text: text.to_owned(),
+            provenance,
+            evidence: EvidenceRef::file(ArtifactId::from_path(&path), path),
+        }))
+    }
+
+    #[test]
+    fn entry_points_exclude_documentation_and_dedupe_executable_text()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let graph = Graph {
+            nodes: vec![
+                command(
+                    "command:docs/guide.md#2",
+                    ". .venv/bin/activate",
+                    CommandProvenance::DocumentationExample,
+                    "docs/guide.md",
+                )?,
+                command(
+                    "command:Makefile#2",
+                    "sphinx-build -M html . _build",
+                    CommandProvenance::BuildAutomation,
+                    "Makefile",
+                )?,
+                command(
+                    "command:docs/Makefile#4",
+                    "sphinx-build -M html . _build",
+                    CommandProvenance::BuildAutomation,
+                    "docs/Makefile",
+                )?,
+                command(
+                    "command:z#1",
+                    "cargo run",
+                    CommandProvenance::Executable,
+                    "z/Makefile",
+                )?,
+                command(
+                    "command:a#1",
+                    "cargo run",
+                    CommandProvenance::Executable,
+                    "a/Makefile",
+                )?,
+            ],
+            relations: vec![],
+        };
+
+        let entry_points = KnowledgeIndex::new(&graph).architecture(None).entry_points;
+
+        assert_eq!(entry_points.len(), 1);
+        assert_eq!(entry_points[0].name, "cargo run");
+        assert_eq!(entry_points[0].id.as_str(), "command:a#1");
+        Ok(())
     }
 }

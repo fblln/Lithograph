@@ -1585,7 +1585,10 @@ mod tests {
         };
         let mut findings = real_drift.findings;
         findings.push(synthetic_finding);
-        let drift = DriftReport { findings };
+        let drift = DriftReport {
+            findings,
+            ..DriftReport::default()
+        };
         assert!(!drift.findings.is_empty());
 
         let architecture_context = super::ArchitectureViewContext {

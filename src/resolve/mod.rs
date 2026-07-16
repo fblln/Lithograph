@@ -14,8 +14,11 @@
 //! Per-language import resolvers (LIT-22.3.2) plug into this framework by
 //! implementing [`Resolver`]; this module only owns the shared plumbing.
 
+pub mod aliases;
+pub mod barrels;
 pub mod environment;
 pub mod imports;
+pub mod propagate;
 pub mod symbols;
 pub mod type_aware;
 
@@ -26,6 +29,8 @@ use crate::graph::{
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
+pub use aliases::TsAliasMap;
+pub use barrels::{ReExport, ReExportKind, ReExportMap, barrel_targets};
 pub use environment::{
     ConfigFact, ENVIRONMENT_FACT_VERSION, EnvFact, EnvironmentCandidate,
     EnvironmentCandidateFeatures, EnvironmentCodeUser, EnvironmentExplanation,
@@ -33,8 +38,12 @@ pub use environment::{
     FactSourceKind, NameAlias, NameAliasKind, NameNormalizationError, NormalizedName,
     SafeFactValue, explain_environment, is_secret_like, resolve_environment_links,
 };
-use imports::extract_typescript_import_bindings;
 pub use imports::{LanguageImportResolver, extract_import_reference};
+pub(crate) use imports::{extract_typescript_import_bindings, import_candidates};
+pub use propagate::{
+    BaseClassFact, BindingFact, FileTypeFacts, ImportBindingFact, MemberCallFact,
+    PROPAGATE_STRATEGY, PropagateReport, Receiver, TypeFacts, propagate_types,
+};
 pub use symbols::{ImportLookup, ImportMap, ProjectSymbol, ProjectSymbolRegistry};
 pub use type_aware::{
     TYPE_AWARE_LANGUAGES, TypeAwareCapability, TypeAwareLanguage, resolve_type_aware,
@@ -76,11 +85,22 @@ pub struct ResolverContext<'a> {
     /// LIT-37: ids of callable symbols (functions/methods), so candidate
     /// filtering is a set membership test instead of a full `graph.nodes` scan.
     callable_symbol_ids: HashSet<&'a GraphNodeId>,
+    /// LIT-45.2: tsconfig `compilerOptions.paths` aliases. Not derivable from
+    /// the graph -- it comes from config files the builder reads -- so it is
+    /// supplied rather than indexed here. Empty for repositories with no
+    /// tsconfig, which leaves every resolver's behaviour unchanged.
+    pub ts_aliases: TsAliasMap,
 }
 
 impl<'a> ResolverContext<'a> {
-    /// Builds every index in one pass over `graph.nodes`.
+    /// Builds every index in one pass over `graph.nodes`, with no tsconfig
+    /// aliases.
     pub fn build(graph: &'a Graph) -> Self {
+        Self::build_with_aliases(graph, TsAliasMap::default())
+    }
+
+    /// Builds every index in one pass over `graph.nodes` (LIT-45.2).
+    pub fn build_with_aliases(graph: &'a Graph, ts_aliases: TsAliasMap) -> Self {
         let mut modules_by_path = BTreeMap::new();
         let mut packages_by_name = BTreeMap::new();
         let mut local_package_names = BTreeSet::new();
@@ -150,6 +170,7 @@ impl<'a> ResolverContext<'a> {
             imports_by_source,
             unresolved_values_by_id,
             callable_symbol_ids,
+            ts_aliases,
         }
     }
 }
@@ -231,6 +252,12 @@ impl HybridResolverPipeline {
     /// Runs every resolver against every eligible relation in `graph`,
     /// mutating resolved relations in place.
     pub fn resolve(&self, graph: &mut Graph) -> ResolveReport {
+        self.resolve_with_aliases(graph, TsAliasMap::default())
+    }
+
+    /// Resolves with tsconfig path aliases available to the resolvers
+    /// (LIT-45.2).
+    pub fn resolve_with_aliases(&self, graph: &mut Graph, ts_aliases: TsAliasMap) -> ResolveReport {
         let unresolved_values = unresolved_node_values(graph);
         let mut report = ResolveReport::default();
 
@@ -240,7 +267,7 @@ impl HybridResolverPipeline {
         // resolvers can never observe each other's output within one run,
         // keeping ordering effects limited to "who claims a relation
         // first," not "what facts are visible."
-        let context = ResolverContext::build(&*graph);
+        let context = ResolverContext::build_with_aliases(&*graph, ts_aliases);
         let mut updates: Vec<(usize, ResolvedTarget, &'static str)> = Vec::new();
 
         for (index, relation) in graph.relations.iter().enumerate() {
@@ -392,34 +419,26 @@ impl Resolver for TypeScriptCallResolver {
     }
 }
 
-fn typescript_import_candidates(source_path: &str, reference: &str, language: &str) -> Vec<String> {
-    use std::path::{Component, Path, PathBuf};
-
-    let source_dir = Path::new(source_path).parent().unwrap_or(Path::new(""));
-    let mut components: Vec<Component<'_>> = source_dir.components().collect();
-    for component in Path::new(reference).components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                components.pop();
-            }
-            other => components.push(other),
-        }
-    }
-    let base = components
-        .into_iter()
-        .collect::<PathBuf>()
-        .to_string_lossy()
-        .replace('\\', "/");
-    let extensions = if language == "tsx" {
-        [".tsx", ".ts"]
-    } else {
-        [".ts", ".tsx"]
-    };
-    extensions
-        .into_iter()
-        .map(|extension| format!("{base}{extension}"))
-        .collect()
+/// Artifact paths a relative TypeScript import specifier could name, most
+/// likely first. Shared with the graph builder, which needs the same
+/// candidates to seed a file's binding environment (LIT-57).
+///
+/// LIT-45.3: this used to join the path itself and try only `{base}.ts` and
+/// `{base}.tsx`, so it silently missed every directory import -- `from
+/// '../../client'` naming `client/index.ts` resolved to nothing. It now defers
+/// to the same candidate order LIT-45.1 documented for the import resolver,
+/// because two functions answering "what path does this specifier name" with
+/// different answers is how that gap survived in the first place.
+pub(crate) fn typescript_import_candidates(
+    source_path: &str,
+    reference: &str,
+    language: &str,
+) -> Vec<String> {
+    let source_dir = std::path::Path::new(source_path)
+        .parent()
+        .unwrap_or(std::path::Path::new(""));
+    let candidate = imports::resolve_relative_path(source_dir, reference);
+    imports::import_candidates(&candidate, language)
 }
 
 /// A relation is eligible for hybrid resolution when it hasn't already

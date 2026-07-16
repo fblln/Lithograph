@@ -10,8 +10,11 @@
 //! and layout cost, so it gets its own budget rather than riding on the
 //! node budget.
 
+use crate::domain::Confidence;
 use crate::graph::index::{node_file_path, node_label, node_name};
-use crate::graph::{Graph, GraphNode, GraphNodeId, KnowledgeIndex, Relation, RelationKind};
+use crate::graph::{
+    Graph, GraphNode, GraphNodeId, KnowledgeIndex, Relation, RelationKind, RelationResolution,
+};
 use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -19,7 +22,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 /// Versioned deterministic layout semantics. Bumped whenever positioning
 /// or budgeting rules change, so a cached result computed under an older
 /// version is never served as if it were current.
-pub const LAYOUT_ALGORITHM_VERSION: u32 = 1;
+pub const LAYOUT_ALGORITHM_VERSION: u32 = 2;
 
 /// Default node budget applied when `max_nodes` is unset.
 const DEFAULT_NODE_BUDGET: usize = 150;
@@ -99,12 +102,33 @@ pub struct PositionedNode {
 /// One relation included in a layout result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LayoutEdge {
+    /// Stable relation identity.
+    #[serde(default)]
+    pub id: String,
     /// Source node id.
     pub source: GraphNodeId,
     /// Target node id.
     pub target: GraphNodeId,
     /// Relation kind.
     pub kind: RelationKind,
+    /// Extraction/resolution class. Relations without explicit resolver
+    /// provenance retain the conservative syntax-only default.
+    #[serde(default = "syntax_only_resolution")]
+    pub resolution: RelationResolution,
+    /// Confidence assigned to this relation.
+    #[serde(default = "low_confidence")]
+    pub confidence: Confidence,
+    /// Stable resolver strategy when the relation has explicit provenance.
+    #[serde(default)]
+    pub resolver_strategy: Option<String>,
+}
+
+fn syntax_only_resolution() -> RelationResolution {
+    RelationResolution::SyntaxOnly
+}
+
+fn low_confidence() -> Confidence {
+    Confidence::Low
 }
 
 /// Explicit budget accounting for one layout response. Every truncation is
@@ -362,9 +386,19 @@ pub fn compute_layout(graph: &Graph, request: &LayoutRequest) -> Result<LayoutRe
     let layout_edges: Vec<LayoutEdge> = edges
         .iter()
         .map(|relation| LayoutEdge {
+            id: relation.id.clone(),
             source: relation.source.clone(),
             target: relation.target.clone(),
             kind: relation.kind,
+            resolution: relation
+                .provenance
+                .as_ref()
+                .map_or(RelationResolution::SyntaxOnly, |value| value.resolution),
+            confidence: relation.confidence,
+            resolver_strategy: relation
+                .provenance
+                .as_ref()
+                .map(|value| value.resolver_strategy.clone()),
         })
         .collect();
 
@@ -573,7 +607,7 @@ fn graph_snapshot_id(graph: &Graph) -> Result<String, String> {
 mod tests {
     use super::*;
     use crate::domain::{ArtifactCategory, ArtifactId, Confidence, EvidenceRef, RepoPath};
-    use crate::graph::{ArtifactNode, SymbolNode};
+    use crate::graph::{ArtifactNode, RelationProvenance, SymbolNode};
 
     fn evidence_for(path: &str) -> Result<EvidenceRef, Box<dyn std::error::Error>> {
         let repo_path = RepoPath::new(path)?;
@@ -793,6 +827,50 @@ mod tests {
         assert_eq!(result.budget.edge_budget, 2);
         assert_eq!(result.edges.len(), 2);
         assert!(result.budget.edges_truncated);
+        Ok(())
+    }
+
+    #[test]
+    fn layout_edges_expose_stable_resolution_provenance() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut graph = chain_graph()?;
+        graph.relations[0].confidence = Confidence::Low;
+        graph.relations[0].provenance = Some(RelationProvenance {
+            language: Some("rust".into()),
+            resolver_strategy: "type-aware".into(),
+            resolution: RelationResolution::HybridResolved,
+            confidence: Confidence::High,
+        });
+
+        let result = compute_layout(&graph, &LayoutRequest::default())?;
+        let edge = result
+            .edges
+            .iter()
+            .find(|edge| edge.id == "ab")
+            .ok_or("missing layout edge")?;
+        assert_eq!(edge.resolution, RelationResolution::HybridResolved);
+        assert_eq!(edge.confidence, Confidence::Low);
+        assert_eq!(edge.resolver_strategy.as_deref(), Some("type-aware"));
+        assert_eq!(
+            result
+                .edges
+                .iter()
+                .find(|edge| edge.id == "bc")
+                .map(|edge| edge.resolution),
+            Some(RelationResolution::SyntaxOnly)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn legacy_layout_edges_deserialize_with_conservative_defaults()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let edge: LayoutEdge =
+            serde_json::from_str(r#"{"source":"a","target":"b","kind":"Calls"}"#)?;
+        assert!(edge.id.is_empty());
+        assert_eq!(edge.resolution, RelationResolution::SyntaxOnly);
+        assert_eq!(edge.confidence, Confidence::Low);
+        assert_eq!(edge.resolver_strategy, None);
         Ok(())
     }
 

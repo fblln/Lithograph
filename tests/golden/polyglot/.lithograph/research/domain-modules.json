@@ -72,7 +72,7 @@
     {
       "name": "Documentation",
       "kind": "Documentation",
-      "member_count": 14,
+      "member_count": 10,
       "evidence": [
         "artifact:LICENSE",
         "artifact:README.md",
@@ -137,7 +137,6 @@
     "README.md -[References]-> vendor/example/lib.rs (High)",
     "README.md -[References]-> web/index.html (High)",
     "README.md -[References]-> web/src/App.tsx (High)",
-    "README.md -[References]-> .github/workflows/ci.yml (High)",
     "assets/logo.svg -[References]-> xmlns=\"http://www.w3.org/2000/svg (Low)",
     "assets/logo.svg -[References]-> xmlns=\"http://www.w3.org/2000/svg (Low)",
     "config/schema.json -[References]-> https://json-schema.org/draft/2020-12/schema (Low)",
@@ -146,15 +145,16 @@
     "config/settings.yaml -[References]-> /var/cache/ridgeline (Low)",
     "config/settings.yaml -[References]-> assets/ (Low)",
     "docs/architecture.md -[References]-> rust/Cargo.toml (High)",
-    "docs/architecture.md -[References]-> rust/ (High)",
-    "docs/architecture.md -[References]-> src/python_app/ (High)",
-    "docs/architecture.md -[References]-> web/ (High)",
     "requirements.txt -[DependsOnPackage]-> pydantic (High)",
     "requirements.txt -[DependsOnPackage]-> pytest (High)",
     "rust/src/bin/worker.rs -[Imports]-> fixture_worker::bake_route (High)",
     "rust/src/bin/worker.rs -[Calls]-> std::env::args (Low)",
     "rust/src/lib.rs -[Imports]-> std (High)",
-    "rust/src/lib.rs -[Calls]-> RouteBaker::from_env (Low)"
+    "rust/src/lib.rs -[Calls]-> RouteBaker::from_env (Low)",
+    "src/python_app/__init__.py -[Imports]-> src.python_app.service (High)",
+    "src/python_app/service.py -[Imports]-> __future__ (High)",
+    "src/python_app/service.py -[Imports]-> json (High)",
+    "src/python_app/service.py -[Imports]-> os (High)"
   ],
   "evidence": [
     {

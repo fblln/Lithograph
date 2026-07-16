@@ -24,6 +24,20 @@ pub struct PythonAnalysis {
     /// Heuristic cross-artifact references (calls, env reads, subprocess,
     /// dynamic imports, ctypes, config/path literals).
     pub references: Vec<PythonReference>,
+    /// LIT-57: member calls (`self.dumps()`, `provider.dumps()`) paired with
+    /// the receiver name and enclosing class. `references` deliberately drops
+    /// every dotted callee because a member call cannot be resolved from the
+    /// call site alone; these facts carry the receiver evidence a later
+    /// cross-file type-propagation pass needs to type it.
+    pub member_calls: Vec<PythonMemberCall>,
+    /// LIT-57: `name = Ctor(...)` bindings, which give a receiver its type.
+    pub bindings: Vec<PythonBinding>,
+    /// LIT-45.5: imports nested one level inside a module-level `if` -- the
+    /// `if t.TYPE_CHECKING:` convention. They bind names only for annotations,
+    /// so they feed receiver typing but never `Imports` edges: the module is
+    /// not imported at runtime, and every annotation receiver in the pinned
+    /// Flask corpus is typed by exactly this kind of import.
+    pub typing_imports: Vec<PythonImport>,
     /// True when the parse tree contains recovered syntax errors.
     pub has_syntax_errors: bool,
     /// Every comment in the file, for rationale extraction (LIT-46).
@@ -141,6 +155,40 @@ pub struct PythonReference {
     pub evidence: EvidenceRef,
 }
 
+/// LIT-57: one `receiver.method(...)` call whose receiver is a bare name.
+///
+/// Only bare-identifier receivers are extracted. `self.foo.bar()`, `f().x()`,
+/// and other compound receivers carry no name a binding environment could
+/// type, so they are left out rather than guessed at.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PythonMemberCall {
+    /// Receiver identifier as written, e.g. `self` or `provider`.
+    pub receiver: String,
+    /// Called method name.
+    pub method: String,
+    /// Enclosing class name, when the call sits inside a class body. This is
+    /// what types a `self`/`cls` receiver.
+    pub enclosing_class: Option<String>,
+    /// Evidence for the call expression.
+    pub evidence: EvidenceRef,
+}
+
+/// LIT-57: one `name = Ctor(...)` binding, which types `name` as `Ctor`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PythonBinding {
+    /// Bound name.
+    pub name: String,
+    /// Constructor callee as written, e.g. `Provider` or `json.Provider`.
+    pub constructor: String,
+    /// Enclosing class name, when bound inside a class body.
+    pub enclosing_class: Option<String>,
+    /// True when bound at module level. Module-level bindings are visible to
+    /// importing files; function-local ones are not.
+    pub is_module_level: bool,
+    /// Evidence for the assignment.
+    pub evidence: EvidenceRef,
+}
+
 /// Tree-sitter-backed analyzer for Python source files.
 ///
 /// Any syntax error anywhere in the file causes whole-file parsers
@@ -201,6 +249,33 @@ fn build_python_analysis(artifact: &Artifact, root: Node, source: &str) -> Pytho
         );
     }
 
+    // LIT-45.5: imports one level inside a module-level `if` -- the
+    // `if t.TYPE_CHECKING:` convention. One level only: an import inside a
+    // function is scoped to that function, and deeper nesting is not the
+    // convention this exists for.
+    let mut typing_imports = Vec::new();
+    let mut cursor = root.walk();
+    for child in root.children(&mut cursor) {
+        if child.kind() != "if_statement" {
+            continue;
+        }
+        let Some(block) = child.child_by_field_name("consequence") else {
+            continue;
+        };
+        let mut block_cursor = block.walk();
+        for statement in block.children(&mut block_cursor) {
+            match statement.kind() {
+                "import_statement" => {
+                    typing_imports.push(build_import(statement, artifact, source));
+                }
+                "import_from_statement" => {
+                    typing_imports.push(build_import_from(statement, artifact, source));
+                }
+                _ => {}
+            }
+        }
+    }
+
     let aliases = build_alias_map(&imports);
     let mut references = Vec::new();
     collect_references(
@@ -212,6 +287,19 @@ fn build_python_analysis(artifact: &Artifact, root: Node, source: &str) -> Pytho
         &mut references,
     );
 
+    let mut member_calls = Vec::new();
+    let mut bindings = Vec::new();
+    collect_scoped_facts(
+        root,
+        artifact,
+        source,
+        &aliases,
+        None,
+        true,
+        &mut member_calls,
+        &mut bindings,
+    );
+
     PythonAnalysis {
         module_path,
         is_package_init,
@@ -219,9 +307,186 @@ fn build_python_analysis(artifact: &Artifact, root: Node, source: &str) -> Pytho
         classes,
         functions,
         references,
+        member_calls,
+        bindings,
+        typing_imports,
         has_syntax_errors: root.has_error(),
         comments: Vec::new(),
     }
+}
+
+/// LIT-57: walks the tree tracking the two pieces of scope a receiver type
+/// depends on -- the enclosing class (which types `self`/`cls`) and whether a
+/// binding is module-level (which decides if importers can see it).
+///
+/// `collect_references` walks flat from the root because its facts are
+/// scope-independent; these are not, so this is a separate walk rather than a
+/// widening of that one.
+#[allow(clippy::too_many_arguments)]
+fn collect_scoped_facts(
+    node: Node,
+    artifact: &Artifact,
+    source: &str,
+    aliases: &HashMap<String, String>,
+    enclosing_class: Option<&str>,
+    is_module_level: bool,
+    member_calls: &mut Vec<PythonMemberCall>,
+    bindings: &mut Vec<PythonBinding>,
+) {
+    match node.kind() {
+        "call" => {
+            if let Some(member_call) =
+                classify_member_call(node, artifact, source, aliases, enclosing_class)
+            {
+                member_calls.push(member_call);
+            }
+        }
+        "assignment" => {
+            if let Some(binding) = classify_binding(
+                node,
+                artifact,
+                source,
+                aliases,
+                enclosing_class,
+                is_module_level,
+            ) {
+                bindings.push(binding);
+            }
+        }
+        // LIT-45.5: `def f(app: Flask)` types `app` exactly as `app = Flask()`
+        // would, so annotated parameters are ordinary bindings. Only plain
+        // (possibly dotted) names count; `Optional[X]`, unions, subscripts,
+        // and string annotations are skipped rather than unwrapped -- an
+        // unwrapping heuristic is where wrong receiver types would creep in.
+        "typed_parameter" | "typed_default_parameter" => {
+            if let Some(annotation) =
+                field_text(node, "type", source).filter(|annotation| is_plain_type_name(annotation))
+                && let Some(name) = parameter_name(node, source)
+                && name != "self"
+                && name != "cls"
+            {
+                bindings.push(PythonBinding {
+                    name: name.to_owned(),
+                    constructor: canonicalize_callee(annotation, aliases),
+                    enclosing_class: enclosing_class.map(str::to_owned),
+                    is_module_level: false,
+                    evidence: evidence(artifact, node),
+                });
+            }
+        }
+        _ => {}
+    }
+
+    // A class body re-types `self`; a function body ends module level. Both
+    // are decided here so the recursion below carries the correct scope.
+    let (child_class, child_module_level) = match node.kind() {
+        "class_definition" => (field_text(node, "name", source).or(enclosing_class), false),
+        "function_definition" => (enclosing_class, false),
+        _ => (enclosing_class, is_module_level),
+    };
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_scoped_facts(
+            child,
+            artifact,
+            source,
+            aliases,
+            child_class,
+            child_module_level,
+            member_calls,
+            bindings,
+        );
+    }
+}
+
+/// True for a bare or dotted type name (`Flask`, `json.Provider`). Anything
+/// with brackets, quotes, unions, or spaces is a composite annotation whose
+/// receiver type is not directly readable.
+fn is_plain_type_name(annotation: &str) -> bool {
+    !annotation.is_empty()
+        && annotation
+            .chars()
+            .all(|character| character.is_alphanumeric() || character == '_' || character == '.')
+}
+
+/// The declared name inside a `typed_parameter`/`typed_default_parameter`.
+/// `typed_default_parameter` names it through a field; `typed_parameter`
+/// keeps it as a bare child.
+fn parameter_name<'a>(node: Node<'a>, source: &'a str) -> Option<&'a str> {
+    field_text(node, "name", source).or_else(|| {
+        let mut cursor = node.walk();
+        node.children(&mut cursor)
+            .find(|child| child.kind() == "identifier")
+            .map(|child| node_text(child, source))
+    })
+}
+
+/// Extracts `receiver.method(...)` when the receiver is a bare identifier.
+/// Aliased receivers (`import numpy as np` then `np.array()`) resolve to a
+/// module, not an object, so they are excluded: the alias map only knows
+/// module aliases, and a module member call is an import fact, not a
+/// receiver-typed one.
+fn classify_member_call(
+    node: Node,
+    artifact: &Artifact,
+    source: &str,
+    aliases: &HashMap<String, String>,
+    enclosing_class: Option<&str>,
+) -> Option<PythonMemberCall> {
+    let function = node.child_by_field_name("function")?;
+    if function.kind() != "attribute" {
+        return None;
+    }
+    let object = function.child_by_field_name("object")?;
+    if object.kind() != "identifier" {
+        return None;
+    }
+    let receiver = node_text(object, source);
+    if aliases.contains_key(receiver) {
+        return None;
+    }
+    let method = field_text(function, "attribute", source)?;
+
+    Some(PythonMemberCall {
+        receiver: receiver.to_owned(),
+        method: method.to_owned(),
+        enclosing_class: enclosing_class.map(str::to_owned),
+        evidence: evidence(artifact, node),
+    })
+}
+
+/// Extracts `name = Ctor(...)`, the only assignment shape that types a name
+/// without inference. `name = other_name` and `name = f(x).y` are left out.
+fn classify_binding(
+    node: Node,
+    artifact: &Artifact,
+    source: &str,
+    aliases: &HashMap<String, String>,
+    enclosing_class: Option<&str>,
+    is_module_level: bool,
+) -> Option<PythonBinding> {
+    let left = node.child_by_field_name("left")?;
+    if left.kind() != "identifier" {
+        return None;
+    }
+    let right = node.child_by_field_name("right")?;
+    if right.kind() != "call" {
+        return None;
+    }
+    let callee = right.child_by_field_name("function")?;
+    if !matches!(callee.kind(), "identifier" | "attribute") {
+        return None;
+    }
+    let constructor = canonicalize_callee(node_text(callee, source), aliases);
+
+    Some(PythonBinding {
+        name: node_text(left, source).to_owned(),
+        constructor,
+        enclosing_class: enclosing_class.map(str::to_owned),
+        is_module_level,
+        evidence: evidence(artifact, node),
+    })
 }
 
 pub(crate) fn module_path(path: &str) -> (String, bool) {
@@ -862,6 +1127,94 @@ mod tests {
         )
         .with_detected_format("python")
         .with_text_status(TextStatus::Text, Some(1)))
+    }
+
+    /// LIT-57: the two facts a cross-file propagation pass types receivers
+    /// from. The scope fields are what make them useful, so they are asserted
+    /// directly rather than inferred from a resolved edge downstream.
+    #[test]
+    fn member_calls_and_bindings_carry_their_scope() -> Result<(), Box<dyn std::error::Error>> {
+        let artifact = python_artifact("src/app.py")?;
+        let analysis = PythonAnalyzer.analyze(
+            &artifact,
+            "\
+import numpy as np
+
+provider = Provider()
+
+
+class Encoder:
+    def dump(self):
+        self.dumps()
+
+    def helper(self):
+        local = Helper()
+        local.run()
+
+
+def free():
+    np.array()
+    other.method()
+
+
+def annotated(app: Flask, plain, opt: Optional[int], aliased: np.NDArray):
+    app.run()
+",
+        );
+
+        let member_calls: Vec<_> = analysis
+            .member_calls
+            .iter()
+            .map(|call| {
+                (
+                    call.receiver.as_str(),
+                    call.method.as_str(),
+                    call.enclosing_class.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            member_calls,
+            vec![
+                // `self` is typed by the class it sits in.
+                ("self", "dumps", Some("Encoder")),
+                ("local", "run", Some("Encoder")),
+                // Outside any class there is no `self` type to carry.
+                ("other", "method", None),
+                // The annotated parameter's call, typed by the binding below.
+                ("app", "run", None),
+            ],
+            "`np.array()` must be absent: `np` aliases a module, not an object",
+        );
+
+        let bindings: Vec<_> = analysis
+            .bindings
+            .iter()
+            .map(|binding| {
+                (
+                    binding.name.as_str(),
+                    binding.constructor.as_str(),
+                    binding.is_module_level,
+                )
+            })
+            .collect();
+        assert_eq!(
+            bindings,
+            vec![
+                // Module level: importers can see this one.
+                ("provider", "Provider", true),
+                // Function-local: they cannot.
+                ("local", "Helper", false),
+                // LIT-45.5: an annotated parameter types its name like a
+                // construction. `plain` has no annotation, `Optional[int]` is
+                // composite, and `np.NDArray` canonicalizes through the
+                // import alias map exactly as constructors do.
+                ("app", "Flask", false),
+                ("aliased", "numpy.NDArray", false),
+            ],
+        );
+
+        Ok(())
     }
 
     #[test]

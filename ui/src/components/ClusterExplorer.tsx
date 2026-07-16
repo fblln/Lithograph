@@ -5,6 +5,7 @@ import type { RepositoryTension } from '../api/tensions'
 import { deriveClusterInsights, type ClusterInsight } from '../clusterInsights'
 import { computeClusterLayout } from '../graph/clusterLayout'
 import { deriveClusterIdentities } from '../clusterIdentity'
+import { ProvenanceTags } from './ProvenanceTags'
 
 export function ClusterExplorer({ layout, clusters, entryPoints = [], tensions = [], scopedClusterId, interClusterOnly, onScope, onInterClusterOnly, onFocus, onRelatedEntity }: { layout: LayoutResult; clusters: ArchitectureCluster[]; entryPoints?: ArchitectureNodeSummary[]; tensions?: RepositoryTension[]; scopedClusterId?: string; interClusterOnly: boolean; onScope: (cluster?: ArchitectureCluster) => void; onInterClusterOnly: (enabled: boolean) => void; onFocus: (id: string) => void; onRelatedEntity: (id: string) => void }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -43,6 +44,7 @@ export function ClusterExplorer({ layout, clusters, entryPoints = [], tensions =
         <p>{identity?.entryPoints.length ?? 0} entry points · {identity?.incoming.length ?? 0} incoming / {identity?.outgoing.length ?? 0} outgoing dependencies</p>
         <p>{insight.bridgeNodes.length} bridge nodes · {insight.boundaryEdges} boundary edges · {insight.tensions.length} tensions{identity?.highestSeverity ? ` · highest ${identity.highestSeverity}` : ''}</p>
         {identity && <p style={{ color: 'var(--atlas-text-dim)' }}>{identity.boundaryInterpretation}</p>}
+        <ProvenanceTags tags={cluster.tags ?? []} label={`Cluster provenance tags for ${cluster.id}`} />
         {isExpanded && <div className="mt-2 border-t pt-2" style={{ borderColor: 'var(--atlas-border)' }}>
           <p className="mb-1 font-semibold">Bridge nodes</p>
           <div className="flex flex-wrap gap-1">{insight.bridgeNodes.slice(0, 8).map((id) => <button key={id} type="button" onClick={() => onFocus(id)} title={id} className="max-w-full truncate rounded px-1.5 py-0.5" style={{ background: 'var(--atlas-chip)', color: 'var(--atlas-accent)' }}>{shortName(id)}</button>)}</div>

@@ -9,12 +9,16 @@ use crate::graph::index::{node_label, node_name};
 use crate::graph::{
     ArchitectureAspect, Graph, GraphNode, GraphNodeId, GraphStore, KnowledgeIndex, LayoutRequest,
     LayoutSnapshotStore, Relation, RelationKind, SearchParams, TagIndex, TraceDirection,
-    TraceParams, compute_layout_cached, derive_tags, resolve_expression,
+    TraceParams, cluster_display_tags, compute_layout_cached, derive_tags, relation_display_tags,
+    resolve_expression, tension_display_tags,
 };
 use crate::graph::{HealthThresholds, detect_health, score_tensions};
 use crate::graph_docs::generate_graph_docs;
 use crate::inventory::{RepositoryWalker, WalkOptions};
 use crate::plan::ModulePlanner;
+use crate::research_feedback::{
+    AnswerOutcome, AnswerResultInput, ResearchFeedbackStore, unix_timestamp_now,
+};
 use crate::resolve::explain_environment;
 use crate::run::{RepositorySnapshot, RunMetadata};
 use crate::search::{CodeSearch, CodeSearchParams};
@@ -60,6 +64,18 @@ pub const MCP_TOOLS: &[McpToolInfo] = &[
     McpToolInfo {
         name: "read_research_memory",
         description: "Returns the versioned research AgentMemory index.",
+    },
+    McpToolInfo {
+        name: "save_research_result",
+        description: "Records an answer outcome. Params: question, answer, cited_node_ids, outcome, correction?, recorded_at?.",
+    },
+    McpToolInfo {
+        name: "reflect_research",
+        description: "Reflects saved outcomes over current graph nodes. Params: now?.",
+    },
+    McpToolInfo {
+        name: "read_research_lessons",
+        description: "Returns the versioned reflected research lessons artifact.",
     },
     McpToolInfo {
         name: "list_documentable_subsystems",
@@ -287,6 +303,7 @@ struct RelatedRelation {
     evidence: Vec<NodeEvidence>,
     resolver_strategy: Option<String>,
     confidence: crate::domain::Confidence,
+    tags: Vec<crate::graph::GraphTag>,
 }
 
 /// Deterministic wiki MCP handler.
@@ -332,6 +349,54 @@ impl WikiMcpServer {
                 let value: Value = serde_json::from_str(&std::fs::read_to_string(path)?)?;
                 Ok(value)
             }
+            "save_research_result" => {
+                let question = required_string_param(&request.params, "question")?;
+                let answer = required_string_param(&request.params, "answer")?;
+                let outcome = required_string_param(&request.params, "outcome")?
+                    .parse::<AnswerOutcome>()
+                    .map_err(std::io::Error::other)?;
+                let cited_node_ids = request
+                    .params
+                    .get("cited_node_ids")
+                    .and_then(Value::as_array)
+                    .ok_or("save_research_result requires params.cited_node_ids")?
+                    .iter()
+                    .map(|value| {
+                        value
+                            .as_str()
+                            .map(str::to_owned)
+                            .ok_or("cited_node_ids must contain only strings")
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let correction = request
+                    .params
+                    .get("correction")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
+                let recorded_at = optional_u64_param(&request.params, "recorded_at")?
+                    .map_or_else(unix_timestamp_now, Ok)?;
+                Ok(serde_json::to_value(
+                    ResearchFeedbackStore::new(&self.repo_root).save_result(AnswerResultInput {
+                        question,
+                        answer,
+                        cited_node_ids,
+                        outcome,
+                        correction,
+                        recorded_at,
+                    })?,
+                )?)
+            }
+            "reflect_research" => {
+                let now = optional_u64_param(&request.params, "now")?
+                    .map_or_else(unix_timestamp_now, Ok)?;
+                let graph = self.load_graph()?;
+                Ok(serde_json::to_value(
+                    ResearchFeedbackStore::new(&self.repo_root).reflect(&graph, now)?,
+                )?)
+            }
+            "read_research_lessons" => Ok(serde_json::to_value(
+                ResearchFeedbackStore::new(&self.repo_root).read_lessons()?,
+            )?),
             "list_documentable_subsystems" => {
                 let graph = self.load_graph()?;
                 Ok(serde_json::to_value(list_subsystems(&graph))?)
@@ -559,14 +624,16 @@ impl WikiMcpServer {
             }
             "get_repository_tensions" => {
                 let graph = self.load_graph()?;
-                Ok(serde_json::to_value(score_tensions(
-                    &graph,
-                    &HealthThresholds::default(),
-                    &[],
-                ))?)
+                let snapshot_id = graph_snapshot_id(&graph)?;
+                let mut tensions = score_tensions(&graph, &HealthThresholds::default(), &[]);
+                for tension in &mut tensions {
+                    tension.tags = tension_display_tags(tension, &snapshot_id);
+                }
+                Ok(serde_json::to_value(tensions)?)
             }
             "get_node_detail" => {
                 let graph = self.load_graph()?;
+                let snapshot_id = graph_snapshot_id(&graph)?;
                 let node_id = request
                     .params
                     .get("node_id")
@@ -576,6 +643,7 @@ impl WikiMcpServer {
                     &self.repo_root,
                     &graph,
                     node_id,
+                    &snapshot_id,
                 )?)?)
             }
             "get_graph_document" | "regenerate_graph_document" => {
@@ -741,9 +809,12 @@ impl WikiMcpServer {
             "get_architecture" => {
                 let graph = self.load_graph()?;
                 let aspects = architecture_aspects(&request.params)?;
-                Ok(serde_json::to_value(
-                    KnowledgeIndex::new(&graph).architecture(aspects.as_ref()),
-                )?)
+                let snapshot_id = graph_snapshot_id(&graph)?;
+                let mut summary = KnowledgeIndex::new(&graph).architecture(aspects.as_ref());
+                for cluster in &mut summary.clusters {
+                    cluster.tags = cluster_display_tags(cluster, &snapshot_id);
+                }
+                Ok(serde_json::to_value(summary)?)
             }
             "create_adr" => {
                 let params = &request.params;
@@ -1002,6 +1073,7 @@ fn node_detail(
     repo_root: &Path,
     graph: &Graph,
     node_id: &str,
+    snapshot_id: &str,
 ) -> Result<NodeDetail, Box<dyn std::error::Error>> {
     let node = graph
         .nodes
@@ -1039,9 +1111,9 @@ fn node_detail(
     let references = graph
         .relations
         .iter()
-        .filter_map(|relation| relation_for_node(graph, relation, node.id()))
+        .filter_map(|relation| relation_for_node(graph, relation, node.id(), snapshot_id))
         .collect();
-    let tags = derive_tags(graph, "current")
+    let tags = derive_tags(graph, snapshot_id)
         .into_iter()
         .filter(|tag| tag.entity_id == node.id().as_str())
         .collect();
@@ -1158,6 +1230,7 @@ fn relation_for_node(
     graph: &Graph,
     relation: &Relation,
     node_id: &GraphNodeId,
+    snapshot_id: &str,
 ) -> Option<RelatedRelation> {
     let (direction, counterpart) = if relation.source == *node_id {
         ("outbound", related_node(graph, &relation.target)?)
@@ -1177,7 +1250,29 @@ fn relation_for_node(
             .as_ref()
             .map(|value| value.resolver_strategy.clone()),
         confidence: relation.confidence,
+        tags: relation_display_tags(relation, snapshot_id),
     })
+}
+
+fn required_string_param(params: &Value, name: &str) -> Result<String, Box<dyn std::error::Error>> {
+    params
+        .get(name)
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| format!("missing or invalid string param `{name}`").into())
+}
+
+fn optional_u64_param(
+    params: &Value,
+    name: &str,
+) -> Result<Option<u64>, Box<dyn std::error::Error>> {
+    match params.get(name) {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => value
+            .as_u64()
+            .map(Some)
+            .ok_or_else(|| format!("param `{name}` must be an unsigned integer").into()),
+    }
 }
 
 fn search_params(params: &Value) -> SearchParams {
@@ -1382,7 +1477,7 @@ mod tests {
         regenerate_graph_document,
     };
     use crate::generation::MockModel;
-    use crate::graph::Graph;
+    use crate::graph::{Graph, GraphStore};
     use crate::graph_docs::generate_graph_docs;
     use crate::orchestrate::run_init;
     use serde_json::Value;
@@ -1506,6 +1601,57 @@ mod tests {
     }
 
     #[test]
+    fn research_feedback_tools_save_reflect_and_read_lessons()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let server = WikiMcpServer::new(temp.path());
+        let node_id = GraphStore::new(temp.path()).load()?.graph.nodes[0]
+            .id()
+            .as_str()
+            .to_owned();
+
+        for (id, question) in [(1, "where?"), (2, "which?")] {
+            let response = server.handle(McpRequest {
+                id: json!(id),
+                tool: "save_research_result".to_owned(),
+                params: json!({
+                    "question": question,
+                    "answer": "here",
+                    "cited_node_ids": [node_id.clone()],
+                    "outcome": "useful",
+                    "recorded_at": 100
+                }),
+            });
+            assert!(response.error.is_none(), "{:?}", response.error);
+        }
+        let reflected = server.handle(McpRequest {
+            id: json!(3),
+            tool: "reflect_research".to_owned(),
+            params: json!({ "now": 100 }),
+        });
+        assert!(reflected.error.is_none(), "{:?}", reflected.error);
+        assert_eq!(
+            reflected.result.as_ref().and_then(|value| value
+                .get("preferred_sources")
+                .and_then(Value::as_array)
+                .map(Vec::len)),
+            Some(1)
+        );
+        let read = server.handle(McpRequest {
+            id: json!(4),
+            tool: "read_research_lessons".to_owned(),
+            params: json!({}),
+        });
+        assert_eq!(read.result, reflected.result);
+        Ok(())
+    }
+
+    #[test]
     fn get_graph_layout_supports_overview_and_detail_and_caches_results()
     -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::TempDir::new()?;
@@ -1533,6 +1679,15 @@ mod tests {
             .and_then(Value::as_array)
             .ok_or("expected nodes array")?;
         assert_eq!(nodes.len(), 5);
+        let edge = overview_result
+            .get("edges")
+            .and_then(Value::as_array)
+            .and_then(|edges| edges.first())
+            .ok_or("expected a layout edge")?;
+        assert!(edge.get("id").is_some_and(Value::is_string));
+        assert!(edge.get("resolution").is_some_and(Value::is_string));
+        assert!(edge.get("confidence").is_some_and(Value::is_string));
+        assert!(edge.get("resolver_strategy").is_some());
         assert!(
             overview_result
                 .get("budget")
@@ -1626,6 +1781,22 @@ mod tests {
             detail["tags"]
                 .as_array()
                 .is_some_and(|items| !items.is_empty())
+        );
+        assert!(
+            detail["tags"]
+                .as_array()
+                .is_some_and(|items| items.iter().all(|tag| tag["graph_snapshot_id"]
+                    .as_str()
+                    .is_some_and(|snapshot| snapshot.starts_with("blake3:"))))
+        );
+        assert!(
+            detail["references"]
+                .as_array()
+                .is_some_and(|items| items.iter().all(|relation| relation["tags"]
+                    .as_array()
+                    .is_some_and(|tags| tags.iter().all(|tag| tag["graph_snapshot_id"]
+                        .as_str()
+                        .is_some_and(|snapshot| snapshot.starts_with("blake3:"))))))
         );
 
         let subsystem_doc = server.handle(McpRequest {

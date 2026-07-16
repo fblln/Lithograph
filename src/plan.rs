@@ -937,7 +937,7 @@ module-plan:directory:generated|Directory|generated|4|37
 module-plan:directory:root|Directory|root|6|78
 module-plan:directory:vendor|Directory|vendor|1|18
 module-plan:directory:web|Directory|web|33|151
-module-plan:documentation:documentation|Documentation|Documentation|13|1081
+module-plan:documentation:documentation|Documentation|Documentation|10|1081
 module-plan:infrastructure:infrastructure|Infrastructure|Infrastructure|19|384
 module-plan:python-package:python-app|PythonPackage|python_app|20|370
 module-plan:rust-crate:fixture-worker|RustCrate|fixture-worker|16|365"

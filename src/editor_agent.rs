@@ -750,6 +750,7 @@ mod tests {
         };
         let drift = DriftReport {
             findings: vec![finding],
+            ..DriftReport::default()
         };
         let context = AgentContext::new()
             .with(

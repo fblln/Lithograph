@@ -58,6 +58,8 @@ pub enum Command {
     Affected(AffectedArgs),
     /// Create, read, update, delete, and list architecture decision records.
     Adr(AdrCommand),
+    /// Record answer outcomes and reflect them into reusable research lessons.
+    Research(ResearchCommand),
     /// Poll a repository for staleness against its last recorded snapshot.
     /// Disabled by default beyond this explicit command: reports staleness
     /// only, unless `--auto-index` is passed.
@@ -66,6 +68,80 @@ pub enum Command {
     /// Claude, Gemini, Zed). Without `--target`, only detects and reports;
     /// `--apply` requires `--target` and is the only way anything is written.
     IntegrateMcp(IntegrateMcpArgs),
+}
+
+/// Research feedback command namespace.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct ResearchCommand {
+    /// Feedback operation.
+    #[command(subcommand)]
+    pub target: ResearchTarget,
+}
+
+/// Research feedback operations.
+#[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
+pub enum ResearchTarget {
+    /// Record the observed outcome of one answer.
+    SaveResult(ResearchSaveResultArgs),
+    /// Aggregate recorded outcomes into deterministic lessons.
+    Reflect(ResearchReflectArgs),
+}
+
+/// Arguments for `research save-result`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct ResearchSaveResultArgs {
+    /// Repository path.
+    pub path: PathBuf,
+    /// Question that was answered.
+    #[arg(long)]
+    pub question: String,
+    /// Answer that was evaluated.
+    #[arg(long)]
+    pub answer: String,
+    /// Cited graph node ids, comma-delimited or repeated.
+    #[arg(long = "node", value_delimiter = ',')]
+    pub cited_node_ids: Vec<String>,
+    /// Observed outcome.
+    #[arg(long, value_enum)]
+    pub outcome: ResearchOutcomeArg,
+    /// Replacement guidance; required for a corrected outcome.
+    #[arg(long)]
+    pub correction: Option<String>,
+    /// Unix timestamp in seconds; defaults to the current time.
+    #[arg(long)]
+    pub recorded_at: Option<u64>,
+}
+
+/// Arguments for `research reflect`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct ResearchReflectArgs {
+    /// Repository path.
+    pub path: PathBuf,
+    /// Unix timestamp in seconds used for all decay calculations.
+    #[arg(long)]
+    pub now: Option<u64>,
+}
+
+/// CLI spelling for an answer outcome.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[value(rename_all = "snake_case")]
+pub enum ResearchOutcomeArg {
+    /// The answer and its cited sources were useful.
+    Useful,
+    /// The cited sources led to a dead end.
+    DeadEnd,
+    /// The answer needed explicit replacement guidance.
+    Corrected,
+}
+
+impl From<ResearchOutcomeArg> for crate::research_feedback::AnswerOutcome {
+    fn from(value: ResearchOutcomeArg) -> Self {
+        match value {
+            ResearchOutcomeArg::Useful => Self::Useful,
+            ResearchOutcomeArg::DeadEnd => Self::DeadEnd,
+            ResearchOutcomeArg::Corrected => Self::Corrected,
+        }
+    }
 }
 
 /// Arguments for `integrate-mcp`.
@@ -244,6 +320,16 @@ pub enum GraphTarget {
     Export(GraphExportArgs),
     /// Import a compressed graph artifact into this repository's graph store.
     Import(GraphImportArgs),
+    /// Render the deterministic report for the current graph snapshot.
+    Report(GraphReportArgs),
+}
+
+/// Arguments for `graph report`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct GraphReportArgs {
+    /// Repository path with a generated Lithograph graph store.
+    #[arg(default_value = ".")]
+    pub path: PathBuf,
 }
 
 /// Arguments for `path`.
@@ -372,6 +458,11 @@ pub struct ViewerArgs {
 pub struct ServeArgs {
     /// Repository path with generated Lithograph docs.
     pub path: PathBuf,
+    /// Additional explicitly allowlisted repositories, as `ID=PATH`.
+    /// Repeat for multiple projects. IDs are stable URL-safe names; no
+    /// parent directory is scanned for repositories.
+    #[arg(long = "project", value_name = "ID=PATH")]
+    pub projects: Vec<String>,
     /// Directory of static UI assets to serve, e.g. a built graph explorer
     /// bundle. Relative paths are resolved against `path`. Missing
     /// directories are tolerated: the graph API still serves, but static
@@ -579,10 +670,11 @@ mod tests {
     use super::{
         AdrCommand, AdrCreateArgs, AdrListArgs, AdrStatusArg, AdrTarget, AdrUpdateArgs, AskArgs,
         Cli, Command, DriftArgs, GoldenArgs, GraphCommand, GraphExportArgs, GraphImportArgs,
-        GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectDsmArgs,
-        InspectEnvArgs, InspectGraphArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs,
-        McpExportArgs, McpServerArgs, OutputFormat, QualityArgs, ServeArgs, ValidateMermaidArgs,
-        ViewerArgs,
+        GraphReportArgs, GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand,
+        InspectDsmArgs, InspectEnvArgs, InspectGraphArgs, InspectModulesArgs, InspectTarget,
+        IntegrateAgentsArgs, McpExportArgs, McpServerArgs, OutputFormat, QualityArgs,
+        ResearchCommand, ResearchOutcomeArg, ResearchReflectArgs, ResearchSaveResultArgs,
+        ResearchTarget, ServeArgs, ValidateMermaidArgs, ViewerArgs,
     };
     use std::path::PathBuf;
 
@@ -893,6 +985,32 @@ mod tests {
                 }),
             }))
         );
+        assert_eq!(
+            Cli::parse_from_args(["lithograph", "graph", "report", "fixtures/polyglot"]).command,
+            Some(Command::Graph(GraphCommand {
+                target: GraphTarget::Report(GraphReportArgs {
+                    path: PathBuf::from("fixtures/polyglot"),
+                }),
+            }))
+        );
+        assert_eq!(
+            Cli::parse_from_args([
+                "lithograph",
+                "serve",
+                "fixtures/polyglot",
+                "--project",
+                "api=/repos/api",
+                "--project",
+                "web=/repos/web",
+            ])
+            .command,
+            Some(Command::Serve(ServeArgs {
+                path: PathBuf::from("fixtures/polyglot"),
+                projects: vec!["api=/repos/api".to_owned(), "web=/repos/web".to_owned()],
+                assets: PathBuf::from(".lithograph/viewer"),
+                port: 4317,
+            }))
+        );
     }
 
     #[test]
@@ -1025,6 +1143,7 @@ mod tests {
             Cli::parse_from_args(["lithograph", "serve", "fixtures/polyglot"]).command,
             Some(Command::Serve(ServeArgs {
                 path: PathBuf::from("fixtures/polyglot"),
+                projects: Vec::new(),
                 assets: PathBuf::from(".lithograph/viewer"),
                 port: 4317,
             }))
@@ -1042,6 +1161,7 @@ mod tests {
             .command,
             Some(Command::Serve(ServeArgs {
                 path: PathBuf::from("fixtures/polyglot"),
+                projects: Vec::new(),
                 assets: PathBuf::from("ui/dist"),
                 port: 0,
             }))
@@ -1088,6 +1208,50 @@ mod tests {
             cli.command,
             Some(Command::IntegrateAgents(IntegrateAgentsArgs {
                 path: PathBuf::from("fixtures/polyglot"),
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_research_feedback_commands() {
+        assert_eq!(
+            Cli::parse_from_args([
+                "lithograph",
+                "research",
+                "save-result",
+                ".",
+                "--question",
+                "where?",
+                "--answer",
+                "here",
+                "--node",
+                "b,a",
+                "--outcome",
+                "dead_end",
+                "--recorded-at",
+                "100",
+            ])
+            .command,
+            Some(Command::Research(ResearchCommand {
+                target: ResearchTarget::SaveResult(ResearchSaveResultArgs {
+                    path: PathBuf::from("."),
+                    question: "where?".to_owned(),
+                    answer: "here".to_owned(),
+                    cited_node_ids: vec!["b".to_owned(), "a".to_owned()],
+                    outcome: ResearchOutcomeArg::DeadEnd,
+                    correction: None,
+                    recorded_at: Some(100),
+                }),
+            }))
+        );
+        assert_eq!(
+            Cli::parse_from_args(["lithograph", "research", "reflect", ".", "--now", "200",])
+                .command,
+            Some(Command::Research(ResearchCommand {
+                target: ResearchTarget::Reflect(ResearchReflectArgs {
+                    path: PathBuf::from("."),
+                    now: Some(200),
+                }),
             }))
         );
     }

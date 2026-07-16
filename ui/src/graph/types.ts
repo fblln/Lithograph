@@ -18,9 +18,13 @@ export interface PositionedNode {
 }
 
 export interface LayoutEdge {
+  id?: string
   source: string
   target: string
   kind: string
+  resolution?: 'HybridResolved' | 'SyntaxOnly' | 'Fallback'
+  confidence?: 'Low' | 'High'
+  resolver_strategy?: string | null
   count?: number
   kinds?: Array<{ kind: string; count: number }>
 }

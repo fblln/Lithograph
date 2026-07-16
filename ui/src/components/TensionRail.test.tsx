@@ -7,7 +7,7 @@ describe('TensionRail', () => {
   afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
   it('switches heatmap labels and focuses a hotspot', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ result: { content: [{ text: JSON.stringify([{ id: 't1', category: 'CouplingHotspot', severity: 'High', confidence: 'High', affected_nodes: ['symbol:a'], metric_inputs: { degree: 9 }, evidence_references: ['degree=9'], follow_up_queries: ['MATCH (n)'], explanation: 'tight coupling' }]) }] } }) }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ result: { content: [{ text: JSON.stringify([{ id: 't1', category: 'CouplingHotspot', severity: 'High', confidence: 'High', affected_nodes: ['symbol:a'], metric_inputs: { degree: 9 }, evidence_references: ['degree=9'], follow_up_queries: ['MATCH (n)'], explanation: 'tight coupling', tags: [{ id: 'tag:risk', entity_id: 't1', namespace: 'risk', value: 'high', source: 'Tension', confidence: 'High', evidence: ['degree=9'], inherited_from: null, graph_snapshot_id: 'g1' }] }]) }] } }) }))
     const focus = vi.fn()
     const selectTension = vi.fn()
     const inspect = vi.fn()
@@ -21,6 +21,7 @@ describe('TensionRail', () => {
     expect(focus).toHaveBeenCalledWith('symbol:a')
     expect(selectTension).toHaveBeenCalledWith(expect.objectContaining({ id: 't1' }))
     expect(screen.getByText('Why this hotspot matters')).toBeInTheDocument()
+    expect(screen.getByLabelText('Tension provenance tags for t1')).toHaveTextContent('Tension · High · evidence 1')
     expect(screen.getAllByText('degree=9')).toHaveLength(2)
     expect(screen.getByText('MATCH (n)')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'symbol:a' }))

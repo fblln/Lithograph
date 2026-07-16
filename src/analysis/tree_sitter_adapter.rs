@@ -552,6 +552,13 @@ fn collect_node_facts(
     if adapter.import_kinds.contains(&kind) {
         push_fact(&mut output.imports, node, kind, source);
     }
+    // LIT-45.4: CommonJS `require("./x")` is an import spelled as a call, so
+    // no node-kind list can capture it. Only a literal string argument counts;
+    // `require(expr)` names nothing statically and capturing it would send a
+    // fabricated reference into the resolver.
+    if is_commonjs_require_with_literal(adapter, node, kind, source) {
+        push_fact(&mut output.imports, node, kind, source);
+    }
     if adapter.symbol_kinds.contains(&kind) {
         push_fact(&mut output.symbols, node, kind, source);
     }
@@ -568,6 +575,39 @@ fn collect_node_facts(
     for child in node.children(&mut cursor) {
         collect_node_facts(adapter, child, source, output);
     }
+}
+
+/// True for a `require("literal")` call in a CommonJS-capable language.
+///
+/// The callee must be exactly the identifier `require` (not `foo.require`)
+/// and the sole argument a plain string -- template strings and expressions
+/// are dynamic imports whose target is unknowable from syntax (LIT-45.4 AC3).
+fn is_commonjs_require_with_literal(
+    adapter: &TreeSitterParserAdapter,
+    node: tree_sitter::Node<'_>,
+    kind: &str,
+    source: &str,
+) -> bool {
+    if kind != "call_expression"
+        || !matches!(adapter.language_id, "typescript" | "tsx" | "javascript")
+    {
+        return false;
+    }
+    let Some(function) = node.child_by_field_name("function") else {
+        return false;
+    };
+    if function.kind() != "identifier" || node_text(function, source) != "require" {
+        return false;
+    }
+    let Some(arguments) = node.child_by_field_name("arguments") else {
+        return false;
+    };
+    let mut cursor = arguments.walk();
+    let named: Vec<_> = arguments
+        .children(&mut cursor)
+        .filter(|child| child.is_named())
+        .collect();
+    matches!(named.as_slice(), [argument] if argument.kind() == "string")
 }
 
 fn push_fact(
@@ -665,6 +705,40 @@ mod tests {
             10,
         )
         .with_text_status(TextStatus::Text, Some(1)))
+    }
+
+    /// LIT-45.4: `require("literal")` is an import fact; `require(expr)` and
+    /// member `.require(...)` calls are not, and a non-CJS language never
+    /// captures calls at all.
+    #[test]
+    fn commonjs_require_with_a_literal_is_an_import_fact() {
+        let source = "\
+const local = require('./local');
+const pkg = require(\"react\");
+const dynamic = require(path.join(base, 'x'));
+const template = require(`./tpl-${name}`);
+const notGlobal = loader.require('./other');
+";
+        let output = TreeSitterParserAdapter::javascript().parse(source);
+        let imports: Vec<&str> = output
+            .imports
+            .iter()
+            .map(|fact| fact.text.as_str())
+            .collect();
+
+        assert_eq!(
+            imports,
+            vec!["require('./local')", "require(\"react\")"],
+            "only literal global require calls may become import facts",
+        );
+
+        // The same shapes in TypeScript, plus proof that a language without
+        // the convention (Python has a `require` fixture-name collision risk
+        // in test corpora) captures nothing.
+        let ts = TreeSitterParserAdapter::typescript().parse("const a = require('./b');\n");
+        assert_eq!(ts.imports.len(), 1);
+        let python = TreeSitterParserAdapter::python().parse("a = require('./b')\n");
+        assert!(python.imports.is_empty());
     }
 
     /// Highest line touched by any fact in the output, mirroring what

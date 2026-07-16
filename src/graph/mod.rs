@@ -14,6 +14,7 @@ pub mod model;
 pub mod parity_benchmark;
 pub mod pipeline;
 pub mod query_api;
+pub mod report;
 pub mod semantic;
 pub mod store;
 pub mod tags;
@@ -48,9 +49,10 @@ pub use layout::{
     LayoutSnapshot, LayoutSnapshotStore, PositionedNode, compute_layout, compute_layout_cached,
 };
 pub use model::{
-    ArtifactNode, CommandNode, ConfigNode, ConfigNodeKind, ContainerImageNode, DocumentationNode,
-    EnvVarNode, Graph, GraphNode, GraphNodeId, ModuleLanguage, ModuleNode, PackageNode, Relation,
-    RelationKind, RelationProvenance, RelationResolution, SymbolKind, SymbolNode, UnresolvedNode,
+    ArtifactNode, CommandNode, CommandProvenance, ConfigNode, ConfigNodeKind, ContainerImageNode,
+    DocumentationNode, EnvVarNode, Graph, GraphNode, GraphNodeId, ModuleLanguage, ModuleNode,
+    PackageNode, Relation, RelationKind, RelationProvenance, RelationResolution, SymbolKind,
+    SymbolNode, UnresolvedNode,
 };
 pub use parity_benchmark::{ParityBenchmark, measure as measure_parity_benchmark};
 pub use pipeline::{
@@ -59,6 +61,7 @@ pub use pipeline::{
     GraphBuildTraceConfig, GraphBuildTraceDetail, GraphDecisionTrace,
 };
 pub use query_api::{LadybugQueryApi, NeighborhoodQuery, RawQueryAccess};
+pub use report::{GraphReport, graph_report_path, persist_graph_report};
 pub use semantic::{
     SemanticClassMatch, SemanticClassProfile, SemanticScore, class_profiles, filter_classes,
 };
@@ -67,7 +70,10 @@ pub use store::{
     GraphArtifactMetadata, GraphArtifactReport, GraphSnapshot, GraphStore, GraphStoreMetadata,
     GraphStoreWriteOutcome,
 };
-pub use tags::{GraphTag, TagIndex, TagSource, derive_tags, inherit_tag, resolve_expression};
+pub use tags::{
+    GraphTag, TagIndex, TagSource, cluster_display_tags, derive_tags, inherit_tag,
+    relation_display_tags, resolve_expression, tension_display_tags,
+};
 pub use tensions::{
     RepositoryTension, TENSION_ALGORITHM_VERSION, TensionCategory, TensionSnapshot,
     TensionSnapshotStore, score_tensions,

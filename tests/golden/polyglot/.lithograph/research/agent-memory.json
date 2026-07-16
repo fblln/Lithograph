@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "input_hash": "0001a207e93d1e18cb1d20b2f4f90205de9cc3aa6752559f3a33fb149a920742",
+  "input_hash": "8ea7a4904079ddd0b12f041278f99678422f58895024c79231ccc0c78b16dc8a",
   "produced_by_stage": "Research",
   "report_keys": [
     "system-context",
@@ -12,7 +12,7 @@
     "deployment"
   ],
   "system_context": {
-    "project_summary": "Repository contains 22 artifact(s), 152 graph node(s), 177 graph relation(s), and 11 documentation module(s).",
+    "project_summary": "Repository contains 22 artifact(s), 148 graph node(s), 173 graph relation(s), and 11 documentation module(s).",
     "included_components": [
       "Configuration (Configuration)",
       "assets (Directory)",
@@ -39,14 +39,14 @@
       "subprocess",
       "typescript",
       "vite",
-      ".github/workflows/ci.yml",
       "/usr/local/bin/worker",
       "/var/cache/ridgeline",
       "App",
       "None",
       "React",
       "RouteBaker::from_env",
-      "RouteSummary"
+      "RouteSummary",
+      "assets/"
     ],
     "evidence": [
       {
@@ -150,7 +150,7 @@
       {
         "name": "Documentation",
         "kind": "Documentation",
-        "member_count": 14,
+        "member_count": 10,
         "evidence": [
           "artifact:LICENSE",
           "artifact:README.md",
@@ -215,7 +215,6 @@
       "README.md -[References]-> vendor/example/lib.rs (High)",
       "README.md -[References]-> web/index.html (High)",
       "README.md -[References]-> web/src/App.tsx (High)",
-      "README.md -[References]-> .github/workflows/ci.yml (High)",
       "assets/logo.svg -[References]-> xmlns=\"http://www.w3.org/2000/svg (Low)",
       "assets/logo.svg -[References]-> xmlns=\"http://www.w3.org/2000/svg (Low)",
       "config/schema.json -[References]-> https://json-schema.org/draft/2020-12/schema (Low)",
@@ -224,15 +223,16 @@
       "config/settings.yaml -[References]-> /var/cache/ridgeline (Low)",
       "config/settings.yaml -[References]-> assets/ (Low)",
       "docs/architecture.md -[References]-> rust/Cargo.toml (High)",
-      "docs/architecture.md -[References]-> rust/ (High)",
-      "docs/architecture.md -[References]-> src/python_app/ (High)",
-      "docs/architecture.md -[References]-> web/ (High)",
       "requirements.txt -[DependsOnPackage]-> pydantic (High)",
       "requirements.txt -[DependsOnPackage]-> pytest (High)",
       "rust/src/bin/worker.rs -[Imports]-> fixture_worker::bake_route (High)",
       "rust/src/bin/worker.rs -[Calls]-> std::env::args (Low)",
       "rust/src/lib.rs -[Imports]-> std (High)",
-      "rust/src/lib.rs -[Calls]-> RouteBaker::from_env (Low)"
+      "rust/src/lib.rs -[Calls]-> RouteBaker::from_env (Low)",
+      "src/python_app/__init__.py -[Imports]-> src.python_app.service (High)",
+      "src/python_app/service.py -[Imports]-> __future__ (High)",
+      "src/python_app/service.py -[Imports]-> json (High)",
+      "src/python_app/service.py -[Imports]-> os (High)"
     ],
     "evidence": [
       {
@@ -512,7 +512,7 @@
       }
     ],
     "architecture_facts": [
-      "knowledge graph schema: 152 node(s), 177 relation(s)",
+      "knowledge graph schema: 148 node(s), 173 relation(s)",
       "container/component candidate: Configuration (Configuration)",
       "container/component candidate: assets (Directory)",
       "container/component candidate: data (Directory)",
@@ -528,7 +528,7 @@
       "Configuration (Configuration) score 99",
       "web (Directory) score 66",
       "python_app (PythonPackage) score 59",
-      "Documentation (Documentation) score 45",
+      "Documentation (Documentation) score 37",
       "fixture-worker (RustCrate) score 37",
       "Infrastructure (Infrastructure) score 31",
       "root (Directory) score 14",
@@ -614,7 +614,7 @@
         "reference": "relation:3"
       },
       {
-        "reference": "relation:153"
+        "reference": "relation:149"
       },
       {
         "reference": "relation:6"
@@ -666,7 +666,6 @@
       "external package: subprocess",
       "external package: typescript",
       "external package: vite",
-      "unresolved reference: .github/workflows/ci.yml",
       "unresolved reference: /usr/local/bin/worker",
       "unresolved reference: /var/cache/ridgeline",
       "unresolved reference: App",
@@ -690,14 +689,15 @@
       "unresolved reference: lang",
       "unresolved reference: main",
       "unresolved reference: meta",
-      "unresolved reference: p"
+      "unresolved reference: p",
+      "unresolved reference: route"
     ],
     "evidence": [
       {
         "reference": "relation:3"
       },
       {
-        "reference": "relation:153"
+        "reference": "relation:149"
       },
       {
         "reference": "relation:6"
@@ -737,7 +737,7 @@
       "Configuration (Configuration) score 99",
       "web (Directory) score 66",
       "python_app (PythonPackage) score 59",
-      "Documentation (Documentation) score 45",
+      "Documentation (Documentation) score 37",
       "fixture-worker (RustCrate) score 37",
       "Infrastructure (Infrastructure) score 31",
       "root (Directory) score 14",

@@ -1,4 +1,5 @@
 import { callTool } from './rpc'
+import type { GraphTag } from './tags'
 
 export interface GraphDocumentSection {
   id: string
@@ -11,7 +12,7 @@ export interface GraphDocumentSection {
   confidence: string
   graph_snapshot_id: string
   deep_link_target: string
-  tags: Array<{ id: string; namespace: string; value: string; source: string; confidence: string }>
+  tags: GraphTag[]
 }
 
 export interface GraphDocumentResult {

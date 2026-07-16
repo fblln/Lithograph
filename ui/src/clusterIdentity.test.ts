@@ -19,7 +19,7 @@ describe('cluster identity', () => {
       id: 'cluster:artifact:src/python_app/service.py',
       members: ['service'],
       top_nodes: [{ id: 'service', label: 'Artifact', name: 'service.py', file_path: 'src/python_app/service.py', in_degree: 2, out_degree: 8 }],
-    })).toBe('Python App subsystem')
+    })).toBe('python_app subsystem')
     expect(humanClusterNameFromEvidence({ id: 'cluster:opaque', members: [] })).toBe('Opaque subsystem')
   })
 
@@ -47,5 +47,28 @@ describe('cluster identity', () => {
     const names = [...result.values()].map((identity) => identity.name)
     expect(new Set(names).size).toBe(2)
     expect(names.every((name) => name.startsWith('Web frontend · '))).toBe(true)
+  })
+
+  it('names clusters from paths below a shared hash root', () => {
+    const hash = '0123456789abcdef0123456789abcdef'
+    const cluster: VisualCluster = { id: `cluster:artifact:.cache/${hash}/domain/model.rs`, members: ['model', 'service'], totalMembers: 2, center: [0, 0, 0], radius: 1 }
+    const identities = deriveClusterIdentities([cluster], [
+      node('model', `.cache/${hash}/domain/model.rs`),
+      node('service', `.cache/${hash}/domain/service.rs`),
+    ], [])
+    expect(identities.get(cluster.id)?.name).toBe('domain subsystem')
+    expect(identities.get(cluster.id)?.responsibility).not.toContain(hash)
+  })
+
+  it('preserves path-derived casing and punctuation', () => {
+    const cluster: VisualCluster = { id: 'custom', members: ['custom'], totalMembers: 1, center: [0, 0, 0], radius: 1 }
+    const identity = deriveClusterIdentities([cluster], [node('custom', 'src/my_API-v2/model.rs')], []).get('custom')
+    expect(identity?.name).toBe('my_API-v2 subsystem')
+  })
+
+  it('preserves a root-level representative filename verbatim', () => {
+    const cluster: VisualCluster = { id: 'root-entry', members: ['script'], totalMembers: 1, center: [0, 0, 0], radius: 1 }
+    const identity = deriveClusterIdentities([cluster], [node('script', 'make_celery.py')], []).get('root-entry')
+    expect(identity?.name).toBe('make_celery.py subsystem')
   })
 })

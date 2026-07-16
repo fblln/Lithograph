@@ -8,6 +8,10 @@ export interface VisualCluster {
   analyticalCluster?: ArchitectureCluster
   members: string[]
   totalMembers: number
+  /** Members used for hull geometry after display-only noise suppression. */
+  renderedMembers?: string[]
+  /** Visible unresolved/external members intentionally omitted from the hull. */
+  mutedMemberCount?: number
   fallbackKey?: string
   center: WorldPosition
   radius: number
@@ -26,6 +30,7 @@ export interface ClusterLayoutResult {
   clusters: VisualCluster[]
   membership: Map<string, string>
   links: ClusterLink[]
+  mutedNodeCount?: number
 }
 
 const GLOBAL_ITERATIONS = 180
@@ -48,6 +53,7 @@ export function computeClusterLayout(
   const nodeIds = new Set(orderedNodes.map((node) => node.id))
   const membership = new Map<string, string>()
   const visualClusters: VisualCluster[] = []
+  const nodeById = new Map(orderedNodes.map((node) => [node.id, node]))
 
   for (const cluster of [...clusters].sort((a, b) => a.id.localeCompare(b.id))) {
     const normalizedCluster = {
@@ -60,13 +66,16 @@ export function computeClusterLayout(
       .filter((id) => nodeIds.has(id) && !membership.has(id))
       .sort()
     for (const id of visibleMembers) membership.set(id, cluster.id)
+    const renderedMembers = visibleMembers.filter((id) => !isHullNoise(nodeById.get(id)))
     visualClusters.push({
       id: cluster.id,
       analyticalCluster: normalizedCluster,
       members: visibleMembers,
       totalMembers: normalizedCluster.members.length,
+      renderedMembers,
+      mutedMemberCount: visibleMembers.length - renderedMembers.length,
       center: [0, 0, 0],
-      radius: clusterRadius(Math.max(1, visibleMembers.length)),
+      radius: clusterRadius(Math.max(1, renderedMembers.length)),
     })
   }
 
@@ -82,18 +91,25 @@ export function computeClusterLayout(
     const id = `visual:${fallbackKey}`
     members.sort()
     for (const member of members) membership.set(member, id)
+    const renderedMembers = members.filter((member) => !isHullNoise(nodeById.get(member)))
     visualClusters.push({
       id,
       members,
       totalMembers: members.length,
+      renderedMembers,
+      mutedMemberCount: members.length - renderedMembers.length,
       fallbackKey,
       center: [0, 0, 0],
-      radius: clusterRadius(members.length),
+      radius: clusterRadius(Math.max(1, renderedMembers.length)),
     })
   }
 
+  const renderedClusters = visualClusters.filter((cluster) => (cluster.renderedMembers ?? cluster.members).length > 0)
+  const mutedNodeCount = visualClusters.reduce((count, cluster) => count + (cluster.mutedMemberCount ?? 0), 0)
+  const renderedClusterIds = new Set(renderedClusters.map((cluster) => cluster.id))
   const links = mergeClusterLinks(aggregateClusterLinks(edges, membership), wholeGraphLinks)
-  const centers = simulateClusterCenters(visualClusters, links)
+    .filter((link) => renderedClusterIds.has(link.source) && renderedClusterIds.has(link.target))
+  const centers = simulateClusterCenters(renderedClusters, links)
   const positions = new Map<string, WorldPosition>()
   const visibleEdges = [...edges].sort(compareEdges)
 
@@ -109,7 +125,11 @@ export function computeClusterLayout(
     }
   }
 
-  return { positions, clusters: visualClusters, membership, links }
+  return { positions, clusters: renderedClusters, membership, links, mutedNodeCount }
+}
+
+export function isHullNoise(node: PositionedNode | undefined): boolean {
+  return node?.label === 'Unresolved' || (node?.label === 'Package' && !node.file_path)
 }
 
 function mergeClusterLinks(rendered: ClusterLink[], wholeGraph: ClusterLink[]): ClusterLink[] {

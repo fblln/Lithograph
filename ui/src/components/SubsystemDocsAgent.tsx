@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { generateSubsystemDocument, refineSubsystemDocument, type SubsystemDocument } from '../api/subsystemDocs'
+import { ProvenanceTags } from './ProvenanceTags'
 
 export interface SubsystemAgentContext {
   scopeId: string
@@ -65,6 +66,7 @@ export function SubsystemDocsAgent({ context, onFocus }: { context: SubsystemAge
       {stale && <p role="alert" className="mb-2 text-[10px]" style={{ color: 'var(--atlas-warn)' }}>This version is stale for the current graph snapshot. Generate again before accepting it.</p>}
       <div className="flex items-center gap-2 text-[9.5px]"><strong>Version {activeVersion + 1}/{versions.length}</strong><span>{current.confidence} confidence</span><span>{acceptedVersion === activeVersion ? 'accepted' : 'draft'}</span></div>
       <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded p-2 text-[10px]" style={{ background: 'var(--atlas-canvas)', color: 'var(--atlas-text-muted)' }}>{current.markdown}</pre>
+      <ProvenanceTags tags={current.resolved_tags} label="Subsystem provenance tags" />
       {comparing && activeVersion > 0 && <div aria-label="Previous version" className="mt-2 rounded border p-2 text-[10px]" style={{ borderColor: 'var(--atlas-border)' }}><strong>Previous version</strong><pre className="mt-1 whitespace-pre-wrap">{versions[activeVersion - 1].markdown}</pre></div>}
       <div className="mt-2 flex flex-wrap gap-1">{current.cited_nodes.slice(0, 10).map((id) => <button type="button" key={id} onClick={() => onFocus(id)} title={id} className="max-w-full truncate rounded px-1.5 py-0.5 text-[9px]" style={{ background: 'var(--atlas-chip)', color: 'var(--atlas-accent)' }}>{id}</button>)}</div>
       <label className="mt-3 block text-[9.5px]">Refinement instruction<textarea aria-label="Refinement instruction" value={instruction} onChange={(event) => setInstruction(event.target.value)} className="mt-1 h-16 w-full rounded border p-2 text-[10.5px]" style={{ borderColor: 'var(--atlas-border)', background: 'var(--atlas-canvas)' }} /></label>

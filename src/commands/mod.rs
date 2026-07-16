@@ -12,6 +12,7 @@ mod inspect;
 mod integrate;
 mod quality;
 mod query;
+mod research;
 mod serve;
 
 #[cfg(test)]
@@ -44,6 +45,7 @@ where
         Some(Command::Explain(args)) => query::execute_explain(args, writer),
         Some(Command::Affected(args)) => query::execute_affected(args, writer),
         Some(Command::Adr(command)) => adr::execute_adr(command, writer),
+        Some(Command::Research(command)) => research::execute_research(command, writer),
         Some(Command::Watch(args)) => generate::execute_watch(args, writer),
         Some(Command::IntegrateMcp(args)) => integrate::execute_integrate_mcp(args, writer),
         None => Ok(()),

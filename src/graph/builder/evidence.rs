@@ -313,9 +313,18 @@ impl BuilderState {
                     );
                 }
                 TextFindingKind::LocalPath => {
-                    let target = self
-                        .resolve_path(&finding.value)
-                        .unwrap_or_else(|| self.unresolved(&finding.value));
+                    let target =
+                        if artifact.category == crate::domain::ArtifactCategory::Documentation {
+                            let Some(target) =
+                                self.resolve_documentation_path(artifact, &finding.value)
+                            else {
+                                continue;
+                            };
+                            target
+                        } else {
+                            self.resolve_path(&finding.value)
+                                .unwrap_or_else(|| self.unresolved(&finding.value))
+                        };
                     self.relate_with_provenance(
                         artifact_node.clone(),
                         target,
@@ -332,6 +341,11 @@ impl BuilderState {
                 TextFindingKind::Url
                 | TextFindingKind::PackageOrImage
                 | TextFindingKind::ImportOrInclude => {
+                    // In documentation these are useful extraction facts, not
+                    // evidence that a code symbol or artifact is missing.
+                    if artifact.category == crate::domain::ArtifactCategory::Documentation {
+                        continue;
+                    }
                     let target = self.unresolved(&finding.value);
                     self.relate_with_provenance(
                         artifact_node.clone(),

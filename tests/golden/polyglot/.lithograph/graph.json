@@ -282,6 +282,7 @@
       "node_type": "Command",
       "id": "command:Dockerfile#4",
       "text": "cargo build --manifest-path rust/Cargo.toml --release",
+      "provenance": "build_automation",
       "evidence": {
         "artifact_id": "artifact:Dockerfile",
         "path": "Dockerfile",
@@ -296,6 +297,7 @@
       "node_type": "Command",
       "id": "command:Dockerfile#9",
       "text": "pip install --no-cache-dir -r requirements.txt",
+      "provenance": "build_automation",
       "evidence": {
         "artifact_id": "artifact:Dockerfile",
         "path": "Dockerfile",
@@ -310,6 +312,7 @@
       "node_type": "Command",
       "id": "command:Makefile#12",
       "text": "npm --prefix web run lint",
+      "provenance": "build_automation",
       "evidence": {
         "artifact_id": "artifact:Makefile",
         "path": "Makefile",
@@ -324,6 +327,7 @@
       "node_type": "Command",
       "id": "command:Makefile#15",
       "text": "docker build -t ghcr.io/example/route-api:dev .",
+      "provenance": "build_automation",
       "evidence": {
         "artifact_id": "artifact:Makefile",
         "path": "Makefile",
@@ -338,6 +342,7 @@
       "node_type": "Command",
       "id": "command:Makefile#6",
       "text": "python -m pytest",
+      "provenance": "build_automation",
       "evidence": {
         "artifact_id": "artifact:Makefile",
         "path": "Makefile",
@@ -352,6 +357,7 @@
       "node_type": "Command",
       "id": "command:Makefile#9",
       "text": "cargo test --manifest-path rust/Cargo.toml",
+      "provenance": "build_automation",
       "evidence": {
         "artifact_id": "artifact:Makefile",
         "path": "Makefile",
@@ -377,6 +383,7 @@
       "node_type": "Command",
       "id": "command:docs/architecture.md#21",
       "text": "make test",
+      "provenance": "documentation_example",
       "evidence": {
         "artifact_id": "artifact:docs/architecture.md",
         "path": "docs/architecture.md",
@@ -391,6 +398,7 @@
       "node_type": "Command",
       "id": "command:docs/architecture.md#22",
       "text": "cargo test --manifest-path rust/Cargo.toml",
+      "provenance": "documentation_example",
       "evidence": {
         "artifact_id": "artifact:docs/architecture.md",
         "path": "docs/architecture.md",
@@ -405,6 +413,7 @@
       "node_type": "Command",
       "id": "command:docs/architecture.md#23",
       "text": "python -m pytest",
+      "provenance": "documentation_example",
       "evidence": {
         "artifact_id": "artifact:docs/architecture.md",
         "path": "docs/architecture.md",
@@ -1381,11 +1390,6 @@
     },
     {
       "node_type": "Unresolved",
-      "id": "unresolved:.github/workflows/ci.yml",
-      "value": ".github/workflows/ci.yml"
-    },
-    {
-      "node_type": "Unresolved",
       "id": "unresolved:/usr/local/bin/worker",
       "value": "/usr/local/bin/worker"
     },
@@ -1511,11 +1515,6 @@
     },
     {
       "node_type": "Unresolved",
-      "id": "unresolved:rust/",
-      "value": "rust/"
-    },
-    {
-      "node_type": "Unresolved",
       "id": "unresolved:script",
       "value": "script"
     },
@@ -1523,11 +1522,6 @@
       "node_type": "Unresolved",
       "id": "unresolved:src",
       "value": "src"
-    },
-    {
-      "node_type": "Unresolved",
-      "id": "unresolved:src/python_app/",
-      "value": "src/python_app/"
     },
     {
       "node_type": "Unresolved",
@@ -1543,11 +1537,6 @@
       "node_type": "Unresolved",
       "id": "unresolved:type",
       "value": "type"
-    },
-    {
-      "node_type": "Unresolved",
-      "id": "unresolved:web/",
-      "value": "web/"
     },
     {
       "node_type": "Unresolved",
@@ -1581,7 +1570,7 @@
       }
     },
     {
-      "id": "relation:153",
+      "id": "relation:149",
       "source": "artifact:Dockerfile",
       "target": "env:RIDGELINE_WORKER",
       "kind": "DefinesEnv",
@@ -1989,7 +1978,7 @@
       }
     },
     {
-      "id": "relation:30",
+      "id": "relation:29",
       "source": "artifact:README.md",
       "target": "artifact:Makefile",
       "kind": "References",
@@ -2037,7 +2026,7 @@
       }
     },
     {
-      "id": "relation:33",
+      "id": "relation:32",
       "source": "artifact:README.md",
       "target": "artifact:assets/logo.svg",
       "kind": "References",
@@ -2109,7 +2098,7 @@
       }
     },
     {
-      "id": "relation:34",
+      "id": "relation:33",
       "source": "artifact:README.md",
       "target": "artifact:data/sample.bin",
       "kind": "References",
@@ -2181,7 +2170,7 @@
       }
     },
     {
-      "id": "relation:35",
+      "id": "relation:34",
       "source": "artifact:README.md",
       "target": "artifact:generated/client.py",
       "kind": "References",
@@ -2349,7 +2338,7 @@
       }
     },
     {
-      "id": "relation:36",
+      "id": "relation:35",
       "source": "artifact:README.md",
       "target": "artifact:vendor/example/lib.rs",
       "kind": "References",
@@ -2373,7 +2362,7 @@
       }
     },
     {
-      "id": "relation:32",
+      "id": "relation:31",
       "source": "artifact:README.md",
       "target": "artifact:web/index.html",
       "kind": "References",
@@ -2397,7 +2386,7 @@
       }
     },
     {
-      "id": "relation:31",
+      "id": "relation:30",
       "source": "artifact:README.md",
       "target": "artifact:web/src/App.tsx",
       "kind": "References",
@@ -2421,27 +2410,27 @@
       }
     },
     {
-      "id": "relation:29",
-      "source": "artifact:README.md",
-      "target": "unresolved:.github/workflows/ci.yml",
+      "id": "relation:36",
+      "source": "artifact:assets/logo.svg",
+      "target": "unresolved:xmlns=\"http://www.w3.org/2000/svg",
       "kind": "References",
-      "confidence": "High",
+      "confidence": "Low",
       "evidence": [
         {
-          "artifact_id": "artifact:README.md",
-          "path": "README.md",
+          "artifact_id": "artifact:assets/logo.svg",
+          "path": "assets/logo.svg",
           "span": {
-            "start_line": 30,
-            "end_line": 30
+            "start_line": 1,
+            "end_line": 1
           },
           "structured_path": null
         }
       ],
       "provenance": {
-        "language": null,
-        "resolver_strategy": "graph-builder",
-        "resolution": "SyntaxOnly",
-        "confidence": "High"
+        "language": "svg",
+        "resolver_strategy": "generic-text-fallback",
+        "resolution": "Fallback",
+        "confidence": "Low"
       }
     },
     {
@@ -2469,31 +2458,7 @@
       }
     },
     {
-      "id": "relation:38",
-      "source": "artifact:assets/logo.svg",
-      "target": "unresolved:xmlns=\"http://www.w3.org/2000/svg",
-      "kind": "References",
-      "confidence": "Low",
-      "evidence": [
-        {
-          "artifact_id": "artifact:assets/logo.svg",
-          "path": "assets/logo.svg",
-          "span": {
-            "start_line": 1,
-            "end_line": 1
-          },
-          "structured_path": null
-        }
-      ],
-      "provenance": {
-        "language": "svg",
-        "resolver_strategy": "generic-text-fallback",
-        "resolution": "Fallback",
-        "confidence": "Low"
-      }
-    },
-    {
-      "id": "relation:40",
+      "id": "relation:39",
       "source": "artifact:config/schema.json",
       "target": "image:ghcr.io/example/worker:1.0",
       "kind": "UsesImage",
@@ -2514,7 +2479,7 @@
       }
     },
     {
-      "id": "relation:39",
+      "id": "relation:38",
       "source": "artifact:config/schema.json",
       "target": "unresolved:https://json-schema.org/draft/2020-12/schema",
       "kind": "References",
@@ -2535,7 +2500,7 @@
       }
     },
     {
-      "id": "relation:158",
+      "id": "relation:154",
       "source": "artifact:config/schema.json",
       "target": "config-key:properties",
       "kind": "BindsConfig",
@@ -2556,7 +2521,7 @@
       }
     },
     {
-      "id": "relation:159",
+      "id": "relation:155",
       "source": "artifact:config/schema.json",
       "target": "config-key:properties.route.file",
       "kind": "BindsConfig",
@@ -2577,7 +2542,7 @@
       }
     },
     {
-      "id": "relation:160",
+      "id": "relation:156",
       "source": "artifact:config/schema.json",
       "target": "config-key:properties.route.file.description",
       "kind": "BindsConfig",
@@ -2598,7 +2563,7 @@
       }
     },
     {
-      "id": "relation:161",
+      "id": "relation:157",
       "source": "artifact:config/schema.json",
       "target": "config-key:properties.route.file.type",
       "kind": "BindsConfig",
@@ -2619,7 +2584,7 @@
       }
     },
     {
-      "id": "relation:162",
+      "id": "relation:158",
       "source": "artifact:config/schema.json",
       "target": "config-key:properties.worker.image",
       "kind": "BindsConfig",
@@ -2640,7 +2605,7 @@
       }
     },
     {
-      "id": "relation:163",
+      "id": "relation:159",
       "source": "artifact:config/schema.json",
       "target": "config-key:properties.worker.image.default",
       "kind": "BindsConfig",
@@ -2661,7 +2626,7 @@
       }
     },
     {
-      "id": "relation:164",
+      "id": "relation:160",
       "source": "artifact:config/schema.json",
       "target": "config-key:properties.worker.image.type",
       "kind": "BindsConfig",
@@ -2682,7 +2647,7 @@
       }
     },
     {
-      "id": "relation:165",
+      "id": "relation:161",
       "source": "artifact:config/schema.json",
       "target": "config-key:required",
       "kind": "BindsConfig",
@@ -2703,7 +2668,7 @@
       }
     },
     {
-      "id": "relation:166",
+      "id": "relation:162",
       "source": "artifact:config/schema.json",
       "target": "config-key:required.0",
       "kind": "BindsConfig",
@@ -2724,7 +2689,7 @@
       }
     },
     {
-      "id": "relation:167",
+      "id": "relation:163",
       "source": "artifact:config/schema.json",
       "target": "config-key:schema",
       "kind": "BindsConfig",
@@ -2745,7 +2710,7 @@
       }
     },
     {
-      "id": "relation:176",
+      "id": "relation:172",
       "source": "artifact:config/schema.json",
       "target": "config-key:title",
       "kind": "BindsConfig",
@@ -2766,7 +2731,7 @@
       }
     },
     {
-      "id": "relation:177",
+      "id": "relation:173",
       "source": "artifact:config/schema.json",
       "target": "config-key:type",
       "kind": "BindsConfig",
@@ -2787,7 +2752,7 @@
       }
     },
     {
-      "id": "relation:50",
+      "id": "relation:49",
       "source": "artifact:config/settings.yaml",
       "target": "config:config/settings.yaml#service.name",
       "kind": "Contains",
@@ -2808,7 +2773,7 @@
       }
     },
     {
-      "id": "relation:51",
+      "id": "relation:50",
       "source": "artifact:config/settings.yaml",
       "target": "config:config/settings.yaml#service.port",
       "kind": "Contains",
@@ -2829,7 +2794,7 @@
       }
     },
     {
-      "id": "relation:44",
+      "id": "relation:43",
       "source": "artifact:config/settings.yaml",
       "target": "env:RIDGELINE_CACHE_DIR",
       "kind": "ReadsEnv",
@@ -2850,7 +2815,7 @@
       }
     },
     {
-      "id": "relation:45",
+      "id": "relation:44",
       "source": "artifact:config/settings.yaml",
       "target": "env:RIDGELINE_WORKER",
       "kind": "ReadsEnv",
@@ -2871,7 +2836,7 @@
       }
     },
     {
-      "id": "relation:48",
+      "id": "relation:47",
       "source": "artifact:config/settings.yaml",
       "target": "env:VERSION",
       "kind": "ReadsEnv",
@@ -2892,7 +2857,7 @@
       }
     },
     {
-      "id": "relation:43",
+      "id": "relation:42",
       "source": "artifact:config/settings.yaml",
       "target": "command:config/settings.yaml#service.command",
       "kind": "RunsCommand",
@@ -2913,7 +2878,7 @@
       }
     },
     {
-      "id": "relation:49",
+      "id": "relation:48",
       "source": "artifact:config/settings.yaml",
       "target": "image:ghcr.io/example/route-api:${VERSION}",
       "kind": "UsesImage",
@@ -2934,7 +2899,7 @@
       }
     },
     {
-      "id": "relation:41",
+      "id": "relation:40",
       "source": "artifact:config/settings.yaml",
       "target": "artifact:config/schema.json",
       "kind": "References",
@@ -2955,7 +2920,7 @@
       }
     },
     {
-      "id": "relation:47",
+      "id": "relation:46",
       "source": "artifact:config/settings.yaml",
       "target": "unresolved:/usr/local/bin/worker",
       "kind": "References",
@@ -2976,7 +2941,7 @@
       }
     },
     {
-      "id": "relation:46",
+      "id": "relation:45",
       "source": "artifact:config/settings.yaml",
       "target": "unresolved:/var/cache/ridgeline",
       "kind": "References",
@@ -2997,7 +2962,7 @@
       }
     },
     {
-      "id": "relation:42",
+      "id": "relation:41",
       "source": "artifact:config/settings.yaml",
       "target": "unresolved:assets/",
       "kind": "References",
@@ -3018,7 +2983,7 @@
       }
     },
     {
-      "id": "relation:155",
+      "id": "relation:151",
       "source": "artifact:config/settings.yaml",
       "target": "config-key:paths",
       "kind": "BindsConfig",
@@ -3039,7 +3004,7 @@
       }
     },
     {
-      "id": "relation:156",
+      "id": "relation:152",
       "source": "artifact:config/settings.yaml",
       "target": "config-key:paths.schema",
       "kind": "BindsConfig",
@@ -3060,7 +3025,7 @@
       }
     },
     {
-      "id": "relation:157",
+      "id": "relation:153",
       "source": "artifact:config/settings.yaml",
       "target": "config-key:paths.static.assets",
       "kind": "BindsConfig",
@@ -3081,7 +3046,7 @@
       }
     },
     {
-      "id": "relation:168",
+      "id": "relation:164",
       "source": "artifact:config/settings.yaml",
       "target": "config-key:service",
       "kind": "BindsConfig",
@@ -3102,7 +3067,7 @@
       }
     },
     {
-      "id": "relation:169",
+      "id": "relation:165",
       "source": "artifact:config/settings.yaml",
       "target": "config-key:service.command",
       "kind": "BindsConfig",
@@ -3123,7 +3088,7 @@
       }
     },
     {
-      "id": "relation:170",
+      "id": "relation:166",
       "source": "artifact:config/settings.yaml",
       "target": "config-key:service.env",
       "kind": "BindsConfig",
@@ -3144,7 +3109,7 @@
       }
     },
     {
-      "id": "relation:171",
+      "id": "relation:167",
       "source": "artifact:config/settings.yaml",
       "target": "config-key:service.env.ridgeline.cache.dir",
       "kind": "BindsConfig",
@@ -3165,7 +3130,7 @@
       }
     },
     {
-      "id": "relation:172",
+      "id": "relation:168",
       "source": "artifact:config/settings.yaml",
       "target": "config-key:service.env.ridgeline.worker",
       "kind": "BindsConfig",
@@ -3186,7 +3151,7 @@
       }
     },
     {
-      "id": "relation:173",
+      "id": "relation:169",
       "source": "artifact:config/settings.yaml",
       "target": "config-key:service.image",
       "kind": "BindsConfig",
@@ -3207,7 +3172,7 @@
       }
     },
     {
-      "id": "relation:174",
+      "id": "relation:170",
       "source": "artifact:config/settings.yaml",
       "target": "config-key:service.name",
       "kind": "BindsConfig",
@@ -3228,7 +3193,7 @@
       }
     },
     {
-      "id": "relation:175",
+      "id": "relation:171",
       "source": "artifact:config/settings.yaml",
       "target": "config-key:service.port",
       "kind": "BindsConfig",
@@ -3249,7 +3214,7 @@
       }
     },
     {
-      "id": "relation:52",
+      "id": "relation:51",
       "source": "artifact:docker-compose.yml",
       "target": "config:docker-compose.yml#services.api",
       "kind": "Contains",
@@ -3270,7 +3235,7 @@
       }
     },
     {
-      "id": "relation:56",
+      "id": "relation:55",
       "source": "artifact:docker-compose.yml",
       "target": "config:docker-compose.yml#services.web",
       "kind": "Contains",
@@ -3291,7 +3256,7 @@
       }
     },
     {
-      "id": "relation:58",
+      "id": "relation:57",
       "source": "artifact:docs/architecture.md",
       "target": "doc:docs/architecture.md#1",
       "kind": "Contains",
@@ -3315,7 +3280,7 @@
       }
     },
     {
-      "id": "relation:63",
+      "id": "relation:59",
       "source": "artifact:docs/architecture.md",
       "target": "command:docs/architecture.md#21",
       "kind": "RunsCommand",
@@ -3339,7 +3304,7 @@
       }
     },
     {
-      "id": "relation:64",
+      "id": "relation:60",
       "source": "artifact:docs/architecture.md",
       "target": "command:docs/architecture.md#22",
       "kind": "RunsCommand",
@@ -3363,7 +3328,7 @@
       }
     },
     {
-      "id": "relation:65",
+      "id": "relation:61",
       "source": "artifact:docs/architecture.md",
       "target": "command:docs/architecture.md#23",
       "kind": "RunsCommand",
@@ -3387,7 +3352,7 @@
       }
     },
     {
-      "id": "relation:62",
+      "id": "relation:58",
       "source": "artifact:docs/architecture.md",
       "target": "artifact:rust/Cargo.toml",
       "kind": "References",
@@ -3411,79 +3376,7 @@
       }
     },
     {
-      "id": "relation:60",
-      "source": "artifact:docs/architecture.md",
-      "target": "unresolved:rust/",
-      "kind": "References",
-      "confidence": "High",
-      "evidence": [
-        {
-          "artifact_id": "artifact:docs/architecture.md",
-          "path": "docs/architecture.md",
-          "span": {
-            "start_line": 6,
-            "end_line": 6
-          },
-          "structured_path": null
-        }
-      ],
-      "provenance": {
-        "language": null,
-        "resolver_strategy": "graph-builder",
-        "resolution": "SyntaxOnly",
-        "confidence": "High"
-      }
-    },
-    {
-      "id": "relation:59",
-      "source": "artifact:docs/architecture.md",
-      "target": "unresolved:src/python_app/",
-      "kind": "References",
-      "confidence": "High",
-      "evidence": [
-        {
-          "artifact_id": "artifact:docs/architecture.md",
-          "path": "docs/architecture.md",
-          "span": {
-            "start_line": 5,
-            "end_line": 5
-          },
-          "structured_path": null
-        }
-      ],
-      "provenance": {
-        "language": null,
-        "resolver_strategy": "graph-builder",
-        "resolution": "SyntaxOnly",
-        "confidence": "High"
-      }
-    },
-    {
-      "id": "relation:61",
-      "source": "artifact:docs/architecture.md",
-      "target": "unresolved:web/",
-      "kind": "References",
-      "confidence": "High",
-      "evidence": [
-        {
-          "artifact_id": "artifact:docs/architecture.md",
-          "path": "docs/architecture.md",
-          "span": {
-            "start_line": 7,
-            "end_line": 7
-          },
-          "structured_path": null
-        }
-      ],
-      "provenance": {
-        "language": null,
-        "resolver_strategy": "graph-builder",
-        "resolution": "SyntaxOnly",
-        "confidence": "High"
-      }
-    },
-    {
-      "id": "relation:67",
+      "id": "relation:63",
       "source": "artifact:generated/client.py",
       "target": "symbol:generated/client.py#generated.client::call_route_api",
       "kind": "Contains",
@@ -3507,7 +3400,7 @@
       }
     },
     {
-      "id": "relation:66",
+      "id": "relation:62",
       "source": "artifact:generated/client.py",
       "target": "module:generated.client",
       "kind": "BelongsToModule",
@@ -3528,7 +3421,7 @@
       }
     },
     {
-      "id": "relation:69",
+      "id": "relation:65",
       "source": "artifact:pyproject.toml",
       "target": "package:polyglot-fixture",
       "kind": "BelongsToPackage",
@@ -3549,7 +3442,7 @@
       }
     },
     {
-      "id": "relation:71",
+      "id": "relation:67",
       "source": "artifact:requirements.txt",
       "target": "package:pydantic",
       "kind": "DependsOnPackage",
@@ -3573,7 +3466,7 @@
       }
     },
     {
-      "id": "relation:72",
+      "id": "relation:68",
       "source": "artifact:requirements.txt",
       "target": "package:pytest",
       "kind": "DependsOnPackage",
@@ -3597,7 +3490,7 @@
       }
     },
     {
-      "id": "relation:73",
+      "id": "relation:69",
       "source": "artifact:rust/Cargo.toml",
       "target": "package:fixture-worker",
       "kind": "BelongsToPackage",
@@ -3618,7 +3511,7 @@
       }
     },
     {
-      "id": "relation:76",
+      "id": "relation:72",
       "source": "artifact:rust/src/bin/worker.rs",
       "target": "symbol:rust/src/bin/worker.rs#worker::main",
       "kind": "Contains",
@@ -3642,7 +3535,7 @@
       }
     },
     {
-      "id": "relation:75",
+      "id": "relation:71",
       "source": "artifact:rust/src/bin/worker.rs",
       "target": "module:worker",
       "kind": "BelongsToModule",
@@ -3663,7 +3556,7 @@
       }
     },
     {
-      "id": "relation:77",
+      "id": "relation:73",
       "source": "artifact:rust/src/bin/worker.rs",
       "target": "unresolved:fixture_worker::bake_route",
       "kind": "Imports",
@@ -3687,7 +3580,7 @@
       }
     },
     {
-      "id": "relation:79",
+      "id": "relation:75",
       "source": "artifact:rust/src/bin/worker.rs",
       "target": "symbol:std::env::args",
       "kind": "Calls",
@@ -3711,7 +3604,7 @@
       }
     },
     {
-      "id": "relation:82",
+      "id": "relation:78",
       "source": "artifact:rust/src/lib.rs",
       "target": "symbol:rust/src/lib.rs#::RouteBake",
       "kind": "Contains",
@@ -3735,7 +3628,7 @@
       }
     },
     {
-      "id": "relation:81",
+      "id": "relation:77",
       "source": "artifact:rust/src/lib.rs",
       "target": "symbol:rust/src/lib.rs#::RouteBaker",
       "kind": "Contains",
@@ -3759,7 +3652,7 @@
       }
     },
     {
-      "id": "relation:83",
+      "id": "relation:79",
       "source": "artifact:rust/src/lib.rs",
       "target": "symbol:rust/src/lib.rs#::bake_route",
       "kind": "Contains",
@@ -3783,7 +3676,7 @@
       }
     },
     {
-      "id": "relation:80",
+      "id": "relation:76",
       "source": "artifact:rust/src/lib.rs",
       "target": "module:",
       "kind": "BelongsToModule",
@@ -3804,7 +3697,7 @@
       }
     },
     {
-      "id": "relation:85",
+      "id": "relation:81",
       "source": "artifact:rust/src/lib.rs",
       "target": "package:std",
       "kind": "Imports",
@@ -3828,7 +3721,7 @@
       }
     },
     {
-      "id": "relation:87",
+      "id": "relation:83",
       "source": "artifact:rust/src/lib.rs",
       "target": "unresolved:RouteBaker::from_env",
       "kind": "Calls",
@@ -3852,7 +3745,7 @@
       }
     },
     {
-      "id": "relation:86",
+      "id": "relation:82",
       "source": "artifact:rust/src/lib.rs",
       "target": "env:RIDGELINE_CACHE_DIR",
       "kind": "ReadsEnv",
@@ -3876,7 +3769,7 @@
       }
     },
     {
-      "id": "relation:88",
+      "id": "relation:84",
       "source": "artifact:src/python_app/__init__.py",
       "target": "module:src.python_app",
       "kind": "BelongsToModule",
@@ -3897,7 +3790,7 @@
       }
     },
     {
-      "id": "relation:89",
+      "id": "relation:85",
       "source": "artifact:src/python_app/__init__.py",
       "target": "module:src.python_app.service",
       "kind": "Imports",
@@ -3921,7 +3814,7 @@
       }
     },
     {
-      "id": "relation:111",
+      "id": "relation:107",
       "source": "artifact:src/python_app/service.py",
       "target": "rationale:src/python_app/service.py#L23",
       "kind": "Contains",
@@ -3945,7 +3838,7 @@
       }
     },
     {
-      "id": "relation:91",
+      "id": "relation:87",
       "source": "artifact:src/python_app/service.py",
       "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
       "kind": "Contains",
@@ -3969,7 +3862,7 @@
       }
     },
     {
-      "id": "relation:104",
+      "id": "relation:100",
       "source": "artifact:src/python_app/service.py",
       "target": "symbol:src/python_app/service.py#src.python_app.service::run_worker",
       "kind": "Contains",
@@ -3993,7 +3886,7 @@
       }
     },
     {
-      "id": "relation:90",
+      "id": "relation:86",
       "source": "artifact:src/python_app/service.py",
       "target": "module:src.python_app.service",
       "kind": "BelongsToModule",
@@ -4014,7 +3907,7 @@
       }
     },
     {
-      "id": "relation:106",
+      "id": "relation:102",
       "source": "artifact:src/python_app/service.py",
       "target": "package:__future__",
       "kind": "Imports",
@@ -4038,7 +3931,7 @@
       }
     },
     {
-      "id": "relation:107",
+      "id": "relation:103",
       "source": "artifact:src/python_app/service.py",
       "target": "package:json",
       "kind": "Imports",
@@ -4062,7 +3955,7 @@
       }
     },
     {
-      "id": "relation:108",
+      "id": "relation:104",
       "source": "artifact:src/python_app/service.py",
       "target": "package:os",
       "kind": "Imports",
@@ -4086,7 +3979,7 @@
       }
     },
     {
-      "id": "relation:110",
+      "id": "relation:106",
       "source": "artifact:src/python_app/service.py",
       "target": "package:pathlib",
       "kind": "Imports",
@@ -4110,7 +4003,7 @@
       }
     },
     {
-      "id": "relation:109",
+      "id": "relation:105",
       "source": "artifact:src/python_app/service.py",
       "target": "package:subprocess",
       "kind": "Imports",
@@ -4134,7 +4027,7 @@
       }
     },
     {
-      "id": "relation:115",
+      "id": "relation:111",
       "source": "artifact:src/python_app/service.py",
       "target": "symbol:src/python_app/service.py#src.python_app.service::run_worker",
       "kind": "Calls",
@@ -4158,7 +4051,7 @@
       }
     },
     {
-      "id": "relation:117",
+      "id": "relation:113",
       "source": "artifact:src/python_app/service.py",
       "target": "unresolved:str",
       "kind": "Calls",
@@ -4182,7 +4075,7 @@
       }
     },
     {
-      "id": "relation:113",
+      "id": "relation:109",
       "source": "artifact:src/python_app/service.py",
       "target": "env:RIDGELINE_WORKER",
       "kind": "ReadsEnv",
@@ -4206,7 +4099,7 @@
       }
     },
     {
-      "id": "relation:116",
+      "id": "relation:112",
       "source": "artifact:src/python_app/service.py",
       "target": "command:src/python_app/service.py#31",
       "kind": "RunsCommand",
@@ -4230,7 +4123,7 @@
       }
     },
     {
-      "id": "relation:114",
+      "id": "relation:110",
       "source": "artifact:src/python_app/service.py",
       "target": "symbol:src/python_app/service.py#src.python_app.service::run_worker",
       "kind": "DataFlows",
@@ -4254,7 +4147,7 @@
       }
     },
     {
-      "id": "relation:119",
+      "id": "relation:115",
       "source": "artifact:web/index.html",
       "target": "symbol:web/index.html::element@L2",
       "kind": "Contains",
@@ -4278,7 +4171,7 @@
       }
     },
     {
-      "id": "relation:120",
+      "id": "relation:116",
       "source": "artifact:web/index.html",
       "target": "symbol:web/index.html::element@L3",
       "kind": "Contains",
@@ -4302,7 +4195,7 @@
       }
     },
     {
-      "id": "relation:121",
+      "id": "relation:117",
       "source": "artifact:web/index.html",
       "target": "symbol:web/index.html::element@L4",
       "kind": "Contains",
@@ -4326,7 +4219,7 @@
       }
     },
     {
-      "id": "relation:122",
+      "id": "relation:118",
       "source": "artifact:web/index.html",
       "target": "symbol:web/index.html::element@L5",
       "kind": "Contains",
@@ -4350,7 +4243,7 @@
       }
     },
     {
-      "id": "relation:123",
+      "id": "relation:119",
       "source": "artifact:web/index.html",
       "target": "symbol:web/index.html::element@L7",
       "kind": "Contains",
@@ -4374,7 +4267,7 @@
       }
     },
     {
-      "id": "relation:124",
+      "id": "relation:120",
       "source": "artifact:web/index.html",
       "target": "symbol:web/index.html::element@L8",
       "kind": "Contains",
@@ -4398,7 +4291,7 @@
       }
     },
     {
-      "id": "relation:125",
+      "id": "relation:121",
       "source": "artifact:web/index.html",
       "target": "symbol:web/index.html::script_element@L9",
       "kind": "Contains",
@@ -4422,7 +4315,7 @@
       }
     },
     {
-      "id": "relation:118",
+      "id": "relation:114",
       "source": "artifact:web/index.html",
       "target": "module:web/index.html",
       "kind": "BelongsToModule",
@@ -4443,7 +4336,7 @@
       }
     },
     {
-      "id": "relation:132",
+      "id": "relation:128",
       "source": "artifact:web/index.html",
       "target": "unresolved:body",
       "kind": "Usages",
@@ -4467,7 +4360,7 @@
       }
     },
     {
-      "id": "relation:130",
+      "id": "relation:126",
       "source": "artifact:web/index.html",
       "target": "unresolved:charset",
       "kind": "Usages",
@@ -4491,7 +4384,7 @@
       }
     },
     {
-      "id": "relation:133",
+      "id": "relation:129",
       "source": "artifact:web/index.html",
       "target": "unresolved:div",
       "kind": "Usages",
@@ -4515,7 +4408,7 @@
       }
     },
     {
-      "id": "relation:128",
+      "id": "relation:124",
       "source": "artifact:web/index.html",
       "target": "unresolved:head",
       "kind": "Usages",
@@ -4539,7 +4432,7 @@
       }
     },
     {
-      "id": "relation:126",
+      "id": "relation:122",
       "source": "artifact:web/index.html",
       "target": "unresolved:html",
       "kind": "Usages",
@@ -4563,7 +4456,7 @@
       }
     },
     {
-      "id": "relation:134",
+      "id": "relation:130",
       "source": "artifact:web/index.html",
       "target": "unresolved:id",
       "kind": "Usages",
@@ -4587,7 +4480,7 @@
       }
     },
     {
-      "id": "relation:127",
+      "id": "relation:123",
       "source": "artifact:web/index.html",
       "target": "unresolved:lang",
       "kind": "Usages",
@@ -4611,7 +4504,7 @@
       }
     },
     {
-      "id": "relation:129",
+      "id": "relation:125",
       "source": "artifact:web/index.html",
       "target": "unresolved:meta",
       "kind": "Usages",
@@ -4635,7 +4528,7 @@
       }
     },
     {
-      "id": "relation:135",
+      "id": "relation:131",
       "source": "artifact:web/index.html",
       "target": "unresolved:script",
       "kind": "Usages",
@@ -4659,7 +4552,7 @@
       }
     },
     {
-      "id": "relation:137",
+      "id": "relation:133",
       "source": "artifact:web/index.html",
       "target": "unresolved:src",
       "kind": "Usages",
@@ -4683,7 +4576,7 @@
       }
     },
     {
-      "id": "relation:131",
+      "id": "relation:127",
       "source": "artifact:web/index.html",
       "target": "unresolved:title",
       "kind": "Usages",
@@ -4707,7 +4600,7 @@
       }
     },
     {
-      "id": "relation:136",
+      "id": "relation:132",
       "source": "artifact:web/index.html",
       "target": "unresolved:type",
       "kind": "Usages",
@@ -4731,7 +4624,7 @@
       }
     },
     {
-      "id": "relation:138",
+      "id": "relation:134",
       "source": "artifact:web/package.json",
       "target": "package:@vitejs/plugin-react",
       "kind": "DependsOnPackage",
@@ -4752,7 +4645,7 @@
       }
     },
     {
-      "id": "relation:139",
+      "id": "relation:135",
       "source": "artifact:web/package.json",
       "target": "package:typescript",
       "kind": "DependsOnPackage",
@@ -4773,7 +4666,7 @@
       }
     },
     {
-      "id": "relation:140",
+      "id": "relation:136",
       "source": "artifact:web/package.json",
       "target": "package:vite",
       "kind": "DependsOnPackage",
@@ -4794,7 +4687,7 @@
       }
     },
     {
-      "id": "relation:142",
+      "id": "relation:138",
       "source": "artifact:web/src/App.tsx",
       "target": "symbol:web/src/App.tsx#web/src/App.tsx::App",
       "kind": "Contains",
@@ -4818,7 +4711,7 @@
       }
     },
     {
-      "id": "relation:143",
+      "id": "relation:139",
       "source": "artifact:web/src/App.tsx",
       "target": "symbol:web/src/App.tsx::type_alias_declaration@L3",
       "kind": "Contains",
@@ -4842,7 +4735,7 @@
       }
     },
     {
-      "id": "relation:141",
+      "id": "relation:137",
       "source": "artifact:web/src/App.tsx",
       "target": "module:web/src/App.tsx",
       "kind": "BelongsToModule",
@@ -4863,7 +4756,7 @@
       }
     },
     {
-      "id": "relation:144",
+      "id": "relation:140",
       "source": "artifact:web/src/App.tsx",
       "target": "unresolved:import React from \"react\";",
       "kind": "Imports",
@@ -4887,7 +4780,7 @@
       }
     },
     {
-      "id": "relation:146",
+      "id": "relation:142",
       "source": "artifact:web/src/App.tsx",
       "target": "unresolved:RouteSummary",
       "kind": "TypeRefs",
@@ -4911,7 +4804,7 @@
       }
     },
     {
-      "id": "relation:148",
+      "id": "relation:144",
       "source": "artifact:web/src/App.tsx",
       "target": "unresolved:App",
       "kind": "Usages",
@@ -4935,7 +4828,7 @@
       }
     },
     {
-      "id": "relation:145",
+      "id": "relation:141",
       "source": "artifact:web/src/App.tsx",
       "target": "unresolved:React",
       "kind": "Usages",
@@ -4959,7 +4852,7 @@
       }
     },
     {
-      "id": "relation:150",
+      "id": "relation:146",
       "source": "artifact:web/src/App.tsx",
       "target": "unresolved:h1",
       "kind": "Usages",
@@ -4983,7 +4876,7 @@
       }
     },
     {
-      "id": "relation:149",
+      "id": "relation:145",
       "source": "artifact:web/src/App.tsx",
       "target": "unresolved:main",
       "kind": "Usages",
@@ -5007,7 +4900,7 @@
       }
     },
     {
-      "id": "relation:151",
+      "id": "relation:147",
       "source": "artifact:web/src/App.tsx",
       "target": "unresolved:p",
       "kind": "Usages",
@@ -5031,7 +4924,7 @@
       }
     },
     {
-      "id": "relation:147",
+      "id": "relation:143",
       "source": "artifact:web/src/App.tsx",
       "target": "unresolved:route",
       "kind": "Usages",
@@ -5055,7 +4948,7 @@
       }
     },
     {
-      "id": "relation:54",
+      "id": "relation:53",
       "source": "config:docker-compose.yml#services.api",
       "target": "env:RIDGELINE_WORKER",
       "kind": "ReadsEnv",
@@ -5076,7 +4969,7 @@
       }
     },
     {
-      "id": "relation:154",
+      "id": "relation:150",
       "source": "config:docker-compose.yml#services.api",
       "target": "env:RIDGELINE_WORKER",
       "kind": "DefinesEnv",
@@ -5097,7 +4990,7 @@
       }
     },
     {
-      "id": "relation:53",
+      "id": "relation:52",
       "source": "config:docker-compose.yml#services.api",
       "target": "image:ghcr.io/example/route-api:${VERSION:-dev}",
       "kind": "UsesImage",
@@ -5118,7 +5011,7 @@
       }
     },
     {
-      "id": "relation:55",
+      "id": "relation:54",
       "source": "config:docker-compose.yml#services.api",
       "target": "config:docker-compose.yml#services.web",
       "kind": "References",
@@ -5139,7 +5032,7 @@
       }
     },
     {
-      "id": "relation:57",
+      "id": "relation:56",
       "source": "config:docker-compose.yml#services.web",
       "target": "image:node:24-alpine",
       "kind": "UsesImage",
@@ -5160,7 +5053,7 @@
       }
     },
     {
-      "id": "relation:74",
+      "id": "relation:70",
       "source": "package:fixture-worker",
       "target": "package:anyhow",
       "kind": "DependsOnPackage",
@@ -5181,7 +5074,7 @@
       }
     },
     {
-      "id": "relation:70",
+      "id": "relation:66",
       "source": "package:polyglot-fixture",
       "target": "package:pydantic",
       "kind": "DependsOnPackage",
@@ -5202,7 +5095,7 @@
       }
     },
     {
-      "id": "relation:112",
+      "id": "relation:108",
       "source": "rationale:src/python_app/service.py#L23",
       "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
       "kind": "RationaleFor",
@@ -5226,7 +5119,7 @@
       }
     },
     {
-      "id": "relation:68",
+      "id": "relation:64",
       "source": "symbol:generated/client.py#generated.client::call_route_api",
       "target": "unresolved:str",
       "kind": "UsesType",
@@ -5250,7 +5143,7 @@
       }
     },
     {
-      "id": "relation:84",
+      "id": "relation:80",
       "source": "symbol:rust/src/lib.rs#::RouteBaker",
       "target": "symbol:rust/src/lib.rs#::RouteBake",
       "kind": "Implements",
@@ -5274,7 +5167,7 @@
       }
     },
     {
-      "id": "relation:92",
+      "id": "relation:88",
       "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
       "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
       "kind": "Contains",
@@ -5286,30 +5179,6 @@
           "span": {
             "start_line": 14,
             "end_line": 16
-          },
-          "structured_path": null
-        }
-      ],
-      "provenance": {
-        "language": null,
-        "resolver_strategy": "graph-builder",
-        "resolution": "SyntaxOnly",
-        "confidence": "High"
-      }
-    },
-    {
-      "id": "relation:100",
-      "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
-      "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
-      "kind": "Contains",
-      "confidence": "High",
-      "evidence": [
-        {
-          "artifact_id": "artifact:src/python_app/service.py",
-          "path": "src/python_app/service.py",
-          "span": {
-            "start_line": 22,
-            "end_line": 25
           },
           "structured_path": null
         }
@@ -5324,6 +5193,30 @@
     {
       "id": "relation:96",
       "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
+      "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
+      "kind": "Contains",
+      "confidence": "High",
+      "evidence": [
+        {
+          "artifact_id": "artifact:src/python_app/service.py",
+          "path": "src/python_app/service.py",
+          "span": {
+            "start_line": 22,
+            "end_line": 25
+          },
+          "structured_path": null
+        }
+      ],
+      "provenance": {
+        "language": null,
+        "resolver_strategy": "graph-builder",
+        "resolution": "SyntaxOnly",
+        "confidence": "High"
+      }
+    },
+    {
+      "id": "relation:92",
+      "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
       "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService::load_settings",
       "kind": "Contains",
       "confidence": "High",
@@ -5346,7 +5239,7 @@
       }
     },
     {
-      "id": "relation:93",
+      "id": "relation:89",
       "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
       "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
       "kind": "HasMethod",
@@ -5370,7 +5263,7 @@
       }
     },
     {
-      "id": "relation:101",
+      "id": "relation:97",
       "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
       "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
       "kind": "HasMethod",
@@ -5394,7 +5287,7 @@
       }
     },
     {
-      "id": "relation:97",
+      "id": "relation:93",
       "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
       "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService::load_settings",
       "kind": "HasMethod",
@@ -5418,7 +5311,7 @@
       }
     },
     {
-      "id": "relation:152",
+      "id": "relation:148",
       "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
       "target": "env:RIDGELINE_WORKER",
       "kind": "ReadsEnv",
@@ -5442,7 +5335,7 @@
       }
     },
     {
-      "id": "relation:94",
+      "id": "relation:90",
       "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
       "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
       "kind": "MemberOf",
@@ -5466,7 +5359,7 @@
       }
     },
     {
-      "id": "relation:95",
+      "id": "relation:91",
       "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService::__init__",
       "target": "unresolved:None",
       "kind": "UsesType",
@@ -5490,7 +5383,7 @@
       }
     },
     {
-      "id": "relation:102",
+      "id": "relation:98",
       "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
       "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
       "kind": "MemberOf",
@@ -5514,7 +5407,7 @@
       }
     },
     {
-      "id": "relation:103",
+      "id": "relation:99",
       "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService::bake_route",
       "target": "unresolved:str",
       "kind": "UsesType",
@@ -5538,7 +5431,7 @@
       }
     },
     {
-      "id": "relation:98",
+      "id": "relation:94",
       "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService::load_settings",
       "target": "symbol:src/python_app/service.py#src.python_app.service::RouteService",
       "kind": "MemberOf",
@@ -5562,7 +5455,7 @@
       }
     },
     {
-      "id": "relation:99",
+      "id": "relation:95",
       "source": "symbol:src/python_app/service.py#src.python_app.service::RouteService::load_settings",
       "target": "unresolved:dict[str, object]",
       "kind": "UsesType",
@@ -5586,7 +5479,7 @@
       }
     },
     {
-      "id": "relation:105",
+      "id": "relation:101",
       "source": "symbol:src/python_app/service.py#src.python_app.service::run_worker",
       "target": "unresolved:str",
       "kind": "UsesType",
@@ -5610,7 +5503,7 @@
       }
     },
     {
-      "id": "relation:78",
+      "id": "relation:74",
       "source": "symbol:std::env::args",
       "target": "package:std",
       "kind": "BelongsToPackage",

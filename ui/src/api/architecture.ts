@@ -1,4 +1,5 @@
 import { callTool } from './rpc'
+import type { GraphTag } from './tags'
 
 /**
  * Mirrors the JSON shape of `get_architecture`'s response for the
@@ -17,6 +18,7 @@ export interface ArchitectureCluster {
   cohesion: number
   incoming_pressure: number
   outgoing_pressure: number
+  tags?: GraphTag[]
 }
 
 export interface ArchitectureNodeSummary {

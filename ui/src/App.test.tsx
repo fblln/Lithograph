@@ -79,9 +79,9 @@ const FIXTURE_DETAIL: NodeDetail = {
   evidence: [{ path: 'a.rs', start_line: 1, end_line: 2 }],
   source: { status: 'available', text: '    1 | fn main() {}', message: null },
   definitions: [],
-  references: [{ id: 'r1', direction: 'outbound', kind: 'Contains', counterpart: { id: 'symbol:a.rs#f', label: 'Symbol', name: 'f' }, evidence: [], resolver_strategy: 'syntax-extraction', confidence: 'High' }],
+  references: [{ id: 'r1', direction: 'outbound', kind: 'Contains', counterpart: { id: 'symbol:a.rs#f', label: 'Symbol', name: 'f' }, evidence: [], resolver_strategy: 'syntax-extraction', confidence: 'High', tags: [{ id: 'tag:relation', entity_id: 'r1', namespace: 'relation', value: 'contains', source: 'DependencyRole', confidence: 'High', evidence: ['a.rs:1'], inherited_from: null, graph_snapshot_id: 'g1' }] }],
   related_docs: [],
-  tags: [{ id: 'tag:artifact', namespace: 'kind', value: 'artifact', source: 'Parser', confidence: 'High', evidence: [], inherited_from: null }],
+  tags: [{ id: 'tag:artifact', entity_id: 'artifact:a.rs', namespace: 'kind', value: 'artifact', source: 'Parser', confidence: 'High', evidence: [], inherited_from: null, graph_snapshot_id: 'g1' }],
 }
 
 function mockRpcResponse(result: LayoutResult, detail: NodeDetail = FIXTURE_DETAIL) {
@@ -104,6 +104,21 @@ function mockRpcResponse(result: LayoutResult, detail: NodeDetail = FIXTURE_DETA
   )
 }
 
+function mockMultiProjectRpc() {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((_: RequestInfo, init?: RequestInit) => {
+    const body = JSON.parse(init?.body as string)
+    const tool = body.params.name
+    const payload = tool === 'list_projects'
+      ? [{ id: 'primary', name: 'Main', is_primary: true }, { id: 'web', name: 'web', is_primary: false }]
+      : tool === 'get_node_detail' ? FIXTURE_DETAIL : FIXTURE_LAYOUT
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: JSON.stringify(payload) }] } }),
+    })
+  }))
+}
+
 describe('App', () => {
   afterEach(() => {
     cleanup()
@@ -112,7 +127,7 @@ describe('App', () => {
   })
 
   it('restores focus, filters, budget, selection, and view mode from the URL', async () => {
-    window.history.replaceState(null, '', '/?center=artifact%3Aa.rs&view=matrix&maxNodes=25&labels=Artifact&selected=symbol%3Aa.rs%23f&tags=kind%3Aartifact')
+    window.history.replaceState(null, '', '/?center=artifact%3Aa.rs&view=matrix&maxNodes=25&labels=Artifact&selected=symbol%3Aa.rs%23f&tags=kind%3Aartifact&unproven=hide')
     mockRpcResponse(FIXTURE_LAYOUT)
     render(<App />)
 
@@ -124,6 +139,8 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByText('symbol:a.rs#f')).toBeInTheDocument())
     expect(screen.getByRole('button', { name: 'Matrix' })).toHaveAttribute('data-active', 'true')
     expect(window.location.search).toContain('tags=kind%3Aartifact')
+    expect(screen.getByRole('checkbox', { name: 'Show syntax-only and fallback edges' })).not.toBeChecked()
+    expect(window.location.search).toContain('unproven=hide')
   })
 
   it('loads the overview layout and renders the fetched node count', async () => {
@@ -134,7 +151,42 @@ describe('App', () => {
     expect(screen.getByTestId('graph-scene')).toHaveTextContent('2 nodes')
     expect(screen.getByText('How this application is organized')).toBeInTheDocument()
     expect(screen.getByText('Major areas')).toBeInTheDocument()
-    expect(screen.getByText('bounded graph slice')).toBeInTheDocument()
+    expect(screen.getByText('Current bounded graph slice · complete')).toBeInTheDocument()
+  })
+
+  it('restores a known project from the URL and falls back before graph calls for an unknown id', async () => {
+    window.history.replaceState(null, '', '/?project=unknown')
+    mockMultiProjectRpc()
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByText('Ready')).toBeInTheDocument())
+    const layoutCall = vi.mocked(fetch).mock.calls.find(([, init]) => JSON.parse((init as RequestInit).body as string).params.name === 'get_graph_layout')
+    if (!layoutCall) throw new Error('expected graph layout request')
+    const body = JSON.parse((layoutCall[1] as RequestInit).body as string)
+    expect(body.params.project_id).toBeUndefined()
+    expect(screen.getByRole('combobox', { name: 'Project' })).toHaveValue('primary')
+    expect(window.location.search).not.toContain('unknown')
+  })
+
+  it('switches projects with a full dashboard reset and project-only URL', async () => {
+    mockMultiProjectRpc()
+    const user = userEvent.setup()
+    render(<App />)
+    await waitFor(() => expect(screen.getByText('Ready')).toBeInTheDocument())
+    await user.click(screen.getByText('select-first-node'))
+    await waitFor(() => expect(screen.getByText('Source excerpt')).toBeInTheDocument())
+
+    vi.mocked(fetch).mockClear()
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Project' }), 'web')
+
+    await waitFor(() => {
+      const layoutCall = vi.mocked(fetch).mock.calls.find(([, init]) => JSON.parse((init as RequestInit).body as string).params.name === 'get_graph_layout')
+      if (!layoutCall) throw new Error('expected project graph layout request')
+      const body = JSON.parse((layoutCall[1] as RequestInit).body as string)
+      expect(body.params.project_id).toBe('web')
+    })
+    expect(screen.queryByText('Source excerpt')).not.toBeInTheDocument()
+    expect(window.location.search).toBe('?project=web')
   })
 
   it('scopes from the architecture overview and returns with Back', async () => {
@@ -170,6 +222,8 @@ describe('App', () => {
     await user.click(screen.getByText('select-root-cluster'))
     expect(screen.getByLabelText('Selected cluster relationships')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Back to previous context' })).not.toBeInTheDocument()
+    const unproven = screen.getByRole('checkbox', { name: 'Show syntax-only and fallback edges' })
+    await user.click(unproven)
 
     vi.mocked(fetch).mockClear()
     mockRpcResponse(FIXTURE_LAYOUT)
@@ -177,10 +231,13 @@ describe('App', () => {
     await waitFor(() => expect(fetch).toHaveBeenCalled())
     expect(screen.getByRole('button', { name: 'Back to previous context' })).toBeInTheDocument()
     expect(window.location.search).toContain('maxNodes=150')
+    await user.click(unproven)
+    expect(unproven).toBeChecked()
     await user.click(screen.getByRole('button', { name: 'Tensions' }))
     expect(screen.getByRole('button', { name: 'Tensions' })).toHaveAttribute('data-active', 'true')
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Back to previous context' })).not.toBeInTheDocument())
+    expect(unproven).not.toBeChecked()
     expect(screen.getByRole('button', { name: 'Architecture' })).toHaveAttribute('data-active', 'true')
     expect(window.location.search).not.toContain('maxNodes=')
   })
@@ -243,6 +300,8 @@ describe('App', () => {
     expect(window.location.search).toContain('selected=artifact%3Aa.rs')
     await waitFor(() => expect(screen.getByText('Source excerpt')).toBeInTheDocument())
     expect(screen.getByText(/syntax-extraction.*High/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Node provenance tags')).toHaveTextContent('Parser · High')
+    expect(screen.getByLabelText('Relation provenance tags for r1')).toHaveTextContent('DependencyRole · High · evidence 1')
   })
 
   it('restores a saved investigation selection when its node is still in the layout', async () => {
@@ -257,13 +316,19 @@ describe('App', () => {
 
     await waitFor(() => expect(screen.getByText('Ready')).toBeInTheDocument())
     await user.click(screen.getByText('select-first-node'))
+    const unproven = screen.getByRole('checkbox', { name: 'Show syntax-only and fallback edges' })
+    await user.click(unproven)
+    expect(unproven).not.toBeChecked()
     await user.click(screen.getByRole('button', { name: 'Saved' }))
     await user.click(screen.getByRole('button', { name: 'Save investigation' }))
+    await user.click(unproven)
+    expect(unproven).toBeChecked()
     await user.click(screen.getByText('Clear'))
     expect(screen.queryByText('Click a node in the graph to inspect it.')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Investigation' }))
     expect(screen.getByText('artifact:a.rs')).toBeInTheDocument()
+    expect(unproven).not.toBeChecked()
   })
 
   it('carries a dashboard tension through evidence, tracing, and a saved investigation', async () => {

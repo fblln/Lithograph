@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { exportInvestigation, loadInvestigations, saveInvestigation, type SavedInvestigation } from '../investigations'
 
 export function SavedInvestigations({ current, onRestore }: { current: Omit<SavedInvestigation, 'id' | 'name' | 'notes'>; onRestore: (value: SavedInvestigation) => void }) {
+  const projectId = current.urlState.projectId ?? 'primary'
   const [name, setName] = useState('Investigation')
   const [notes, setNotes] = useState('')
-  const [items, setItems] = useState(loadInvestigations)
+  const [items, setItems] = useState(() => loadInvestigations(projectId))
   function save() {
     const item: SavedInvestigation = { ...current, id: `${current.graphSnapshotId}:${name}`, name, notes }
-    saveInvestigation(item); setItems(loadInvestigations())
+    saveInvestigation(item); setItems(loadInvestigations(projectId))
   }
   function download(item: SavedInvestigation) {
     const anchor = document.createElement('a')

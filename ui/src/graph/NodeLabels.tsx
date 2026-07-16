@@ -3,7 +3,7 @@ import type { PositionedNode } from './types'
 import { chooseImportantNodes } from './nodeLabelModel'
 
 export function NodeLabels({ nodes, positions, selectedId, entryPointIds = new Set(), clusterMemberIds, onSelect, onFocus }: { nodes: PositionedNode[]; positions: Map<string, [number, number, number]>; selectedId: string | null; entryPointIds?: Set<string>; clusterMemberIds?: Set<string>; onSelect: (node: PositionedNode) => void; onFocus?: (node: PositionedNode) => void }) {
-  const important = chooseImportantNodes(nodes, selectedId, entryPointIds, clusterMemberIds)
+  const important = chooseImportantNodes(nodes, selectedId, entryPointIds, clusterMemberIds, positions)
   return <>{important.map((node) => {
     const position = positions.get(node.id)
     if (!position) return null

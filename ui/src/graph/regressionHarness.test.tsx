@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { GraphScene } from './GraphScene'
 import { cameraFrameForPositions } from './cameraFrame'
@@ -17,7 +17,10 @@ vi.mock('./EdgeLines', () => ({ EdgeLines: ({ edges }: { edges: unknown[] }) => 
 vi.mock('./ClusterHulls', () => ({ ClusterHulls: () => <div data-testid="cluster-hulls" /> }))
 
 describe('graph explorer regression harness', () => {
-  afterEach(cleanup)
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+  })
   it.each([
     ['small', smallGraphFixture],
     ['medium', mediumGraphFixture],
@@ -47,15 +50,62 @@ describe('graph explorer regression harness', () => {
     expect(screen.getByTestId('edge-lines')).toHaveTextContent(String(expected))
   })
 
-  it('frames repository-scale layouts instead of using the demo camera distance', () => {
+  it('frames repository-scale layouts to fit each axis without the old empty-canvas margin', () => {
     const frame = cameraFrameForPositions(new Map([
       ['left', [-40, 0, -20]],
       ['right', [40, 0, 20]],
     ]))
     expect(frame.position[0]).toBe(0)
-    expect(frame.position[1]).toBeGreaterThan(100)
+    // Far enough that both the 80-wide and 40-deep spans fit the frustum with
+    // margin, but closer than the old flat `max-span * 1.6` (128 here), which
+    // left wide layouts as a thin band in an empty canvas.
+    expect(frame.position[1]).toBeGreaterThan(50)
+    expect(frame.position[1]).toBeLessThan(128)
     expect(Math.abs(frame.position[2] - frame.target[2])).toBeLessThan(frame.position[1] * 0.1)
     expect(frame.far).toBeGreaterThan(1000)
     expect(frame.position.every(Number.isFinite)).toBe(true)
+  })
+
+  it('backs the camera out for a deep layout so the depth axis also fits', () => {
+    // Depth (Z) is limited by the vertical frustum, which is narrower than
+    // the horizontal one at any aspect > 1, so a deep layout needs more
+    // distance than an equally wide one.
+    const wide = cameraFrameForPositions(new Map([
+      ['left', [-40, 0, 0]],
+      ['right', [40, 0, 0]],
+    ]))
+    const deep = cameraFrameForPositions(new Map([
+      ['near', [0, 0, -40]],
+      ['far', [0, 0, 40]],
+    ]))
+    expect(deep.position[1]).toBeGreaterThan(wide.position[1])
+  })
+
+  it('uses the current graph viewport aspect and reacts when an inspector narrows it', () => {
+    let resize: ResizeObserverCallback | undefined
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: ResizeObserverCallback) { resize = callback }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    })
+    render(<GraphScene layout={smallGraphFixture()} viewMode="radial" clusters={[]} selectedId={null} onSelect={() => {}} dragPositions={{ getOverride: () => undefined, setOverride: () => {}, clearOverride: () => {}, clearAll: () => {}, hasOverride: () => false }} />)
+    const viewport = screen.getByTestId('graph-scene-viewport')
+
+    act(() => resize?.([{ contentRect: { width: 800, height: 600 } } as ResizeObserverEntry], {} as ResizeObserver))
+    expect(viewport).toHaveAttribute('data-camera-aspect', String(800 / 600))
+
+    act(() => resize?.([{ contentRect: { width: 480, height: 600 } } as ResizeObserverEntry], {} as ResizeObserver))
+    expect(viewport).toHaveAttribute('data-camera-aspect', String(480 / 600))
+  })
+
+  it('backs the camera out when the measured viewport becomes narrower', () => {
+    const positions = new Map([
+      ['left', [-40, 0, 0] as [number, number, number]],
+      ['right', [40, 0, 0] as [number, number, number]],
+    ])
+    const wide = cameraFrameForPositions(positions, 16 / 9)
+    const narrow = cameraFrameForPositions(positions, 4 / 5)
+    expect(narrow.position[1]).toBeGreaterThan(wide.position[1])
   })
 })

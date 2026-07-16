@@ -15,7 +15,6 @@
     "external package: subprocess",
     "external package: typescript",
     "external package: vite",
-    "unresolved reference: .github/workflows/ci.yml",
     "unresolved reference: /usr/local/bin/worker",
     "unresolved reference: /var/cache/ridgeline",
     "unresolved reference: App",
@@ -39,14 +38,15 @@
     "unresolved reference: lang",
     "unresolved reference: main",
     "unresolved reference: meta",
-    "unresolved reference: p"
+    "unresolved reference: p",
+    "unresolved reference: route"
   ],
   "evidence": [
     {
       "reference": "relation:3"
     },
     {
-      "reference": "relation:153"
+      "reference": "relation:149"
     },
     {
       "reference": "relation:6"

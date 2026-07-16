@@ -25,13 +25,13 @@ interface HullEntry {
   color: string
 }
 
-/** Adaptive, selectable cluster regions driven by the same visual membership
- * as the force layout. Even empty and partial analytical clusters retain a
- * labeled body so overview completeness is explicit. */
+/** Adaptive, selectable cluster regions driven by renderable membership.
+ * Unresolved/external members remain in graph membership but do not inflate
+ * architectural hull geometry. */
 export function ClusterHulls({ clusters, positions, identities, selectedId, onSelect, onEnter }: ClusterHullsProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
-  const hulls = useMemo<HullEntry[]>(() => clusters.map((cluster) => {
-    const worldPositions = cluster.members
+  const hulls = useMemo<HullEntry[]>(() => clusters.filter((cluster) => (cluster.renderedMembers ?? cluster.members).length > 0).map((cluster) => {
+    const worldPositions = (cluster.renderedMembers ?? cluster.members)
       .map((memberId) => positions.get(memberId))
       .filter((position): position is [number, number, number] => position !== undefined)
     const flatPoints: [number, number][] = worldPositions.length > 0
@@ -91,11 +91,16 @@ export function ClusterHulls({ clusters, positions, identities, selectedId, onSe
         >
           <strong>{identity?.name ?? hull.cluster.id}</strong>
           <span>{identity ? `${identity.visibleMemberCount}/${identity.memberCount} nodes` : `${hull.cluster.members.length} nodes`}</span>
+          <MutedClusterCount count={hull.cluster.mutedMemberCount ?? 0} />
           {identity?.tensionCount ? <span data-severity={identity.highestSeverity?.toLowerCase()}>{identity.tensionCount} attention</span> : null}
         </button>
       </Html>
     </group>
   })}</>
+}
+
+export function MutedClusterCount({ count }: { count: number }) {
+  return count > 0 ? <span style={{ color: 'var(--atlas-text-faint)' }}>+{count} unresolved/external</span> : null
 }
 
 function hashString(value: string): number {

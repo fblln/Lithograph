@@ -22,24 +22,26 @@
 use crate::analysis::{
     ActionsProfile, ActionsProfileAnalyzer, ActionsStepHint, AnalysisCache, AnalyzerKind,
     AnalyzerOutput, CargoProfile, CargoProfileAnalyzer, ComposeProfile, ComposeProfileAnalyzer,
-    ConfigReferenceKind, DockerfileAnalysis, DockerfileAnalyzer, EnvironmentFacts,
-    GenericTextExtractor, MarkdownAnalysis, MarkdownAnalyzer, PackageManifestAnalysis,
-    PackageManifestFormat, ProtocolFormat, ProtocolRoute, PyProjectAnalyzer, PyProjectProfile,
-    PythonAnalysis, PythonAnalyzer, PythonImportKind, PythonReferenceKind, RequirementsAnalyzer,
-    RequirementsProfile, RustAnalysis, RustAnalyzer, RustReferenceKind, RustWorkspaceAnalysis,
-    RustWorkspaceAnalyzer, StructuredAnalysis, StructuredAnalyzer, StructuredFormat,
-    SyntaxIndexedLanguage, TextFinding, TextFindingKind, TreeSitterAdapterOutput,
-    TypeScriptAnalysis, TypeScriptAnalyzer, TypeScriptLanguage, is_python_stdlib_module,
-    normalize_python_package_name, python, rust_source, rust_std_crate,
+    ConfigReferenceKind, DockerCommandKind, DockerfileAnalysis, DockerfileAnalyzer,
+    EnvironmentFacts, GenericTextExtractor, MarkdownAnalysis, MarkdownAnalyzer,
+    PackageManifestAnalysis, PackageManifestFormat, ProtocolFormat, ProtocolRoute,
+    PyProjectAnalyzer, PyProjectProfile, PythonAnalysis, PythonAnalyzer, PythonImportKind,
+    PythonReferenceKind, RequirementsAnalyzer, RequirementsProfile, RustAnalysis, RustAnalyzer,
+    RustReferenceKind, RustWorkspaceAnalysis, RustWorkspaceAnalyzer, StructuredAnalysis,
+    StructuredAnalyzer, StructuredFormat, SyntaxIndexedLanguage, TextFinding, TextFindingKind,
+    TreeSitterAdapterOutput, TypeScriptAnalysis, TypeScriptAnalyzer, TypeScriptLanguage,
+    TypeScriptReExportKind, is_python_stdlib_module, normalize_python_package_name, python,
+    rust_source, rust_std_crate,
 };
 use crate::domain::{
     AnalyzerSelection, Artifact, ArtifactId, Confidence, EvidenceRef, ModelExposurePolicy,
     TextStatus,
 };
 use crate::graph::model::{
-    ArtifactNode, CommandNode, ConfigNode, ConfigNodeKind, ContainerImageNode, DocumentationNode,
-    EnvVarNode, Graph, GraphNode, GraphNodeId, ModuleLanguage, ModuleNode, PackageNode, Relation,
-    RelationKind, RelationProvenance, RelationResolution, SymbolKind, SymbolNode, UnresolvedNode,
+    ArtifactNode, CommandNode, CommandProvenance, ConfigNode, ConfigNodeKind, ContainerImageNode,
+    DocumentationNode, EnvVarNode, Graph, GraphNode, GraphNodeId, ModuleLanguage, ModuleNode,
+    PackageNode, Relation, RelationKind, RelationProvenance, RelationResolution, SymbolKind,
+    SymbolNode, UnresolvedNode,
 };
 use crate::graph::{
     GRAPH_BUILD_PIPELINE_VERSION, GraphBuildOutput, GraphBuildPass, GraphBuildTraceConfig,
@@ -161,6 +163,14 @@ impl GraphBuilder {
                 };
             state.register_rust_crate_roots(&workspace);
         }
+
+        // LIT-45.2: read every `tsconfig.json` before indexing any TS file, so
+        // an aliased import resolves regardless of artifact walk order. Like
+        // the manifest pre-pass below, this deliberately bypasses the analysis
+        // cache: these files are small, few, and not analyzed anywhere else,
+        // so a cache entry would cost more bookkeeping than the parse.
+        state.ts_aliases =
+            crate::resolve::TsAliasMap::build(&collect_ts_configs(repo_root, artifacts));
 
         // Collect this repo's own declared Python dependency names (LIT-44.1)
         // before indexing any Python file, so `python_external_target` can
@@ -299,6 +309,11 @@ impl GraphBuilder {
         // together: the clone materializes the enrichment-stage graph that
         // `record` hashes, so it is enrichment work, not free (LIT-39).
         let finish_started = Instant::now();
+        // LIT-57: `finish` consumes the state, so the propagation facts it
+        // accumulated are taken out first; the resolution stage below is the
+        // only consumer.
+        let type_facts = std::mem::take(&mut state.type_facts);
+        let ts_aliases = std::mem::take(&mut state.ts_aliases);
         let mut graph = state.finish();
         output.graph = graph.clone();
         let enrichment_finish_us = finish_started
@@ -371,7 +386,13 @@ impl GraphBuilder {
         // caller, or callers would see inconsistently-resolved graphs.
         let resolution_started = Instant::now();
         let relations_before_resolution = graph.relations.clone();
-        crate::resolve::HybridResolverPipeline::default_pipeline().resolve(&mut graph);
+        // LIT-57: types receivers across files before the name-based
+        // resolvers run. It appends `HybridResolved` relations, which the
+        // pipeline below never revisits, so the two cannot contend for the
+        // same call.
+        crate::resolve::propagate_types(&mut graph, &type_facts);
+        crate::resolve::HybridResolverPipeline::default_pipeline()
+            .resolve_with_aliases(&mut graph, ts_aliases);
         crate::resolve::resolve_environment_links(&mut graph);
         prune_orphaned_unresolved_nodes(&mut graph);
         let resolution_decisions = trace_decisions_for_relations(
@@ -555,6 +576,16 @@ struct BuilderState {
     /// populated by a pre-pass before any Python file is indexed so
     /// `python_external_target` can classify a third-party import as a known
     /// project dependency regardless of artifact walk order.
+    /// LIT-57: per-file receiver-typing facts, accumulated while each file is
+    /// analyzed and consumed once by the cross-file propagation pass after
+    /// every symbol exists. They are carried here rather than staged as
+    /// `Unresolved` `Calls` edges because an unresolved value like `p.dumps`
+    /// would be claimed by `SymbolNameResolver`'s unique simple-name match and
+    /// fabricate an edge into whatever `dumps` happened to be unique (LIT-63).
+    type_facts: crate::resolve::TypeFacts,
+    /// LIT-45.2: tsconfig `compilerOptions.paths` aliases, read once before
+    /// any TypeScript file is indexed.
+    ts_aliases: crate::resolve::TsAliasMap,
     python_manifest_packages: BTreeSet<String>,
     /// Crate names declared in Cargo.toml (LIT-66).
     rust_manifest_packages: BTreeSet<String>,
@@ -577,6 +608,8 @@ impl BuilderState {
             rust_modules: BTreeMap::new(),
             rust_crate_roots: BTreeSet::new(),
             rust_local_crates: BTreeSet::new(),
+            type_facts: crate::resolve::TypeFacts::new(),
+            ts_aliases: crate::resolve::TsAliasMap::default(),
             python_manifest_packages: BTreeSet::new(),
             rust_manifest_packages: BTreeSet::new(),
         }
@@ -754,9 +787,21 @@ impl BuilderState {
         text: &str,
         evidence: EvidenceRef,
     ) -> GraphNodeId {
+        let provenance = command_provenance(artifact, &evidence);
+        self.command_with_provenance(artifact, key, text, evidence, provenance)
+    }
+    fn command_with_provenance(
+        &mut self,
+        artifact: &Artifact,
+        key: &str,
+        text: &str,
+        evidence: EvidenceRef,
+        provenance: CommandProvenance,
+    ) -> GraphNodeId {
         self.insert(GraphNode::Command(CommandNode {
             id: GraphNodeId::new(format!("command:{}#{key}", artifact.path)),
             text: text.to_owned(),
+            provenance,
             evidence,
         }))
     }
@@ -854,6 +899,32 @@ impl BuilderState {
             .contains(normalized)
             .then(|| GraphNodeId::new(format!("artifact:{normalized}")))
     }
+    /// Resolves a path mentioned by documentation without manufacturing an
+    /// `Unresolved` node when it is prose, a broken link, or a quoted code
+    /// fragment. Documentation analyzers retain those findings (and Markdown
+    /// drift records), while the graph only records references that point to
+    /// an inventoried repository artifact.
+    fn resolve_documentation_path(&self, artifact: &Artifact, value: &str) -> Option<GraphNodeId> {
+        let path = value.split(['#', '?']).next()?.trim();
+        if path.is_empty() {
+            return None;
+        }
+
+        let normalized = if path.starts_with('/') {
+            path.trim_start_matches('/').to_owned()
+        } else {
+            let parent = artifact
+                .path
+                .as_str()
+                .rsplit_once('/')
+                .map_or("", |(parent, _)| parent);
+            crate::resolve::imports::resolve_relative_path(std::path::Path::new(parent), path)
+        };
+        self.artifact_paths
+            .contains(&normalized)
+            .then(|| GraphNodeId::new(format!("artifact:{normalized}")))
+            .or_else(|| self.resolve_path(path))
+    }
     fn reference_target(&mut self, value: &str) -> (GraphNodeId, Confidence) {
         match self.resolve_path(value) {
             Some(id) => (id, Confidence::High),
@@ -924,6 +995,26 @@ impl BuilderState {
     }
 }
 
+fn command_provenance(artifact: &Artifact, evidence: &EvidenceRef) -> CommandProvenance {
+    let is_documentation_path = evidence.path.as_str().split('/').any(|component| {
+        component.eq_ignore_ascii_case("doc")
+            || component.eq_ignore_ascii_case("docs")
+            || component.eq_ignore_ascii_case("documentation")
+    });
+    if artifact.category == crate::domain::ArtifactCategory::Documentation || is_documentation_path
+    {
+        CommandProvenance::DocumentationExample
+    } else if matches!(
+        artifact.category,
+        crate::domain::ArtifactCategory::BuildDefinition
+            | crate::domain::ArtifactCategory::ContinuousIntegration
+    ) {
+        CommandProvenance::BuildAutomation
+    } else {
+        CommandProvenance::Executable
+    }
+}
+
 fn artifact_node_id(artifact: &Artifact) -> GraphNodeId {
     GraphNodeId::new(format!("artifact:{}", artifact.path))
 }
@@ -975,6 +1066,87 @@ fn file_name(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
 
+/// LIT-45.2: every `tsconfig.json` in the repository, plus the configs they
+/// extend.
+///
+/// Discovery starts from `tsconfig*.json` because that is what a repository
+/// names its configs. An `extends` target need not follow that convention
+/// (`./base.json` is common), so the chain is followed explicitly rather than
+/// hoping the name matches -- otherwise inherited `paths` silently vanish.
+/// Only files already in `artifacts` are read, so this never reaches outside
+/// the scanned tree or into `node_modules`.
+fn collect_ts_configs(
+    repo_root: &Path,
+    artifacts: &[Artifact],
+) -> BTreeMap<String, crate::analysis::TsConfigProfile> {
+    let readable: BTreeMap<&str, &Artifact> = artifacts
+        .iter()
+        .filter(|artifact| {
+            artifact.path.as_str().ends_with(".json")
+                && artifact.text_status == TextStatus::Text
+                && artifact.model_policy != ModelExposurePolicy::Never
+        })
+        .map(|artifact| (artifact.path.as_str(), artifact))
+        .collect();
+
+    let read = |path: &str| -> Option<crate::analysis::TsConfigProfile> {
+        readable.get(path)?;
+        let text = std::fs::read_to_string(repo_root.join(path)).ok()?;
+        crate::analysis::parse_tsconfig(&text)
+    };
+
+    let mut configs: BTreeMap<String, crate::analysis::TsConfigProfile> = readable
+        .keys()
+        .filter(|path| file_name(path).starts_with("tsconfig."))
+        .filter_map(|path| Some(((*path).to_owned(), read(path)?)))
+        .collect();
+
+    // Pull in extended configs until the set closes. Bounded by `readable`,
+    // and each pass only adds paths not already present, so a cyclic
+    // `extends` cannot loop here.
+    loop {
+        let wanted: Vec<String> = configs
+            .iter()
+            .filter_map(|(path, profile)| {
+                let extends = profile.extends.as_deref()?;
+                // A bare specifier lives in node_modules, which is not scanned.
+                if !(extends.starts_with("./") || extends.starts_with("../")) {
+                    return None;
+                }
+                let directory = path.rsplit_once('/').map_or("", |(parent, _)| parent);
+                let mut resolved =
+                    crate::resolve::imports::resolve_relative_path(Path::new(directory), extends);
+                if !resolved.ends_with(".json") {
+                    resolved.push_str(".json");
+                }
+                (!configs.contains_key(&resolved)).then_some(resolved)
+            })
+            .collect();
+        if wanted.is_empty() {
+            break;
+        }
+        let mut added = false;
+        for path in wanted {
+            match read(&path) {
+                Some(profile) => {
+                    configs.insert(path, profile);
+                    added = true;
+                }
+                // Record the miss so the loop does not ask for it forever.
+                None => {
+                    configs.insert(path, crate::analysis::TsConfigProfile::default());
+                    added = true;
+                }
+            }
+        }
+        if !added {
+            break;
+        }
+    }
+
+    configs
+}
+
 #[cfg(test)]
 fn fixture_root() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot")
@@ -1016,6 +1188,428 @@ mod tests {
     use super::*;
     use crate::graph::GRAPH_BUILD_PASS_ORDER;
     use crate::inventory::{RepositoryWalker, WalkOptions};
+
+    /// LIT-57 AC2, end to end through the real analyzers and builder rather
+    /// than hand-built facts: `provider.dumps()` in one file resolves to the
+    /// method on a class constructed from an import of another file, and the
+    /// same-named method on an unrelated class is not what it resolves to.
+    #[test]
+    fn cross_file_receiver_calls_resolve_through_the_real_pipeline()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(
+            temp.path().join("src/provider.py"),
+            "class Provider:\n    def dumps(self):\n        return self.helper()\n\n    def helper(self):\n        return 1\n",
+        )?;
+        // A same-named method on an unrelated class: resolving by method name
+        // alone would make `dumps` ambiguous and could land here.
+        std::fs::write(
+            temp.path().join("src/other.py"),
+            "class Unrelated:\n    def dumps(self):\n        return 2\n",
+        )?;
+        // A relative import, which is how a package imports its own modules
+        // and what every intra-project import in the pinned Flask corpus
+        // looks like.
+        std::fs::write(temp.path().join("src/__init__.py"), "")?;
+        std::fs::write(
+            temp.path().join("src/app.py"),
+            "from .provider import Provider\n\nprovider = Provider()\n\n\ndef run():\n    return provider.dumps()\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let propagated: Vec<&str> = graph
+            .relations
+            .iter()
+            .filter(|relation| {
+                relation.provenance.as_ref().is_some_and(|provenance| {
+                    provenance.resolver_strategy == crate::resolve::PROPAGATE_STRATEGY
+                })
+            })
+            .map(|relation| relation.target.as_str())
+            .collect();
+
+        assert_eq!(
+            propagated,
+            vec![
+                // `provider.dumps()` in app.py, typed by the construction of
+                // an imported class.
+                "symbol:src/provider.py#src.provider::Provider::dumps",
+                // `self.helper()` inside Provider.dumps.
+                "symbol:src/provider.py#src.provider::Provider::helper",
+            ],
+            "receiver calls must resolve to the receiver's class, not to any same-named method",
+        );
+
+        Ok(())
+    }
+
+    /// LIT-57 AC2 for TypeScript, end to end. Uses a direct relative import:
+    /// a barrel (`from '../../client'` re-exporting the class) needs LIT-45.3
+    /// before it can resolve, which is why the pinned Full Stack FastAPI
+    /// corpus produces no TypeScript propagation yet.
+    #[test]
+    fn typescript_receiver_calls_resolve_through_the_real_pipeline()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(
+            temp.path().join("src/provider.ts"),
+            "export class Provider {\n  dumps() {\n    return this.helper();\n  }\n  helper() {\n    return 1;\n  }\n}\n",
+        )?;
+        std::fs::write(
+            temp.path().join("src/other.ts"),
+            "export class Unrelated {\n  dumps() {\n    return 2;\n  }\n}\n",
+        )?;
+        std::fs::write(
+            temp.path().join("src/app.ts"),
+            "import { Provider } from './provider';\n\nconst provider = new Provider();\n\nexport function run() {\n  return provider.dumps();\n}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let propagated: Vec<&str> = graph
+            .relations
+            .iter()
+            .filter(|relation| {
+                relation.provenance.as_ref().is_some_and(|provenance| {
+                    provenance.resolver_strategy == crate::resolve::PROPAGATE_STRATEGY
+                })
+            })
+            .map(|relation| relation.target.as_str())
+            .collect();
+
+        assert_eq!(
+            propagated,
+            vec![
+                // `provider.dumps()` in app.ts, typed by `new Provider()`
+                // where `Provider` came from the import.
+                "symbol:src/provider.ts#src/provider.ts::Provider::dumps",
+                // `this.helper()` inside Provider.dumps.
+                "symbol:src/provider.ts#src/provider.ts::Provider::helper",
+            ],
+            "the same-named `dumps` on Unrelated must not be what this resolves to",
+        );
+
+        Ok(())
+    }
+
+    /// LIT-45.5 AC2 end to end: TypeScript inheritance must be extracted by
+    /// the analyzer, materialized as a real graph edge, and visible to the
+    /// receiver resolver before it handles `this.inherited()`.
+    #[test]
+    fn typescript_inherited_receiver_calls_resolve_through_the_real_pipeline()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(
+            temp.path().join("src/base.ts"),
+            "export class Base {\n  inherited() { return 1; }\n}\n",
+        )?;
+        std::fs::write(
+            temp.path().join("src/child.ts"),
+            "import { Base } from './base';\nexport class Child extends Base {\n  run() { return this.inherited(); }\n}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        assert!(graph.relations.iter().any(|relation| {
+            relation.kind == RelationKind::Inherits
+                && relation.source.as_str() == "symbol:src/child.ts#src/child.ts::Child"
+                && relation.target.as_str() == "symbol:src/base.ts#src/base.ts::Base"
+        }));
+        assert!(graph.relations.iter().any(|relation| {
+            relation.kind == RelationKind::Calls
+                && relation.source.as_str() == "artifact:src/child.ts"
+                && relation.target.as_str() == "symbol:src/base.ts#src/base.ts::Base::inherited"
+                && relation.provenance.as_ref().is_some_and(|provenance| {
+                    provenance.resolver_strategy == crate::resolve::PROPAGATE_STRATEGY
+                })
+        }));
+
+        Ok(())
+    }
+
+    /// Import facts are file-global, so two conditional imports that bind the
+    /// same local name to different classes are ambiguous. Neither branch may
+    /// win merely because it was visited last.
+    #[test]
+    fn conditional_import_name_collisions_do_not_type_receivers()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(temp.path().join("src/__init__.py"), "")?;
+        std::fs::write(
+            temp.path().join("src/left.py"),
+            "class Service:\n    def run(self):\n        return 'left'\n",
+        )?;
+        std::fs::write(
+            temp.path().join("src/right.py"),
+            "class Service:\n    def run(self):\n        return 'right'\n",
+        )?;
+        std::fs::write(
+            temp.path().join("src/app.py"),
+            "import typing as t\n\nif t.TYPE_CHECKING:\n    from .left import Service\n\nif t.TYPE_CHECKING:\n    from .right import Service\n\n\ndef use(service: Service):\n    return service.run()\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        assert!(!graph.relations.iter().any(|relation| {
+            relation.kind == RelationKind::Calls
+                && relation.source.as_str() == "artifact:src/app.py"
+                && relation.provenance.as_ref().is_some_and(|provenance| {
+                    provenance.resolver_strategy == crate::resolve::PROPAGATE_STRATEGY
+                })
+        }));
+
+        Ok(())
+    }
+
+    /// Two calls to the same target can share a physical source line. Their
+    /// relation identities must remain distinct so indexes and storage never
+    /// collapse one call site into the other.
+    #[test]
+    fn same_line_receiver_calls_have_distinct_relation_ids()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(
+            temp.path().join("src/app.ts"),
+            "class App { helper() {} run() { this.helper(); this.helper(); } }\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+        let calls: Vec<_> = graph
+            .relations
+            .iter()
+            .filter(|relation| {
+                relation.kind == RelationKind::Calls
+                    && relation.target.as_str() == "symbol:src/app.ts#src/app.ts::App::helper"
+                    && relation.provenance.as_ref().is_some_and(|provenance| {
+                        provenance.resolver_strategy == crate::resolve::PROPAGATE_STRATEGY
+                    })
+            })
+            .collect();
+        let ids: BTreeSet<_> = calls.iter().map(|relation| relation.id.as_str()).collect();
+
+        assert_eq!(calls.len(), 2);
+        assert_eq!(
+            ids.len(),
+            2,
+            "each same-line call site needs its own relation id"
+        );
+
+        Ok(())
+    }
+
+    /// LIT-45.3 AC1/AC2 end to end, in the exact shape the pinned Full Stack
+    /// FastAPI corpus uses: `import { ItemsService } from '../../client'`
+    /// where `client/` is a directory whose `index.ts` re-exports the class
+    /// from a nested barrel. Before this, the import named no file at all
+    /// (directory imports were not candidates) and the barrel declared
+    /// nothing, so the call resolved to nothing.
+    #[test]
+    fn barrel_re_exported_classes_resolve_to_the_declaring_module()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src/client/services"))?;
+        std::fs::write(
+            temp.path().join("src/client/services/ItemsService.ts"),
+            "export class ItemsService {\n  static deleteItem(id: string) {\n    return id;\n  }\n}\n",
+        )?;
+        // Two hops: client/index.ts -> services/index.ts -> ItemsService.ts,
+        // with a star export for the first hop and a named one for the second.
+        std::fs::write(
+            temp.path().join("src/client/services/index.ts"),
+            "export { ItemsService } from './ItemsService';\n",
+        )?;
+        std::fs::write(
+            temp.path().join("src/client/index.ts"),
+            "export * from './services';\n",
+        )?;
+        std::fs::write(
+            temp.path().join("src/app.ts"),
+            "import { ItemsService } from './client';\n\nexport function run() {\n  return ItemsService.deleteItem('1');\n}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let propagated: Vec<&str> = graph
+            .relations
+            .iter()
+            .filter(|relation| {
+                relation.provenance.as_ref().is_some_and(|provenance| {
+                    provenance.resolver_strategy == crate::resolve::PROPAGATE_STRATEGY
+                })
+            })
+            .map(|relation| relation.target.as_str())
+            .collect();
+
+        assert_eq!(
+            propagated,
+            vec![
+                "symbol:src/client/services/ItemsService.ts#src/client/services/ItemsService.ts::ItemsService::deleteItem",
+            ],
+            "the call must reach the declaring module, not stop at either barrel",
+        );
+
+        Ok(())
+    }
+
+    /// LIT-45.2 AC1/AC4 end to end: an aliased import resolves to the file the
+    /// alias names, and an alias whose target does not exist resolves to
+    /// nothing rather than to a plausible-looking neighbour.
+    #[test]
+    fn tsconfig_path_aliases_resolve_imports_and_misses_fall_through()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(
+            temp.path().join("tsconfig.json"),
+            // JSONC, as the pinned NestJS config is: a comment and a trailing
+            // comma, both of which plain JSON rejects.
+            "{\n  // Path aliases.\n  \"compilerOptions\": {\n    \"baseUrl\": \".\",\n    \"paths\": {\n      \"@app/*\": [\"./src/*\"],\n    },\n  },\n}\n",
+        )?;
+        std::fs::write(
+            temp.path().join("src/util.ts"),
+            "export function helper() {\n  return 1;\n}\n",
+        )?;
+        std::fs::write(
+            temp.path().join("src/main.ts"),
+            "import { helper } from '@app/util';\nimport { nope } from '@app/does-not-exist';\n\nexport function run() {\n  return helper();\n}\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let imports: Vec<&str> = graph
+            .relations
+            .iter()
+            .filter(|relation| {
+                relation.kind == RelationKind::Imports
+                    && relation.source.as_str() == "artifact:src/main.ts"
+            })
+            .map(|relation| relation.target.as_str())
+            .collect();
+
+        assert!(
+            imports.contains(&"artifact:src/util.ts"),
+            "`@app/util` must resolve through the alias to src/util.ts, got {imports:?}",
+        );
+        assert!(
+            imports
+                .iter()
+                .any(|target| target.starts_with("unresolved:")),
+            "`@app/does-not-exist` matches the alias pattern but names no file, \
+             so it must stay unresolved rather than resolve to src/util.ts; got {imports:?}",
+        );
+
+        Ok(())
+    }
+
+    /// LIT-45.5: a parameter annotation types the receiver, in the exact shape
+    /// that dominates the pinned Flask corpus -- `def serve(app: Flask)`
+    /// followed by `app.run()`, where `Flask` is imported from another file.
+    #[test]
+    fn annotated_parameters_type_receivers_through_the_real_pipeline()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(temp.path().join("src/__init__.py"), "")?;
+        std::fs::write(
+            temp.path().join("src/app.py"),
+            "class Flask:\n    def run(self):\n        return 1\n",
+        )?;
+        // The import sits under `if TYPE_CHECKING:`, as it does for every
+        // annotation receiver in the pinned Flask corpus -- a top-level-only
+        // import scan misses it and the annotation types nothing.
+        std::fs::write(
+            temp.path().join("src/serve.py"),
+            "import typing as t\n\nif t.TYPE_CHECKING:\n    from .app import Flask\n\n\ndef serve(app: Flask):\n    return app.run()\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let propagated: Vec<(&str, &str)> = graph
+            .relations
+            .iter()
+            .filter(|relation| {
+                relation.provenance.as_ref().is_some_and(|provenance| {
+                    provenance.resolver_strategy == crate::resolve::PROPAGATE_STRATEGY
+                })
+            })
+            .map(|relation| (relation.source.as_str(), relation.target.as_str()))
+            .collect();
+
+        assert_eq!(
+            propagated,
+            vec![(
+                "artifact:src/serve.py",
+                "symbol:src/app.py#src.app::Flask::run",
+            )],
+            "`app` is typed only by its annotation; the edge must cross into app.py",
+        );
+
+        Ok(())
+    }
+
+    /// LIT-45.4 AC1-AC3: CommonJS requires resolve like ESM imports -- a
+    /// relative require to the local artifact (through LIT-45.1's candidate
+    /// order, so `./util` finds `util.js`), a bare require to the declared
+    /// package, and a dynamic require to nothing at all.
+    #[test]
+    fn commonjs_requires_resolve_through_the_import_pipeline()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(
+            temp.path().join("package.json"),
+            "{\n  \"name\": \"app\",\n  \"dependencies\": {\n    \"react\": \"^18.0.0\"\n  }\n}\n",
+        )?;
+        std::fs::write(temp.path().join("src/util.js"), "module.exports = {};\n")?;
+        std::fs::write(
+            temp.path().join("src/main.js"),
+            "const util = require('./util');\nconst react = require('react');\nconst dynamic = require(process.env.MODULE);\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let imports: Vec<&str> = graph
+            .relations
+            .iter()
+            .filter(|relation| {
+                relation.kind == RelationKind::Imports
+                    && relation.source.as_str() == "artifact:src/main.js"
+            })
+            .map(|relation| relation.target.as_str())
+            .collect();
+
+        assert!(
+            imports.contains(&"artifact:src/util.js"),
+            "require('./util') must resolve to the local artifact, got {imports:?}",
+        );
+        assert!(
+            imports.contains(&"package:react"),
+            "require('react') must resolve to the declared dependency, got {imports:?}",
+        );
+        assert!(
+            !imports
+                .iter()
+                .any(|target| target.contains("process.env") || target.contains("MODULE")),
+            "a dynamic require must produce no import fact at all, got {imports:?}",
+        );
+
+        Ok(())
+    }
 
     #[test]
     fn build_with_cache_none_matches_build() -> Result<(), Box<dyn std::error::Error>> {

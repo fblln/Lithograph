@@ -38,6 +38,10 @@ pub struct RepositoryTension {
     pub evidence_references: Vec<String>,
     pub explanation: String,
     pub follow_up_queries: Vec<String>,
+    /// Snapshot-bound display tags added by API surfaces. Scoring itself is
+    /// independent of persistence and therefore leaves these empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<crate::graph::GraphTag>,
 }
 /// A graph-snapshot-bound tension result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -171,6 +175,7 @@ fn tension(
         evidence_references: evidence,
         explanation: format!("{:?} detected from deterministic graph evidence", category),
         follow_up_queries: vec!["MATCH (n)-[r]-(m) RETURN n,r,m".into()],
+        tags: vec![],
     }
 }
 

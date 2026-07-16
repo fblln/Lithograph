@@ -1,7 +1,7 @@
 //! Typed deterministic tags and taxonomy queries over graph entities.
 use crate::architecture::{LayerDetector, LayerKind};
 use crate::domain::Confidence;
-use crate::graph::{Graph, GraphNode};
+use crate::graph::{ArchitectureCluster, Graph, GraphNode, Relation, RepositoryTension};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -232,11 +232,78 @@ pub fn inherit_tag(parent: &GraphTag, entity_id: impl Into<String>) -> GraphTag 
     tag.evidence = parent.evidence.clone();
     tag
 }
+
+/// Builds display-only tags for a relation without adding them to the
+/// node-scope tag index.
+pub fn relation_display_tags(relation: &Relation, snapshot: &str) -> Vec<GraphTag> {
+    let mut tag = GraphTag::new(
+        &relation.id,
+        "relation",
+        format!("{:?}", relation.kind).to_ascii_lowercase(),
+        TagSource::DependencyRole,
+        snapshot,
+    );
+    tag.confidence = relation.confidence;
+    tag.evidence = relation
+        .evidence
+        .iter()
+        .map(|evidence| evidence.path.as_str().to_owned())
+        .collect();
+    let mut tags = vec![tag];
+    if let Some(provenance) = &relation.provenance {
+        let mut resolution = GraphTag::new(
+            &relation.id,
+            "resolution",
+            &provenance.resolver_strategy,
+            TagSource::DependencyRole,
+            snapshot,
+        );
+        resolution.confidence = provenance.confidence;
+        resolution.evidence = tags[0].evidence.clone();
+        tags.push(resolution);
+    }
+    tags
+}
+
+/// Builds display-only architecture tags for a cluster. Member ids are kept
+/// as provenance evidence; these tags never participate in node filtering.
+pub fn cluster_display_tags(cluster: &ArchitectureCluster, snapshot: &str) -> Vec<GraphTag> {
+    let mut tag = GraphTag::new(
+        &cluster.id,
+        "kind",
+        "cluster",
+        TagSource::Architecture,
+        snapshot,
+    );
+    tag.evidence = cluster
+        .members
+        .iter()
+        .map(|member| member.as_str().to_owned())
+        .collect();
+    vec![tag]
+}
+
+/// Builds display-only risk tags for one deterministic tension.
+pub fn tension_display_tags(tension: &RepositoryTension, snapshot: &str) -> Vec<GraphTag> {
+    let mut tag = GraphTag::new(
+        &tension.id,
+        "risk",
+        format!("{:?}", tension.severity).to_ascii_lowercase(),
+        TagSource::Tension,
+        snapshot,
+    );
+    tag.confidence = tension.confidence;
+    tag.evidence = tension.evidence_references.clone();
+    vec![tag]
+}
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::domain::{ArtifactCategory, ArtifactId, EvidenceRef, RepoPath};
     use crate::graph::model::{ArtifactNode, GraphNodeId, PackageNode, SymbolKind, SymbolNode};
+    use crate::graph::{
+        HealthSeverity, RelationKind, RelationProvenance, RelationResolution, TensionCategory,
+    };
 
     #[test]
     fn derive_tags_adds_layer_tags_from_evidence_path() -> Result<(), Box<dyn std::error::Error>> {
@@ -325,6 +392,69 @@ mod tests {
             serde_json::from_str::<GraphTag>(&serde_json::to_string(&child)?)?,
             child
         );
+        Ok(())
+    }
+    #[test]
+    fn display_tags_keep_entity_provenance_and_real_snapshot()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let path = RepoPath::new("src/lib.rs")?;
+        let evidence = EvidenceRef::file(ArtifactId::from_path(&path), path);
+        let relation = Relation {
+            id: "edge:a-b".into(),
+            source: GraphNodeId::new("symbol:a"),
+            target: GraphNodeId::new("symbol:b"),
+            kind: RelationKind::Calls,
+            confidence: Confidence::Low,
+            evidence: vec![evidence],
+            provenance: Some(RelationProvenance {
+                language: Some("rust".into()),
+                resolver_strategy: "type-aware".into(),
+                resolution: RelationResolution::HybridResolved,
+                confidence: Confidence::High,
+            }),
+        };
+        let cluster = ArchitectureCluster {
+            id: "cluster:a".into(),
+            members: vec![GraphNodeId::new("symbol:a")],
+            top_nodes: vec![],
+            packages: vec![],
+            edge_types: vec![],
+            cohesion: 0.0,
+            incoming_pressure: 0,
+            outgoing_pressure: 0,
+            tags: vec![],
+        };
+        let tension = RepositoryTension {
+            id: "risk:a".into(),
+            category: TensionCategory::BlastRadius,
+            severity: HealthSeverity::High,
+            confidence: Confidence::Low,
+            affected_nodes: vec![GraphNodeId::new("symbol:a")],
+            affected_edges: vec![],
+            metric_inputs: BTreeMap::new(),
+            evidence_references: vec!["edge:a-b".into()],
+            explanation: "risk".into(),
+            follow_up_queries: vec![],
+            tags: vec![],
+        };
+
+        let relation_tag = &relation_display_tags(&relation, "blake3:real")[0];
+        assert_eq!(relation_tag.source, TagSource::DependencyRole);
+        assert_eq!(relation_tag.confidence, Confidence::Low);
+        assert_eq!(relation_tag.evidence, vec!["src/lib.rs"]);
+        assert_eq!(relation_tag.graph_snapshot_id, "blake3:real");
+        let resolution_tag = &relation_display_tags(&relation, "blake3:real")[1];
+        assert_eq!(resolution_tag.namespace, "resolution");
+        assert_eq!(resolution_tag.value, "type-aware");
+        assert_eq!(resolution_tag.confidence, Confidence::High);
+        assert_eq!(
+            cluster_display_tags(&cluster, "blake3:real")[0].evidence,
+            vec!["symbol:a"]
+        );
+        let tension_tag = &tension_display_tags(&tension, "blake3:real")[0];
+        assert_eq!(tension_tag.source, TagSource::Tension);
+        assert_eq!(tension_tag.confidence, Confidence::Low);
+        assert_eq!(tension_tag.evidence, vec!["edge:a-b"]);
         Ok(())
     }
     #[test]

@@ -4,11 +4,12 @@ use super::inspect::{render_artifacts_json, render_artifacts_table, render_graph
 use crate::cli::{
     AdrCommand, AdrCreateArgs, AdrDeleteArgs, AdrGetArgs, AdrListArgs, AdrStatusArg, AdrTarget,
     AdrUpdateArgs, AskArgs, Cli, Command, DriftArgs, GraphCommand, GraphExportArgs,
-    GraphImportArgs, GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand, InspectGraphArgs,
-    InspectMetricsArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs, IntegrateMcpArgs,
-    McpExportArgs, OutputFormat, ValidateMermaidArgs, WatchArgs,
+    GraphImportArgs, GraphReportArgs, GraphTarget, InitArgs, InspectArtifactsArgs, InspectCommand,
+    InspectGraphArgs, InspectMetricsArgs, InspectModulesArgs, InspectTarget, IntegrateAgentsArgs,
+    IntegrateMcpArgs, McpExportArgs, OutputFormat, ResearchCommand, ResearchOutcomeArg,
+    ResearchReflectArgs, ResearchSaveResultArgs, ResearchTarget, ValidateMermaidArgs, WatchArgs,
 };
-use crate::graph::{GraphIssue, GraphIssueKind};
+use crate::graph::{GraphIssue, GraphIssueKind, GraphStore};
 use crate::inventory::{RepositoryWalker, WalkOptions};
 use std::path::{Path, PathBuf};
 
@@ -80,6 +81,69 @@ fn execute_update_reports_regenerated_pages() -> Result<(), Box<dyn std::error::
     assert!(output.contains("pages regenerated:"));
     assert!(temp.path().join(".lithograph/run.json").exists());
 
+    Ok(())
+}
+
+#[test]
+fn research_cli_saves_results_and_reflects_corroborated_lessons()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::TempDir::new()?;
+    copy_dir(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+        temp.path(),
+    )?;
+    execute(
+        Cli {
+            command: Some(Command::Init(InitArgs {
+                path: temp.path().to_path_buf(),
+                prompt_version: "v1".to_owned(),
+                semantic_grouping: false,
+                include_tests: false,
+            })),
+        },
+        &mut Vec::new(),
+    )?;
+    let node_id = GraphStore::new(temp.path()).load()?.graph.nodes[0]
+        .id()
+        .as_str()
+        .to_owned();
+    for question in ["where?", "which?"] {
+        execute(
+            Cli {
+                command: Some(Command::Research(ResearchCommand {
+                    target: ResearchTarget::SaveResult(ResearchSaveResultArgs {
+                        path: temp.path().to_path_buf(),
+                        question: question.to_owned(),
+                        answer: "here".to_owned(),
+                        cited_node_ids: vec![node_id.clone()],
+                        outcome: ResearchOutcomeArg::Useful,
+                        correction: None,
+                        recorded_at: Some(100),
+                    }),
+                })),
+            },
+            &mut Vec::new(),
+        )?;
+    }
+    let mut output = Vec::new();
+    execute(
+        Cli {
+            command: Some(Command::Research(ResearchCommand {
+                target: ResearchTarget::Reflect(ResearchReflectArgs {
+                    path: temp.path().to_path_buf(),
+                    now: Some(100),
+                }),
+            })),
+        },
+        &mut output,
+    )?;
+    let lessons: crate::research_feedback::ResearchLessons = serde_json::from_slice(&output)?;
+    assert_eq!(lessons.preferred_sources[0].node_id, node_id);
+    assert!(
+        temp.path()
+            .join(".lithograph/research/lessons.json")
+            .exists()
+    );
     Ok(())
 }
 
@@ -270,6 +334,17 @@ fn execute_graph_export_and_import_round_trips_artifact() -> Result<(), Box<dyn 
         &mut import_output,
     )?;
     let import_output = String::from_utf8(import_output)?;
+    let mut report_output = Vec::new();
+    execute(
+        Cli {
+            command: Some(Command::Graph(GraphCommand {
+                target: GraphTarget::Report(GraphReportArgs {
+                    path: source.path().to_path_buf(),
+                }),
+            })),
+        },
+        &mut report_output,
+    )?;
 
     assert!(artifact_path.exists());
     assert!(export_output.contains("graph artifact exported"));
@@ -281,6 +356,11 @@ fn execute_graph_export_and_import_round_trips_artifact() -> Result<(), Box<dyn 
             .exists()
     );
     assert!(destination.path().join(".lithograph/graph.json").exists());
+    assert_eq!(
+        report_output,
+        std::fs::read(source.path().join(".lithograph/GRAPH_REPORT.md"))?
+    );
+    assert!(String::from_utf8(report_output)?.contains("## Suggested audit questions"));
 
     Ok(())
 }

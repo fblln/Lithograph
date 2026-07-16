@@ -1,6 +1,134 @@
 use super::*;
 
 impl BuilderState {
+    /// LIT-57: hands this file's receiver-typing facts to the cross-file
+    /// propagation pass, which runs once every file's symbols exist.
+    ///
+    /// TypeScript symbols are qualified by artifact path, so an import's
+    /// "module" is the imported file's path. A specifier can name more than
+    /// one candidate path (`./util` may be `util.ts` or `util.tsx`), so every
+    /// candidate is forwarded; at most one exists as a symbol, and the pass
+    /// takes only exact qualified-name hits. Bare package specifiers are
+    /// skipped: their declarations are not in this repository.
+    fn record_typescript_type_facts(
+        &mut self,
+        artifact: &Artifact,
+        analysis: &TypeScriptAnalysis,
+        language_id: &str,
+    ) {
+        let source_path = artifact.path.as_str();
+        let mut imports = Vec::new();
+        for import in &analysis.syntax.imports {
+            let Some(reference) =
+                crate::resolve::extract_import_reference(language_id, &import.text)
+            else {
+                continue;
+            };
+            // LIT-45.2: a first-party module may be imported by tsconfig alias
+            // rather than relatively, so those specifiers carry receiver types
+            // too. An alias that matches nothing yields no candidates.
+            let relative = reference.starts_with("./") || reference.starts_with("../");
+            let bases: Vec<String> = if relative {
+                crate::resolve::typescript_import_candidates(source_path, &reference, language_id)
+            } else {
+                self.ts_aliases
+                    .resolve(source_path, &reference)
+                    .into_iter()
+                    .flat_map(|aliased| crate::resolve::import_candidates(&aliased, language_id))
+                    .collect()
+            };
+            if bases.is_empty() {
+                continue;
+            }
+            for (exported, local) in
+                crate::resolve::extract_typescript_import_bindings(&import.text)
+            {
+                imports.push(crate::resolve::ImportBindingFact {
+                    local,
+                    modules: bases.clone(),
+                    symbol: exported,
+                });
+            }
+        }
+
+        let bindings = analysis
+            .bindings
+            .iter()
+            .map(|binding| crate::resolve::BindingFact {
+                name: binding.name.clone(),
+                constructor: binding.constructor.clone(),
+                is_module_level: binding.is_module_level,
+            })
+            .collect();
+        let member_calls = analysis
+            .member_calls
+            .iter()
+            .map(|call| crate::resolve::MemberCallFact {
+                receiver: match call.receiver.as_str() {
+                    "this" => crate::resolve::Receiver::Enclosing,
+                    name => crate::resolve::Receiver::Named(name.to_owned()),
+                },
+                method: call.method.clone(),
+                enclosing_class: call.enclosing_class.clone(),
+                evidence: call.evidence.clone(),
+            })
+            .collect();
+        let bases = analysis
+            .classes
+            .iter()
+            .flat_map(|class| {
+                class
+                    .bases
+                    .iter()
+                    .map(|base| crate::resolve::BaseClassFact {
+                        class: class.name.clone(),
+                        base: base.clone(),
+                        evidence: class.evidence.clone(),
+                    })
+            })
+            .collect();
+
+        // LIT-45.3: resolve each re-export's specifier to candidate artifact
+        // paths here, where the source path is known, so the barrel walker
+        // works in artifact paths only.
+        let re_exports = analysis
+            .re_exports
+            .iter()
+            .filter(|re_export| {
+                re_export.specifier.starts_with("./") || re_export.specifier.starts_with("../")
+            })
+            .map(|re_export| crate::resolve::ReExport {
+                targets: crate::resolve::typescript_import_candidates(
+                    source_path,
+                    &re_export.specifier,
+                    language_id,
+                ),
+                kind: match &re_export.kind {
+                    TypeScriptReExportKind::Star => crate::resolve::ReExportKind::Star,
+                    TypeScriptReExportKind::Named { exported, local } => {
+                        crate::resolve::ReExportKind::Named {
+                            exported: exported.clone(),
+                            local: local.clone(),
+                        }
+                    }
+                },
+            })
+            .collect();
+
+        self.type_facts.insert(
+            source_path.to_owned(),
+            crate::resolve::FileTypeFacts {
+                module: source_path.to_owned(),
+                language: language_id.to_owned(),
+                imports,
+                bindings,
+                bases,
+                member_calls,
+                re_exports,
+            },
+        );
+    }
+
     /// Adds TypeScript/TSX's typed declaration symbols, then reuses the
     /// syntax-indexed fact pass for imports, type references, identifier
     /// usages, and definitions that do not yet have a richer symbol kind
@@ -120,6 +248,8 @@ impl BuilderState {
                 .or_default()
                 .push(function_id);
         }
+
+        self.record_typescript_type_facts(artifact, &analysis, language_id);
 
         for call in &analysis.calls {
             if let Some([target]) = callable_ids.get(call.name.as_str()).map(Vec::as_slice) {

@@ -11,7 +11,7 @@ vi.mock('../api/subsystemDocs', () => ({
 }))
 
 function document(markdown: string, snapshot = 'g1') {
-  return { subsystem_id: 'cluster-a', graph_snapshot_id: snapshot, prompt_version: 'v1', confidence: 'High', cited_nodes: ['node:a'], cited_edges: ['edge:a-b'], source_spans: [], unresolved_assumptions: [], markdown, resolved_tags: [] }
+  return { subsystem_id: 'cluster-a', graph_snapshot_id: snapshot, prompt_version: 'v1', confidence: 'High', cited_nodes: ['node:a'], cited_edges: ['edge:a-b'], source_spans: [], unresolved_assumptions: [], markdown, resolved_tags: [{ id: 'tag:subsystem', entity_id: 'cluster-a', namespace: 'subsystem', value: 'cluster-a', source: 'Architecture', confidence: 'High', evidence: ['node:a'], inherited_from: null, graph_snapshot_id: snapshot }] }
 }
 
 describe('SubsystemDocsAgent', () => {
@@ -26,6 +26,7 @@ describe('SubsystemDocsAgent', () => {
     expect(screen.getByLabelText('Agent context')).toHaveTextContent('2 nodes · 1 edges · 2 evidence refs · 1 tensions')
     await user.click(screen.getByRole('button', { name: 'Generate with graph agent' }))
     expect(await screen.findByText('version one')).toBeInTheDocument()
+    expect(screen.getByLabelText('Subsystem provenance tags')).toHaveTextContent('Architecture · High · evidence 1')
     await user.type(screen.getByLabelText('Refinement instruction'), 'add operations')
     await user.click(screen.getByRole('button', { name: 'Refine' }))
     expect(await screen.findByText('version two')).toBeInTheDocument()

@@ -214,6 +214,13 @@ impl BuilderState {
             );
             self.process_python_route_decorators(artifact, artifact_node, function, &id);
             for decorator in &function.decorators {
+                // Route decorators already have a typed Route node and a
+                // HandlesRoute edge. Emitting the raw invocation again as a
+                // low-confidence Unresolved Decorates target duplicates the
+                // fact and makes a valid route look like resolver failure.
+                if python::parse_route_decorator(decorator).is_some() {
+                    continue;
+                }
                 let target = self
                     .same_file_import_external_symbol(
                         &imported_modules,
@@ -279,6 +286,8 @@ impl BuilderState {
         }
 
         self.process_rationale(artifact, artifact_node, &analysis.comments, &symbol_spans);
+
+        self.record_python_type_facts(artifact, &analysis);
 
         for reference in &analysis.references {
             self.process_python_reference(
@@ -451,6 +460,91 @@ impl BuilderState {
             );
         }
     }
+    /// LIT-57: hands this file's receiver-typing facts to the cross-file
+    /// propagation pass, which runs once every file's symbols exist.
+    ///
+    /// Only `from x import y` bindings are forwarded. `import x` binds a
+    /// module, and a module member call (`x.f()`) is an import fact that
+    /// LIT-44.1 already classifies -- it is not a receiver to type.
+    ///
+    /// These bindings are built from the raw imports rather than reused from
+    /// `imported_modules`, which drops relative imports because LIT-44.1 only
+    /// cares about external packages. The opposite is true here: a package
+    /// imports its own modules relatively (`from .json.tag import ...`), so
+    /// skipping those would leave the environment empty for exactly the
+    /// intra-repository imports this pass exists to follow.
+    fn record_python_type_facts(&mut self, artifact: &Artifact, analysis: &PythonAnalysis) {
+        // Runtime imports and `if TYPE_CHECKING:` imports bind names the same
+        // way for annotation purposes; the latter exist for nothing else.
+        let imports = analysis
+            .imports
+            .iter()
+            .chain(&analysis.typing_imports)
+            .filter(|import| import.kind == PythonImportKind::ImportFrom)
+            .filter_map(|import| {
+                let module = absolute_python_module(
+                    &analysis.module_path,
+                    analysis.is_package_init,
+                    import.relative_level,
+                    import.module.as_deref(),
+                )?;
+                Some(
+                    import
+                        .names
+                        .iter()
+                        .map(move |name| crate::resolve::ImportBindingFact {
+                            local: name.alias.clone().unwrap_or_else(|| name.name.clone()),
+                            modules: vec![module.clone()],
+                            symbol: name.name.clone(),
+                        }),
+                )
+            })
+            .flatten()
+            .collect();
+        let bindings = analysis
+            .bindings
+            .iter()
+            .map(|binding| crate::resolve::BindingFact {
+                name: binding.name.clone(),
+                constructor: binding.constructor.clone(),
+                is_module_level: binding.is_module_level,
+            })
+            .collect();
+        let member_calls = analysis
+            .member_calls
+            .iter()
+            .map(|call| crate::resolve::MemberCallFact {
+                // `self`/`cls` are conventions rather than keywords, so a
+                // method that names its receiver parameter anything else is
+                // not typed here. Every such method in the pinned corpora
+                // follows the convention, and inferring the first parameter's
+                // role instead would type receivers this pass cannot check.
+                receiver: match call.receiver.as_str() {
+                    "self" | "cls" => crate::resolve::Receiver::Enclosing,
+                    name => crate::resolve::Receiver::Named(name.to_owned()),
+                },
+                method: call.method.clone(),
+                enclosing_class: call.enclosing_class.clone(),
+                evidence: call.evidence.clone(),
+            })
+            .collect();
+
+        self.type_facts.insert(
+            artifact.path.as_str().to_owned(),
+            crate::resolve::FileTypeFacts {
+                module: analysis.module_path.clone(),
+                language: "python".to_owned(),
+                imports,
+                bindings,
+                bases: Vec::new(),
+                member_calls,
+                // Python has no barrel re-exports: `__init__.py` republishes
+                // by importing, which the import bindings above already carry.
+                re_exports: Vec::new(),
+            },
+        );
+    }
+
     fn process_python_reference(
         &mut self,
         artifact: &Artifact,
@@ -685,6 +779,45 @@ impl BuilderState {
 /// records `pydantic::Field` rather than the local alias `F`, and its absence
 /// marks a plain `import x` binding, where the member is instead the segment
 /// that follows the module in the reference text.
+/// LIT-57: the absolute module a `from ... import ...` names, so an imported
+/// symbol is an exact `{module}::{symbol}` lookup.
+///
+/// Python resolves a relative import against the importing file's *package*,
+/// not its module: one leading dot means the current package, and each extra
+/// dot climbs one level above it. A regular module's package is its path minus
+/// its own name, while a package's `__init__.py` is already that package --
+/// getting that distinction wrong shifts every relative import by one level.
+///
+/// Returns `None` when the import climbs above the repository root, which is a
+/// module outside the scanned tree rather than one to guess at.
+fn absolute_python_module(
+    module_path: &str,
+    is_package_init: bool,
+    relative_level: u32,
+    module: Option<&str>,
+) -> Option<String> {
+    if relative_level == 0 {
+        return module.map(str::to_owned);
+    }
+
+    let mut package: Vec<&str> = module_path
+        .split('.')
+        .filter(|part| !part.is_empty())
+        .collect();
+    if !is_package_init {
+        package.pop();
+    }
+    // The first dot names the package itself, so only the extra dots climb.
+    for _ in 0..relative_level - 1 {
+        package.pop()?;
+    }
+
+    let mut parts: Vec<&str> = package;
+    parts.extend(module.into_iter().flat_map(|value| value.split('.')));
+    let joined = parts.join(".");
+    (!joined.is_empty()).then_some(joined)
+}
+
 #[derive(Debug, Clone)]
 struct PythonImportBinding {
     /// Dotted module path the name resolves to.
@@ -767,6 +900,46 @@ fn python_relative_target(
 mod tests {
     use super::*;
     use crate::inventory::{RepositoryWalker, WalkOptions};
+
+    /// LIT-57: a relative import resolves against the importing file's
+    /// package, and a package's `__init__` *is* that package. An off-by-one
+    /// here silently points every relative import at the wrong module, which
+    /// yields no edge rather than a visible failure.
+    #[test]
+    fn relative_imports_resolve_against_the_importing_package() {
+        // `src/flask/sessions.py` doing `from .json.tag import X`: one dot is
+        // the package `src.flask`, not the module `src.flask.sessions`.
+        assert_eq!(
+            absolute_python_module("src.flask.sessions", false, 1, Some("json.tag")),
+            Some("src.flask.json.tag".to_owned()),
+        );
+        // `src/flask/__init__.py` IS `src.flask`, so one dot stays there.
+        assert_eq!(
+            absolute_python_module("src.flask", true, 1, Some("app")),
+            Some("src.flask.app".to_owned()),
+        );
+        // Each extra dot climbs one level above the package.
+        assert_eq!(
+            absolute_python_module("src.flask.json.tag", false, 2, Some("app")),
+            Some("src.flask.app".to_owned()),
+        );
+        // `from . import x` has no module clause; the package itself is meant.
+        assert_eq!(
+            absolute_python_module("src.flask.sessions", false, 1, None),
+            Some("src.flask".to_owned()),
+        );
+        // Absolute imports pass through untouched.
+        assert_eq!(
+            absolute_python_module("src.flask.app", false, 0, Some("os.path")),
+            Some("os.path".to_owned()),
+        );
+        // Climbing above the root names a module outside the scanned tree.
+        assert_eq!(
+            absolute_python_module("app", false, 2, Some("x")),
+            None,
+            "an import that escapes the repository root must not be guessed at",
+        );
+    }
 
     #[test]
     fn python_cross_file_calls_resolve_to_symbols() -> Result<(), Box<dyn std::error::Error>> {
@@ -1120,6 +1293,9 @@ mod tests {
                     provenance.resolution == RelationResolution::HybridResolved
                         && provenance.language.as_deref() == Some("python")
                 })
+        }));
+        assert!(graph.nodes.iter().all(|node| {
+            !matches!(node, GraphNode::Unresolved(unresolved) if unresolved.value == "app.get(\"/users/{id}\")")
         }));
 
         let literal_call = graph

@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { LayoutEdge } from './types'
 import { edgeFadeOpacity } from './positions'
+import { EDGE_RESOLUTION_STYLE, edgeResolution, type EdgeResolution } from './edgeProvenance'
 
 export interface EdgeLinesProps {
   edges: LayoutEdge[]
@@ -26,6 +27,18 @@ export function EdgeLines({ edges, positions, selectedId = null }: EdgeLinesProp
     return [{ edge, source, target, related }]
   }), [edges, positions, selectedId])
 
+  const groups = useMemo(() => (Object.keys(EDGE_RESOLUTION_STYLE) as EdgeResolution[]).map((resolution) => ({ resolution, rendered: rendered.filter(({ edge }) => edgeResolution(edge) === resolution) })).filter((group) => group.rendered.length > 0), [rendered])
+  const opacity = selectedId ? 0.88 : Math.max(0.24, edgeFadeOpacity(edges.length))
+  if (rendered.length === 0) return null
+
+  return <>
+    {groups.map((group) => <ResolutionLines key={group.resolution} resolution={group.resolution} rendered={group.rendered} opacity={opacity} />)}
+    <Arrowheads rendered={rendered} selectedId={selectedId} />
+  </>
+}
+
+function ResolutionLines({ resolution, rendered, opacity }: { resolution: EdgeResolution; rendered: Array<{ edge: LayoutEdge; source: [number, number, number]; target: [number, number, number]; related: boolean }>; opacity: number }) {
+  const lineRef = useRef<THREE.LineSegments>(null)
   const geometry = useMemo(() => {
     const flatPositions = new Float32Array(rendered.length * 6)
     const flatColors = new Float32Array(rendered.length * 6)
@@ -39,16 +52,13 @@ export function EdgeLines({ edges, positions, selectedId = null }: EdgeLinesProp
     buffer.setAttribute('color', new THREE.BufferAttribute(flatColors, 3))
     return buffer
   }, [rendered])
-
-  const opacity = selectedId ? 0.88 : Math.max(0.24, edgeFadeOpacity(edges.length))
-  if (rendered.length === 0) return null
-
-  return <>
-    <lineSegments geometry={geometry}>
-      <lineBasicMaterial vertexColors transparent opacity={opacity} />
-    </lineSegments>
-    <Arrowheads rendered={rendered} selectedId={selectedId} />
-  </>
+  useLayoutEffect(() => { lineRef.current?.computeLineDistances?.() }, [geometry])
+  const style = EDGE_RESOLUTION_STYLE[resolution]
+  return <lineSegments ref={lineRef} geometry={geometry} userData={{ resolution, label: style.label }}>
+    {resolution === 'HybridResolved'
+      ? <lineBasicMaterial vertexColors transparent opacity={opacity * style.opacity} />
+      : <lineDashedMaterial vertexColors transparent opacity={opacity * style.opacity} dashSize={style.dashSize} gapSize={style.gapSize} />}
+  </lineSegments>
 }
 
 function Arrowheads({ rendered, selectedId }: { rendered: Array<{ edge: LayoutEdge; source: [number, number, number]; target: [number, number, number]; related: boolean }>; selectedId: string | null }) {

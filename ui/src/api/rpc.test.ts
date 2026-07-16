@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { callTool, RpcError } from './rpc'
+import { callServerTool, callTool, RpcError, setActiveProjectId } from './rpc'
 
 function mockFetch(response: unknown, ok = true, status = 200) {
   vi.stubGlobal(
@@ -14,7 +14,35 @@ function mockFetch(response: unknown, ok = true, status = 200) {
 
 describe('callTool', () => {
   afterEach(() => {
+    setActiveProjectId(undefined)
     vi.unstubAllGlobals()
+  })
+
+  it('attaches the selected project id without exposing a repository path', async () => {
+    mockFetch({
+      jsonrpc: '2.0', id: 1,
+      result: { content: [{ type: 'text', text: '{}' }] },
+    })
+    setActiveProjectId('web')
+
+    await callTool('get_graph_schema')
+
+    const body = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string)
+    expect(body.params.project_id).toBe('web')
+    expect(JSON.stringify(body)).not.toContain('/repos/')
+  })
+
+  it('keeps server-wide discovery project agnostic', async () => {
+    mockFetch({
+      jsonrpc: '2.0', id: 1,
+      result: { content: [{ type: 'text', text: '[]' }] },
+    })
+    setActiveProjectId('web')
+
+    await callServerTool('list_projects')
+
+    const body = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string)
+    expect(body.params.project_id).toBeUndefined()
   })
 
   it('sends the tools/call JSON-RPC envelope and unwraps result.content[0].text', async () => {

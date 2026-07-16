@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { getGraphDocument, regenerateGraphDocument, type GraphDocumentResult, type GraphDocumentSection } from '../api/docs'
 import { sectionBody } from '../docMarkdown'
 import { SubsystemDocsAgent, type SubsystemAgentContext } from './SubsystemDocsAgent'
+import { ProvenanceTags } from './ProvenanceTags'
 
 export function DocsWorkspace({ currentSnapshotId, relatedEntityId, selectedSectionId, agentContext, onSelectSection, onFocus, onTagScope = () => {} }: { currentSnapshotId?: string; relatedEntityId?: string; selectedSectionId?: string; agentContext?: SubsystemAgentContext; onSelectSection: (id: string) => void; onFocus: (id: string) => void; onTagScope?: (tag: string, nodeIds: string[]) => void }) {
   const [result, setResult] = useState<GraphDocumentResult | null>(null)
@@ -50,7 +51,7 @@ function DocumentSectionView({ section, markdown, stale, onFocus, onTagScope }: 
     <div className="mt-3 whitespace-pre-wrap text-[11.5px] leading-relaxed" style={{ color: 'var(--atlas-text-muted)' }}>{sectionBody(markdown, section.title)}</div>
     <h3 className="mb-1 mt-4 text-[9.5px] font-bold uppercase" style={{ color: 'var(--atlas-text-dim)' }}>Evidence</h3>
     {section.evidence_references.length ? <ul>{section.evidence_references.map((item) => <li key={item} className="font-mono text-[10px]">{item}</li>)}</ul> : <p className="text-[10px]">No direct evidence references for this section.</p>}
-    {section.tags.length > 0 && <div aria-label="Section tags" className="mt-2 flex flex-wrap gap-1">{section.tags.map((tag) => <button type="button" key={tag.id} onClick={() => onTagScope(`${tag.namespace}:${tag.value}`, section.affected_nodes)} className="rounded px-1.5 py-0.5 text-[9px]" title={`Scope graph · derived from ${tag.source} (${tag.confidence})`} style={{ background: 'var(--atlas-chip)', color: 'var(--atlas-text-dim)' }}>{tag.namespace}:{tag.value}</button>)}</div>}
+    {section.tags.length > 0 && <div aria-label="Section tags" className="mt-2"><div className="flex flex-wrap gap-1">{section.tags.map((tag) => <button type="button" key={tag.id} onClick={() => onTagScope(`${tag.namespace}:${tag.value}`, section.affected_nodes)} className="rounded px-1.5 py-0.5 text-[9px]" title="Scope graph" style={{ background: 'var(--atlas-chip)', color: 'var(--atlas-text-dim)' }}>{tag.namespace}:{tag.value}</button>)}</div><ProvenanceTags tags={section.tags} label="Document provenance tags" /></div>}
     <h3 className="mb-1 mt-4 text-[9.5px] font-bold uppercase" style={{ color: 'var(--atlas-text-dim)' }}>In the graph</h3>
     <div className="flex flex-wrap gap-1">{section.affected_nodes.map((id) => <button key={id} type="button" onClick={() => onFocus(id)} className="max-w-full truncate rounded-full px-2 py-1 text-[10px]" title={id} style={{ background: 'var(--atlas-chip)', color: 'var(--atlas-text-bright)' }}>{id}</button>)}</div>
     {section.affected_edges.length > 0 && <div aria-label="Related edges" className="mt-2 flex flex-wrap gap-1">{section.affected_edges.map((id) => <span key={id} className="max-w-full truncate rounded-full px-2 py-1 text-[10px]" title={id} style={{ background: 'var(--atlas-chip)', color: 'var(--atlas-accent)' }}>{id}</span>)}</div>}

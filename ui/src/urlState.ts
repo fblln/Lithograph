@@ -6,6 +6,7 @@ import type { ViewMode } from './components/ViewModeToggle'
  * what node budget was requested, and any active filters.
  */
 export interface ExplorerUrlState {
+  projectId?: string
   centerNode?: string
   viewMode: ViewMode
   maxNodes?: number
@@ -16,6 +17,7 @@ export interface ExplorerUrlState {
   tagExpression?: string
   workspaceMode?: 'explore' | 'docs'
   docSectionId?: string
+  showUnprovenEdges?: boolean
 }
 
 export const DEFAULT_VIEW_MODE: ViewMode = 'cluster'
@@ -23,6 +25,7 @@ export const DEFAULT_VIEW_MODE: ViewMode = 'cluster'
 /** Parses `location.search` (a leading `?...` or a bare query string) into explorer state, tolerating missing/invalid values by falling back to defaults rather than throwing. */
 export function parseUrlState(search: string): ExplorerUrlState {
   const params = new URLSearchParams(search)
+  const projectId = params.get('project')
   const centerNode = params.get('center')
   const viewModeParam = params.get('view')
   const viewMode: ViewMode = viewModeParam === 'radial' || viewModeParam === 'matrix' ? viewModeParam : DEFAULT_VIEW_MODE
@@ -36,8 +39,10 @@ export function parseUrlState(search: string): ExplorerUrlState {
   const tagExpression = params.get('tags')
   const workspaceMode = params.get('workspace') === 'docs' ? 'docs' : undefined
   const docSectionId = params.get('doc')
+  const showUnprovenEdges = params.get('unproven') === 'hide' ? false : undefined
 
   return {
+    ...(projectId ? { projectId } : {}),
     centerNode: centerNode ?? undefined,
     viewMode,
     maxNodes: maxNodes !== undefined && Number.isFinite(maxNodes) && maxNodes > 0 ? maxNodes : undefined,
@@ -48,12 +53,14 @@ export function parseUrlState(search: string): ExplorerUrlState {
     ...(tagExpression ? { tagExpression } : {}),
     ...(workspaceMode ? { workspaceMode } : {}),
     ...(docSectionId ? { docSectionId } : {}),
+    ...(showUnprovenEdges === false ? { showUnprovenEdges } : {}),
   }
 }
 
 /** Inverse of `parseUrlState`: only writes params that differ from the default, so a plain overview view keeps a clean, empty URL. Returns an empty string (not `?`) when there's nothing to encode. */
 export function serializeUrlState(state: ExplorerUrlState): string {
   const params = new URLSearchParams()
+  if (state.projectId && state.projectId !== 'primary') params.set('project', state.projectId)
   if (state.centerNode) params.set('center', state.centerNode)
   if (state.viewMode !== DEFAULT_VIEW_MODE) params.set('view', state.viewMode)
   if (state.maxNodes !== undefined) params.set('maxNodes', String(state.maxNodes))
@@ -64,6 +71,7 @@ export function serializeUrlState(state: ExplorerUrlState): string {
   if (state.tagExpression) params.set('tags', state.tagExpression)
   if (state.workspaceMode === 'docs') params.set('workspace', 'docs')
   if (state.docSectionId) params.set('doc', state.docSectionId)
+  if (state.showUnprovenEdges === false) params.set('unproven', 'hide')
 
   const query = params.toString()
   return query ? `?${query}` : ''

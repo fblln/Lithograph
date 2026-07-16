@@ -452,7 +452,16 @@ fn clean_token(token: &str) -> String {
 }
 
 fn is_source_path(token: &str, code_like: bool) -> bool {
-    if token.is_empty() || is_external_target(token) {
+    // Inline and fenced code is still documentation. Call-shaped snippets
+    // such as `render_template('blog/create.html')` and
+    // `@app.get("/result/<id>")` contain slash-bearing string literals, but
+    // treating the cleaned token as a path both invents a reference and
+    // leaves a visibly truncated value after punctuation trimming.
+    if token.is_empty()
+        || is_external_target(token)
+        || token.contains("(\"")
+        || token.contains("('")
+    {
         return false;
     }
     known_path_extension(token)
@@ -639,6 +648,31 @@ $ cargo test
             3
         ));
 
+        Ok(())
+    }
+
+    #[test]
+    fn markdown_does_not_turn_quoted_code_fragments_into_paths()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = TempDir::new()?;
+        let artifact = markdown_artifact("README.md")?;
+        let text = "\
+# Routes
+Use `render_template('blog/create.html')` and `client.get('/create').status_code`.
+```python
+@app.post(\"/add\")
+@app.get(\"/result/<id>\")
+```
+";
+
+        let analysis = MarkdownAnalyzer.analyze(&artifact, text, temp.path());
+
+        assert!(
+            analysis.source_paths.is_empty(),
+            "{:#?}",
+            analysis.source_paths
+        );
+        assert_eq!(analysis.code_fences.len(), 1);
         Ok(())
     }
 

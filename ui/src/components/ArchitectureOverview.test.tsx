@@ -45,4 +45,17 @@ describe('ArchitectureOverview', () => {
     expect(onScope).toHaveBeenCalledWith(expect.objectContaining({ id: 'web', nodeIds: ['web'] }))
     expect(onFocus).toHaveBeenCalledWith('run')
   })
+
+  it('derives areas below a common hash root without changing node ids', () => {
+    const hash = '0123456789abcdef0123456789abcdef'
+    const rooted = {
+      ...layout,
+      nodes: layout.nodes.map((node) => ({ ...node, id: `${node.id}:${hash}`, name: `.cache/${hash}/${node.file_path}`, file_path: `.cache/${hash}/${node.file_path}` })),
+      edges: [],
+    }
+    const areas = deriveRepositoryAreas(rooted, [], [])
+    expect(areas.map((area) => area.id)).toEqual(['src/api', 'web'])
+    expect(areas.flatMap((area) => area.nodeIds)).toContain(`web:${hash}`)
+    expect(areas.map((area) => area.name).join(' ')).not.toContain(hash)
+  })
 })

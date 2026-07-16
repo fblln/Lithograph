@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { getGraphLayout } from './api/graph'
 import { getNodeDetail, type NodeDetail } from './api/nodeDetail'
 import { getArchitectureSummary, type ArchitectureCluster, type ArchitectureSummary } from './api/architecture'
-import { RpcError } from './api/rpc'
+import { RpcError, setActiveProjectId } from './api/rpc'
+import { listProjects, type ProjectMetadata } from './api/projects'
 import type { LayoutEdge, LayoutResult, PositionedNode } from './graph/types'
 import { GraphScene } from './graph/GraphScene'
 import { useDragPositions } from './graph/useDragPositions'
@@ -28,6 +29,9 @@ import { humanClusterNameFromEvidence } from './clusterIdentity'
 import { deriveClusterIdentities } from './clusterIdentity'
 import { computeClusterLayout } from './graph/clusterLayout'
 import { ClusterRelationshipInspector } from './components/ClusterRelationshipInspector'
+import { filterVisibleEdges } from './graph/edgeProvenance'
+import { deriveDisplayRootPrefix } from './displayRoot'
+import { deriveSliceFacetCounts } from './graph/sliceFacets'
 
 type Status = 'loading' | 'ready' | 'error'
 interface NavigationContext {
@@ -47,9 +51,10 @@ interface NavigationContext {
   tagNodeIds?: string[]
   selectedNodeId?: string
   tensionId?: string
+  showUnprovenEdges?: boolean
 }
 
-function App() {
+function ExplorerApp({ projects, projectId, onProjectChange }: { projects: ProjectMetadata[]; projectId: string; onProjectChange: (id: string) => void }) {
   // Capture the incoming URL once. Subsequent URL writes are an output of the
   // current interaction, not an instruction to reset the live explorer state.
   const [initialUrlState] = useState(() => parseUrlState(window.location.search))
@@ -73,6 +78,7 @@ function App() {
   const [overlayMode, setOverlayMode] = useState<OverlayMode>('kind')
   const [edgeView, setEdgeView] = useState<EdgeView>('nodes')
   const [edgeKinds, setEdgeKinds] = useState<Set<string>>(new Set())
+  const [showUnprovenEdges, setShowUnprovenEdges] = useState(initialUrlState.showUnprovenEdges ?? true)
   const [zoom, setZoom] = useState(1)
   const [queryState, setQueryState] = useState<InvestigationQueryState>({ query: 'MATCH (a:Artifact)-[:Contains]->(b:Symbol) RETURN a, b', rows: [] })
   const [healthFindings, setHealthFindings] = useState<HealthFinding[]>([])
@@ -100,20 +106,19 @@ function App() {
     return tagNodeIds.filter((id) => allowed.has(id))
   }, [matrixScopeNodeIds, scopedCluster, tagNodeIds])
   const documentationScopeNodeIds = effectiveScopeNodeIds.length > 0 ? effectiveScopeNodeIds : layout?.nodes.map((node) => node.id) ?? []
-  const availableEdgeKinds = useMemo(() => [...new Set([
-    ...(layout?.edges.map((edge) => edge.kind) ?? []),
-    ...((architecture.cluster_links ?? []).flatMap((link) => link.kinds.map(({ kind }) => kind))),
-  ])].sort(), [architecture.cluster_links, layout])
-  const visibleLayoutEdges = useMemo(() => !layout ? [] : edgeKinds.size === 0 ? layout.edges : layout.edges.filter((edge) => edgeKinds.has(edge.kind)), [edgeKinds, layout])
+  const displayRootPrefix = useMemo(() => deriveDisplayRootPrefix(layout?.nodes ?? []), [layout?.nodes])
+  const sliceFacetCounts = useMemo(() => layout ? deriveSliceFacetCounts(layout) : { nodeLabels: new Map<string, number>(), edgeKinds: new Map<string, number>() }, [layout])
+  const availableEdgeKinds = useMemo(() => [...sliceFacetCounts.edgeKinds.keys()], [sliceFacetCounts])
+  const visibleLayoutEdges = useMemo(() => !layout ? [] : filterVisibleEdges(layout.edges, edgeKinds, showUnprovenEdges), [edgeKinds, layout, showUnprovenEdges])
   const completeClusterLinks = useMemo(() => (architecture.cluster_links ?? []).map((link) => {
-    const underlying = edgeKinds.size === 0 ? link.underlying : link.underlying.filter((edge) => edgeKinds.has(edge.kind))
+    const underlying = filterVisibleEdges(link.underlying, edgeKinds, showUnprovenEdges)
     const counts = new Map<string, number>()
     for (const edge of underlying) counts.set(edge.kind, (counts.get(edge.kind) ?? 0) + 1)
     return { ...link, count: underlying.length, underlying, kinds: [...counts].map(([kind, count]) => ({ kind, count })).sort((a, b) => b.count - a.count || a.kind.localeCompare(b.kind)) }
-  }).filter((link) => link.count > 0), [architecture.cluster_links, edgeKinds])
+  }).filter((link) => link.count > 0), [architecture.cluster_links, edgeKinds, showUnprovenEdges])
   const visualClusterLayout = useMemo(() => layout ? computeClusterLayout(layout.nodes, clusters, visibleLayoutEdges, completeClusterLinks) : null, [clusters, completeClusterLinks, layout, visibleLayoutEdges])
   const visualClusterIdentities = useMemo(() => visualClusterLayout && layout ? deriveClusterIdentities(visualClusterLayout.clusters, layout.nodes, visualClusterLayout.links, architecture.entry_points, repositoryTensions) : new Map(), [architecture.entry_points, layout, repositoryTensions, visualClusterLayout])
-  const navigationSnapshot = useMemo(() => ({ viewMode, overlayMode, edgeView, edgeKinds: [...edgeKinds], zoom, maxNodes: maxNodes ?? null, maxEdges: maxEdges ?? null, activeLabels: [...activeLabels], tagExpression, tagNodeIds: [...tagNodeIds], selectedNodeId: selected?.id, tensionId: selectedTension?.id }), [activeLabels, edgeKinds, edgeView, maxEdges, maxNodes, overlayMode, selected?.id, selectedTension?.id, tagExpression, tagNodeIds, viewMode, zoom])
+  const navigationSnapshot = useMemo(() => ({ viewMode, overlayMode, edgeView, edgeKinds: [...edgeKinds], showUnprovenEdges, zoom, maxNodes: maxNodes ?? null, maxEdges: maxEdges ?? null, activeLabels: [...activeLabels], tagExpression, tagNodeIds: [...tagNodeIds], selectedNodeId: selected?.id, tensionId: selectedTension?.id }), [activeLabels, edgeKinds, edgeView, maxEdges, maxNodes, overlayMode, selected?.id, selectedTension?.id, showUnprovenEdges, tagExpression, tagNodeIds, viewMode, zoom])
   const dragPositions = useDragPositions(layout?.graph_snapshot_id ?? '')
   const overlayValues = useMemo(() => {
     if (!layout || overlayMode === 'kind') return new Map<string, number>()
@@ -184,9 +189,9 @@ function App() {
   // budget field), so it isn't worth spamming browser history on top of
   // that.
   useEffect(() => {
-    const query = serializeUrlState({ centerNode, viewMode, maxNodes, maxEdges, nodeLabels: [...activeLabels], selectedNode: selected?.id, tensionId: requestedTensionId, tagExpression, workspaceMode, docSectionId })
+    const query = serializeUrlState({ projectId, centerNode, viewMode, maxNodes, maxEdges, nodeLabels: [...activeLabels], selectedNode: selected?.id, tensionId: requestedTensionId, tagExpression, workspaceMode, docSectionId, showUnprovenEdges })
     window.history.replaceState(null, '', `${window.location.pathname}${query}`)
-  }, [centerNode, viewMode, maxEdges, maxNodes, activeLabels, selected, requestedTensionId, tagExpression, workspaceMode, docSectionId])
+  }, [projectId, centerNode, viewMode, maxEdges, maxNodes, activeLabels, selected, requestedTensionId, tagExpression, workspaceMode, docSectionId, showUnprovenEdges])
 
   useEffect(() => {
     if (!layout || !pendingSelectedId) return
@@ -256,6 +261,7 @@ function App() {
     setOverlayMode(context.overlayMode ?? overlayMode)
     setEdgeView(context.edgeView ?? edgeView)
     if (context.edgeKinds) setEdgeKinds(new Set(context.edgeKinds))
+    if (context.showUnprovenEdges !== undefined) setShowUnprovenEdges(context.showUnprovenEdges)
     setZoom(context.zoom ?? zoom)
     if ('maxNodes' in context) setMaxNodes(context.maxNodes ?? undefined)
     if ('maxEdges' in context) setMaxEdges(context.maxEdges ?? undefined)
@@ -373,10 +379,11 @@ function App() {
 
   return (
     <WorkspaceShell
-      topBar={<TopBar centerLabel={navigation.at(-1)?.label ?? 'Overview'} breadcrumbs={navigation.map((context) => context.label)} onNavigateBreadcrumb={navigateToBreadcrumb} onBack={() => navigateToBreadcrumb(Math.max(0, navigation.length - 2))} status={status} onFocus={handleFocusId} clusters={clusters} onFocusCluster={navigateToCluster} onSelectTension={(tension) => { setSelectedTension(tension); setOverlayMode('tension'); setRequestedTensionId(tension.id); if (tension.affected_nodes[0]) handleFocusId(tension.affected_nodes[0]); setRelatedDocEntityId(tension.id) }} snapshotId={layout?.graph_snapshot_id} renderedNodes={layout?.budget.nodes_returned} availableNodes={layout?.budget.nodes_available} scopeNodeIds={effectiveScopeNodeIds} workspaceMode={workspaceMode} onWorkspaceMode={setWorkspaceMode} />}
+      topBar={<TopBar projects={projects} projectId={projectId} onProjectChange={onProjectChange} centerLabel={navigation.at(-1)?.label ?? 'Overview'} breadcrumbs={navigation.map((context) => context.label)} displayRootPrefix={displayRootPrefix} onNavigateBreadcrumb={navigateToBreadcrumb} onBack={() => navigateToBreadcrumb(Math.max(0, navigation.length - 2))} status={status} onFocus={handleFocusId} clusters={clusters} onFocusCluster={navigateToCluster} onSelectTension={(tension) => { setSelectedTension(tension); setOverlayMode('tension'); setRequestedTensionId(tension.id); if (tension.affected_nodes[0]) handleFocusId(tension.affected_nodes[0]); setRelatedDocEntityId(tension.id) }} snapshotId={layout?.graph_snapshot_id} renderedNodes={layout?.budget.nodes_returned} availableNodes={layout?.budget.nodes_available} scopeNodeIds={effectiveScopeNodeIds} workspaceMode={workspaceMode} onWorkspaceMode={setWorkspaceMode} />}
       sidebar={layout && (
           <Sidebar
             layout={layout}
+            nodeLabelCounts={sliceFacetCounts.nodeLabels}
             activeLabels={activeLabels}
             onToggleLabel={handleToggleLabel}
             maxNodes={maxNodes}
@@ -403,7 +410,7 @@ function App() {
             onInterClusterOnly={setInterClusterOnly}
             onRelatedEntity={setRelatedDocEntityId}
             scopeNodeIds={effectiveScopeNodeIds}
-            investigationState={{ version: 1, graphSnapshotId: layout.graph_snapshot_id, urlState: { centerNode, viewMode, maxNodes, maxEdges, tensionId: requestedTensionId, tagExpression, workspaceMode, docSectionId }, selectedNodeId: selected?.id, activeLabels: [...activeLabels], metricValues: [...metricValues], queryState, focusedSubgraph: { center_node: layout.center_node, nodes: layout.nodes, edges: layout.edges, budget: layout.budget }, healthFindings, selectedTension, overlayMode, edgeView }}
+            investigationState={{ version: 1, graphSnapshotId: layout.graph_snapshot_id, urlState: { projectId, centerNode, viewMode, maxNodes, maxEdges, tensionId: requestedTensionId, tagExpression, workspaceMode, docSectionId, showUnprovenEdges }, selectedNodeId: selected?.id, activeLabels: [...activeLabels], metricValues: [...metricValues], queryState, focusedSubgraph: { center_node: layout.center_node, nodes: layout.nodes, edges: layout.edges, budget: layout.budget }, healthFindings, selectedTension, overlayMode, edgeView }}
             onRestoreInvestigation={(item) => {
               setCenterNode(item.urlState.centerNode)
               setNavigation([{ label: 'Overview', scopeNodeIds: [] }, ...(item.urlState.centerNode ? [{ label: shortNodeLabel(item.urlState.centerNode), centerNode: item.urlState.centerNode, scopeNodeIds: [] }] : [])])
@@ -419,6 +426,7 @@ function App() {
               setMetricValues(new Map(item.metricValues ?? []))
               setOverlayMode(item.overlayMode ?? ((item.metricValues?.length ?? 0) > 0 ? 'centrality' : 'kind'))
               setEdgeView(item.edgeView ?? 'nodes')
+              setShowUnprovenEdges(item.urlState.showUnprovenEdges ?? true)
               setQueryState(item.queryState ?? { query: 'MATCH (a:Artifact)-[:Contains]->(b:Symbol) RETURN a, b', rows: [] })
               setSelectedTension(item.selectedTension)
               setRequestedTensionId(item.selectedTension?.id ?? item.urlState.tensionId)
@@ -437,12 +445,13 @@ function App() {
             node={selected}
             detail={detail}
             detailError={detailError}
+            displayRootPrefix={displayRootPrefix}
             onFocus={handleFocus}
             onClear={() => setSelected(null)}
           /> : undefined}
     >
           <div data-testid="view-mode-control" className="contents top-3">
-            <GraphToolbar viewMode={viewMode} overlayMode={overlayMode} edgeView={edgeView} zoom={zoom} layoutCustomized={layout?.nodes.some((node) => dragPositions.hasOverride(node.id)) ?? false} truncated={Boolean(layout?.budget.nodes_truncated || layout?.budget.edges_truncated)} omittedNodes={layout ? Math.max(0, layout.budget.nodes_available - layout.budget.nodes_returned) : 0} omittedEdges={layout ? Math.max(0, layout.budget.edges_available - layout.budget.edges_returned) : 0} availableEdgeKinds={availableEdgeKinds} activeEdgeKinds={edgeKinds} onViewMode={setViewMode} onOverlayMode={setOverlayMode} onEdgeView={setEdgeView} onToggleEdgeKind={toggleEdgeKind} onResetLayout={dragPositions.clearAll} onZoom={setZoom} onRaiseBudget={() => { if (!layout) return; setMaxNodes(Math.min(layout.budget.nodes_available, Math.max(layout.budget.nodes_returned * 2, 300))); setMaxEdges(Math.min(layout.budget.edges_available, Math.max(layout.budget.edges_returned * 2, 800))) }} />
+            <GraphToolbar viewMode={viewMode} overlayMode={overlayMode} edgeView={edgeView} zoom={zoom} layoutCustomized={layout?.nodes.some((node) => dragPositions.hasOverride(node.id)) ?? false} truncated={Boolean(layout?.budget.nodes_truncated || layout?.budget.edges_truncated)} edgeCountsTruncated={layout?.budget.edges_truncated ?? false} omittedNodes={layout ? Math.max(0, layout.budget.nodes_available - layout.budget.nodes_returned) : 0} omittedEdges={layout ? Math.max(0, layout.budget.edges_available - layout.budget.edges_returned) : 0} availableEdgeKinds={availableEdgeKinds} edgeKindCounts={sliceFacetCounts.edgeKinds} activeEdgeKinds={edgeKinds} showUnprovenEdges={showUnprovenEdges} onViewMode={setViewMode} onOverlayMode={setOverlayMode} onEdgeView={setEdgeView} onToggleEdgeKind={toggleEdgeKind} onShowUnprovenEdges={setShowUnprovenEdges} onResetLayout={dragPositions.clearAll} onZoom={setZoom} onRaiseBudget={() => { if (!layout) return; setMaxNodes(Math.min(layout.budget.nodes_available, Math.max(layout.budget.nodes_returned * 2, 300))); setMaxEdges(Math.min(layout.budget.edges_available, Math.max(layout.budget.edges_returned * 2, 800))) }} />
           </div>
           {status === 'error' && (
             <div data-testid="graph-error" className="absolute inset-x-0 top-14 mx-auto w-fit"><StatusBanner>{error}</StatusBanner></div>
@@ -466,6 +475,7 @@ function App() {
               onSelectCluster={(cluster) => { setSelectedVisualClusterId(cluster.id); setSelected(null); setRelatedDocEntityId(cluster.id) }}
               onEnterCluster={navigateToVisualCluster}
               edgeKinds={edgeKinds}
+              showUnprovenEdges={showUnprovenEdges}
               clusterLinks={architecture.cluster_links}
               onFocusNode={handleFocus}
             />
@@ -476,6 +486,36 @@ function App() {
           {scopedCluster && <ClusterTensionDrilldown clusters={[scopedCluster]} onFocus={handleFocusId} />}
     </WorkspaceShell>
   )
+}
+
+function App() {
+  const [requestedProject] = useState(() => parseUrlState(window.location.search).projectId)
+  const [projects, setProjects] = useState<ProjectMetadata[] | null>(null)
+  const [projectId, setProjectId] = useState(requestedProject ?? 'primary')
+
+  useEffect(() => {
+    const controller = new AbortController()
+    listProjects(controller.signal)
+      .then((available) => {
+        setProjects(available)
+        if (!available.some((project) => project.id === requestedProject)) {
+          setProjectId(available.find((project) => project.is_primary)?.id ?? 'primary')
+        }
+      })
+      .catch(() => setProjects([{ id: 'primary', name: 'Primary project', is_primary: true }]))
+    return () => controller.abort()
+  }, [requestedProject])
+
+  useLayoutEffect(() => setActiveProjectId(projectId), [projectId])
+  if (!projects) return <div role="status">Loading projects…</div>
+  const switchProject = (next: string) => {
+    if (next === projectId || !projects.some((project) => project.id === next)) return
+    setActiveProjectId(next)
+    const query = serializeUrlState({ projectId: next, viewMode: 'cluster' })
+    window.history.replaceState(null, '', `${window.location.pathname}${query}`)
+    setProjectId(next)
+  }
+  return <ExplorerApp key={projectId} projects={projects} projectId={projectId} onProjectChange={switchProject} />
 }
 
 function shortNodeLabel(id: string): string {

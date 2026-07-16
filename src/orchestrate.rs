@@ -333,6 +333,7 @@ pub fn run_init_with_options(
 
         let graph_store_outcome = GraphStore::new(repo_root).save(&graph)?;
         let graph_path = graph_store_outcome.legacy_graph_path;
+        crate::graph::persist_graph_report(repo_root, &graph)?;
         // The FTS index is a pure function of the graph (LIT-22.4.3 AC1),
         // so it is rebuilt from scratch every run and only actually
         // rewritten (`write_if_changed`) when its content differs.
@@ -596,6 +597,7 @@ pub fn run_update_with_options(
 
         let graph_store_outcome = GraphStore::new(repo_root).save(&graph)?;
         let graph_path = graph_store_outcome.legacy_graph_path;
+        crate::graph::persist_graph_report(repo_root, &graph)?;
         // The FTS index is a pure function of the graph (LIT-22.4.3 AC1),
         // so it is rebuilt from scratch every run and only actually
         // rewritten (`write_if_changed`) when its content differs.

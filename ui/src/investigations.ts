@@ -35,15 +35,20 @@ export interface SavedInvestigation {
   notes: string
 }
 
-export function loadInvestigations(): SavedInvestigation[] {
+function loadAllInvestigations(): SavedInvestigation[] {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')
     return Array.isArray(value) ? value.filter(isInvestigation) : []
   } catch { return [] }
 }
 
+/** Loads saved views only for the selected allowlisted project. */
+export function loadInvestigations(projectId = 'primary'): SavedInvestigation[] {
+  return loadAllInvestigations().filter((item) => (item.urlState.projectId ?? 'primary') === projectId)
+}
+
 export function saveInvestigation(investigation: SavedInvestigation): void {
-  const next = loadInvestigations().filter((item) => item.id !== investigation.id)
+  const next = loadAllInvestigations().filter((item) => item.id !== investigation.id)
   next.push(investigation)
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
 }

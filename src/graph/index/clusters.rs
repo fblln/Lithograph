@@ -48,6 +48,10 @@ pub struct ArchitectureCluster {
     pub incoming_pressure: usize,
     /// Relations leaving the cluster for nodes outside it.
     pub outgoing_pressure: usize,
+    /// Snapshot-bound display tags added by API surfaces. Core clustering
+    /// leaves this empty because cluster membership is snapshot-agnostic.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<crate::graph::GraphTag>,
 }
 
 impl<'a> KnowledgeIndex<'a> {
@@ -202,5 +206,6 @@ fn build_cluster(
         cohesion,
         incoming_pressure,
         outgoing_pressure,
+        tags: vec![],
     }
 }

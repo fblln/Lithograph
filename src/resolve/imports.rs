@@ -109,7 +109,7 @@ fn remapped_extensions(extension: &str) -> &'static [&'static str] {
 ///    imports and multi-dot names like `Foo.svelte.ts`;
 /// 4. directory index files -- last, because a file always beats a directory
 ///    of the same name.
-fn import_candidates(candidate: &str, language: &str) -> Vec<String> {
+pub(crate) fn import_candidates(candidate: &str, language: &str) -> Vec<String> {
     let mut candidates = vec![candidate.to_owned()];
 
     if let Some(extension_start) = file_extension_start(candidate) {
@@ -188,7 +188,7 @@ fn php_reference(text: &str) -> Option<String> {
 /// `reference`, collapsing `.`/`..` components lexically (no filesystem
 /// access -- the candidate is checked against known artifact paths by the
 /// caller, not the disk).
-fn resolve_relative_path(source_dir: &Path, reference: &str) -> String {
+pub(crate) fn resolve_relative_path(source_dir: &Path, reference: &str) -> String {
     let mut components: Vec<Component<'_>> = source_dir.components().collect();
     for part in Path::new(reference).components() {
         match part {
@@ -251,6 +251,43 @@ impl Resolver for LanguageImportResolver {
             }
         }
 
+        // LIT-45.2: a non-relative specifier may be a tsconfig path alias for
+        // a first-party file (`@app/util` -> `src/util.ts`). Tried after the
+        // package map above, so a real dependency still wins, and before the
+        // language fall-throughs below. An alias whose target does not exist
+        // simply finds no artifact and falls through (AC4).
+        if matches!(language, "typescript" | "tsx" | "javascript")
+            && !context.ts_aliases.is_empty()
+            && let Some(source_path) = relation.source.as_str().strip_prefix("artifact:")
+        {
+            for aliased in context.ts_aliases.resolve(source_path, &reference) {
+                for path in import_candidates(&aliased, language) {
+                    if let Some(target) = context.artifacts_by_path.get(path.as_str()) {
+                        return Some(ResolvedTarget {
+                            target: (*target).clone(),
+                            confidence: Confidence::High,
+                        });
+                    }
+                }
+            }
+        }
+
+        // LIT-44.2: npm subpath imports belong to the package declared by
+        // their bare dependency root (`react-dom/client` -> `react-dom`,
+        // `@scope/pkg/sub` -> `@scope/pkg`). This runs after relative and
+        // tsconfig-alias resolution so a first-party path keeps its existing
+        // precedence, and matches only a package node the manifest already
+        // created -- an undeclared name still falls through to Unresolved.
+        if matches!(language, "typescript" | "tsx" | "javascript")
+            && let Some(root) = typescript_dependency_root(&reference)
+            && let Some(target) = context.packages_by_name.get(root)
+        {
+            return Some(ResolvedTarget {
+                target: (*target).clone(),
+                confidence: Confidence::High,
+            });
+        }
+
         if language == "go" {
             return context
                 .local_package_names
@@ -269,9 +306,59 @@ impl Resolver for LanguageImportResolver {
     }
 }
 
+/// Returns the npm dependency name at the root of a bare TS/JS specifier.
+///
+/// Plain packages use their first segment; scoped packages require both the
+/// scope and package segment. Relative/absolute paths and malformed scopes
+/// are not package names and deliberately produce no candidate.
+fn typescript_dependency_root(specifier: &str) -> Option<&str> {
+    if specifier.is_empty()
+        || specifier.starts_with('.')
+        || specifier.starts_with('/')
+        || specifier.starts_with('\\')
+    {
+        return None;
+    }
+    if specifier.starts_with('@') {
+        let mut separators = specifier.match_indices('/');
+        let (first_end, _) = separators.next()?;
+        if first_end <= 1 {
+            return None;
+        }
+        let end = separators
+            .next()
+            .map_or(specifier.len(), |(index, _)| index);
+        (end > first_end + 1).then_some(&specifier[..end])
+    } else {
+        let end = specifier.find('/').unwrap_or(specifier.len());
+        (end > 0).then_some(&specifier[..end])
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{extract_import_reference, extract_typescript_import_bindings};
+    use super::{
+        extract_import_reference, extract_typescript_import_bindings, typescript_dependency_root,
+    };
+
+    #[test]
+    fn typescript_dependency_roots_preserve_scopes_and_strip_only_subpaths() {
+        assert_eq!(typescript_dependency_root("react"), Some("react"));
+        assert_eq!(
+            typescript_dependency_root("react-dom/client"),
+            Some("react-dom")
+        );
+        assert_eq!(typescript_dependency_root("@scope/pkg"), Some("@scope/pkg"));
+        assert_eq!(
+            typescript_dependency_root("@scope/pkg/sub/path"),
+            Some("@scope/pkg")
+        );
+        assert_eq!(typescript_dependency_root("./local"), None);
+        assert_eq!(typescript_dependency_root("../local"), None);
+        assert_eq!(typescript_dependency_root("/absolute"), None);
+        assert_eq!(typescript_dependency_root("@scope"), None);
+        assert_eq!(typescript_dependency_root("@/pkg"), None);
+    }
 
     #[test]
     fn extracts_named_typescript_import_bindings_without_guessing_defaults() {
@@ -440,6 +527,104 @@ mod pipeline_tests {
                 .resolution,
             RelationResolution::HybridResolved
         );
+
+        Ok(())
+    }
+
+    /// LIT-44.2 AC1-AC3: manifest-declared npm roots classify plain, scoped,
+    /// and subpath imports onto the existing package nodes. An undeclared
+    /// root remains Unresolved, and repeated subpaths do not duplicate nodes.
+    #[test]
+    fn typescript_bare_imports_resolve_only_to_declared_dependency_roots()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src"))?;
+        std::fs::write(
+            temp.path().join("package.json"),
+            r#"{
+  "name": "app",
+  "dependencies": {
+    "react": "^18",
+    "react-dom": "^18",
+    "@scope/pkg": "^1"
+  }
+}"#,
+        )?;
+        std::fs::write(
+            temp.path().join("src/app.ts"),
+            "import { useState } from 'react';\n\
+             import client from 'react-dom/client';\n\
+             import server from 'react-dom/server';\n\
+             import scoped from '@scope/pkg/sub';\n\
+             import missing from 'left-pad/sub';\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+        let targets: Vec<_> = graph
+            .relations
+            .iter()
+            .filter(|relation| {
+                relation.kind == RelationKind::Imports
+                    && relation.source.as_str() == "artifact:src/app.ts"
+            })
+            .map(|relation| relation.target.as_str())
+            .collect();
+
+        assert!(targets.contains(&"package:react"));
+        assert_eq!(
+            targets
+                .iter()
+                .filter(|target| **target == "package:react-dom")
+                .count(),
+            2,
+            "both subpath relations reuse one manifest-derived package node",
+        );
+        assert!(targets.contains(&"package:@scope/pkg"));
+        assert!(graph.nodes.iter().any(|node| matches!(
+            node,
+            GraphNode::Unresolved(unresolved) if unresolved.value.contains("left-pad/sub")
+        )));
+        assert_eq!(
+            graph
+                .nodes
+                .iter()
+                .filter(|node| node.id().as_str() == "package:react-dom")
+                .count(),
+            1,
+        );
+
+        Ok(())
+    }
+
+    /// A tsconfig alias is a first-party path even when its prefix is also a
+    /// declared npm dependency; the existing alias precedence is preserved.
+    #[test]
+    fn typescript_alias_target_wins_before_dependency_root_classification()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("src/core"))?;
+        std::fs::write(
+            temp.path().join("package.json"),
+            r#"{"name":"app","dependencies":{"@app/core":"1"}}"#,
+        )?;
+        std::fs::write(
+            temp.path().join("tsconfig.json"),
+            r#"{"compilerOptions":{"baseUrl":".","paths":{"@app/*":["src/*"]}}}"#,
+        )?;
+        std::fs::write(
+            temp.path().join("src/core/util.ts"),
+            "export const util = 1;\n",
+        )?;
+        std::fs::write(
+            temp.path().join("src/app.ts"),
+            "import { util } from '@app/core/util';\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+        let relation = resolved_target(&graph, "src/app.ts").ok_or("missing import relation")?;
+        assert_eq!(relation.target.as_str(), "artifact:src/core/util.ts");
 
         Ok(())
     }

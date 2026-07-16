@@ -263,6 +263,14 @@ fn is_url(token: &str) -> bool {
 }
 
 fn is_local_path(token: &str) -> bool {
+    // Documentation fallbacks see code samples as plain whitespace-delimited
+    // tokens. A decorator/call such as `@app.post("/add")` contains both a
+    // dot and slash, but it is not a repository path. Reject call-shaped
+    // tokens before path heuristics so quoted literals are never emitted as
+    // truncated pseudo-paths such as `@app.post("/add`.
+    if token.contains("(\"") || token.contains("('") {
+        return false;
+    }
     token.contains('/')
         && !is_url(token)
         && (token.contains(".")
@@ -408,6 +416,24 @@ include \"config/settings.yaml\"
             "config/settings.yaml"
         ));
 
+        Ok(())
+    }
+
+    #[test]
+    fn generic_text_does_not_truncate_decorator_literals_into_paths()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let artifact = safe_text_artifact("guide.rst")?;
+        let findings = GenericTextExtractor.extract(
+            &artifact,
+            "    @app.post(\"/add\")\n    @app.get(\"/result/<id>\")\n",
+        );
+
+        assert!(
+            findings
+                .iter()
+                .all(|finding| finding.kind != TextFindingKind::LocalPath),
+            "{findings:#?}"
+        );
         Ok(())
     }
 

@@ -2,8 +2,13 @@ import { useEffect, useRef } from 'react'
 import { ExplorerSearch } from './ExplorerSearch'
 import type { ArchitectureCluster } from '../api/architecture'
 import type { RepositoryTension } from '../api/tensions'
+import type { ProjectMetadata } from '../api/projects'
+import { stripDisplayRoot } from '../displayRoot'
 
 export interface TopBarProps {
+  projects?: ProjectMetadata[]
+  projectId?: string
+  onProjectChange?: (id: string) => void
   centerLabel: string
   status: 'loading' | 'ready' | 'error'
   onFocus: (id: string) => void
@@ -19,9 +24,10 @@ export interface TopBarProps {
   breadcrumbs?: string[]
   onNavigateBreadcrumb?: (index: number) => void
   onBack?: () => void
+  displayRootPrefix?: string
 }
 
-export function TopBar({ centerLabel, status, onFocus, clusters = [], onFocusCluster = () => {}, onSelectTension, snapshotId, renderedNodes, availableNodes, scopeNodeIds, workspaceMode = 'explore', onWorkspaceMode = () => {}, breadcrumbs = [centerLabel], onNavigateBreadcrumb = () => {}, onBack }: TopBarProps) {
+export function TopBar({ centerLabel, status, onFocus, projects = [], projectId = 'primary', onProjectChange = () => {}, clusters = [], onFocusCluster = () => {}, onSelectTension, snapshotId, renderedNodes, availableNodes, scopeNodeIds, workspaceMode = 'explore', onWorkspaceMode = () => {}, breadcrumbs = [centerLabel], onNavigateBreadcrumb = () => {}, onBack, displayRootPrefix }: TopBarProps) {
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -41,12 +47,13 @@ export function TopBar({ centerLabel, status, onFocus, clusters = [], onFocusClu
       style={{ borderColor: 'var(--atlas-border)', background: 'var(--atlas-panel-header)' }}
     >
       <div className="flex items-center gap-2 whitespace-nowrap text-[13.5px] font-semibold" style={{ color: 'var(--atlas-text)' }}><AtlasMark />Lithograph <span style={{ color: 'var(--atlas-text-muted)', fontWeight: 500 }}>Atlas</span></div>
+      {projects.length > 0 && <label className="flex items-center gap-1 text-[10px]" style={{ color: 'var(--atlas-text-muted)' }}>Project <select aria-label="Project" value={projectId} disabled={projects.length === 1} onChange={(event) => onProjectChange(event.target.value)} className="max-w-36 rounded border px-1.5 py-1" style={{ borderColor: 'var(--atlas-border-strong)', background: 'var(--atlas-chip)', color: 'var(--atlas-text-bright)' }}>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>}
       <nav aria-label="Exploration path" className="flex min-w-0 max-w-[38vw] items-center gap-1 rounded px-1.5 py-1 text-[10.5px]" style={{ background: 'var(--atlas-chip)', color: 'var(--atlas-text-dim)' }}>
         {breadcrumbs.length > 1 && <button type="button" aria-label="Back to previous context" onClick={onBack} className="rounded px-1.5 py-0.5" style={{ color: 'var(--atlas-accent)' }}>← Back</button>}
-        <div className="flex min-w-0 items-center overflow-hidden">{breadcrumbs.map((crumb, index) => <span key={`${crumb}:${index}`} className="flex min-w-0 items-center"><span aria-hidden="true" className={index === 0 ? 'hidden' : 'mx-1'}>/</span><button type="button" aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined} onClick={() => onNavigateBreadcrumb(index)} className="max-w-32 truncate rounded px-1 py-0.5 font-semibold" title={crumb} style={{ color: index === breadcrumbs.length - 1 ? 'var(--atlas-text-bright)' : 'var(--atlas-text-muted)' }}>{crumb}</button></span>)}</div>
+        <div className="flex min-w-0 items-center overflow-hidden">{breadcrumbs.map((crumb, index) => <span key={`${crumb}:${index}`} className="flex min-w-0 items-center"><span aria-hidden="true" className={index === 0 ? 'hidden' : 'mx-1'}>/</span><button type="button" aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined} onClick={() => onNavigateBreadcrumb(index)} className="max-w-32 truncate rounded px-1 py-0.5 font-semibold" title={crumb} style={{ color: index === breadcrumbs.length - 1 ? 'var(--atlas-text-bright)' : 'var(--atlas-text-muted)' }}>{stripDisplayRoot(crumb, displayRootPrefix)}</button></span>)}</div>
       </nav>
       {snapshotId && <span className="hidden whitespace-nowrap text-[9.5px] lg:inline" style={{ color: 'var(--atlas-text-faint)' }}>snapshot {snapshotId.slice(0, 12)}{renderedNodes !== undefined && availableNodes !== undefined ? ` · ${renderedNodes}/${availableNodes} nodes` : ''}</span>}
-      <ExplorerSearch onFocus={onFocus} onFocusCluster={onFocusCluster} clusters={clusters} onSelectTension={onSelectTension} inputRef={searchRef} scopeNodeIds={scopeNodeIds} />
+      <ExplorerSearch onFocus={onFocus} onFocusCluster={onFocusCluster} clusters={clusters} onSelectTension={onSelectTension} inputRef={searchRef} scopeNodeIds={scopeNodeIds} displayRootPrefix={displayRootPrefix} />
       <div className="flex rounded p-0.5" style={{ background: 'var(--atlas-chip)' }}><button type="button" data-active={workspaceMode === 'explore'} onClick={() => onWorkspaceMode('explore')} className="rounded px-2.5 py-1 text-[10.5px]" style={{ background: workspaceMode === 'explore' ? 'var(--atlas-accent)' : 'transparent' }}>Explore</button><button type="button" data-active={workspaceMode === 'docs'} onClick={() => onWorkspaceMode('docs')} className="rounded px-2.5 py-1 text-[10.5px]" style={{ background: workspaceMode === 'docs' ? 'var(--atlas-accent)' : 'transparent' }}>Docs</button></div>
       <StatusDot status={status} />
     </header>

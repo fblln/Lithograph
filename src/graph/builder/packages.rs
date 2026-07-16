@@ -29,7 +29,18 @@ impl BuilderState {
         }
         for command in &analysis.commands {
             let key = command.line.to_string();
-            let target = self.command(artifact, &key, &command.command, command.evidence.clone());
+            let mut provenance = command_provenance(artifact, &command.evidence);
+            if provenance == CommandProvenance::Executable && command.kind == DockerCommandKind::Run
+            {
+                provenance = CommandProvenance::BuildAutomation;
+            }
+            let target = self.command_with_provenance(
+                artifact,
+                &key,
+                &command.command,
+                command.evidence.clone(),
+                provenance,
+            );
             self.relate(
                 artifact_node.clone(),
                 target,
@@ -70,32 +81,26 @@ impl BuilderState {
             .iter()
             .filter(|link| matches!(link.kind, crate::analysis::LinkKind::Local))
         {
-            let (target, confidence) = self.reference_target(&link.target);
+            let Some(target) = self.resolve_documentation_path(artifact, &link.target) else {
+                continue;
+            };
             self.relate(
                 artifact_node.clone(),
                 target,
                 RelationKind::References,
-                confidence,
+                Confidence::High,
                 vec![link.evidence.clone()],
             );
         }
         for path_ref in &analysis.source_paths {
-            let target = if path_ref.exists {
-                self.resolve_path(&path_ref.path)
-                    .unwrap_or_else(|| self.unresolved(&path_ref.path))
-            } else {
-                self.unresolved(&path_ref.path)
-            };
-            let confidence = if path_ref.exists {
-                Confidence::High
-            } else {
-                Confidence::Low
+            let Some(target) = self.resolve_documentation_path(artifact, &path_ref.path) else {
+                continue;
             };
             self.relate(
                 artifact_node.clone(),
                 target,
                 RelationKind::References,
-                confidence,
+                Confidence::High,
                 vec![path_ref.evidence.clone()],
             );
         }
@@ -595,6 +600,89 @@ fn python_dependency_name(requirement: &str) -> &str {
 mod tests {
     use super::*;
     use crate::inventory::{RepositoryWalker, WalkOptions};
+
+    #[test]
+    fn documentation_noise_does_not_mint_unresolved_nodes() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("docs"))?;
+        std::fs::create_dir_all(temp.path().join(".github/workflows"))?;
+        std::fs::write(temp.path().join("docs/guide.md"), "# Guide\n")?;
+        // The default inventory intentionally excludes this hidden tree. A
+        // physical file outside the artifact set is still not a graph target,
+        // but documentation mentioning it must not become resolver failure.
+        std::fs::write(temp.path().join(".github/workflows/ci.yml"), "name: CI\n")?;
+        std::fs::write(
+            temp.path().join("README.md"),
+            "# Project\n\nSee [guide](docs/guide.md), [missing](docs/missing.md), `.github/workflows/ci.yml`, and https://example.test.\n\nUse `render_template('blog/create.html')`.\n```python\n@app.post(\"/add\")\n```\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+        let unresolved = graph
+            .nodes
+            .iter()
+            .filter_map(|node| match node {
+                GraphNode::Unresolved(node) => Some(node.value.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert!(unresolved.is_empty(), "{unresolved:#?}");
+        assert!(
+            graph
+                .nodes
+                .iter()
+                .all(|node| node.id().as_str() != "artifact:.github/workflows/ci.yml")
+        );
+        assert!(graph.relations.iter().any(|relation| {
+            relation.source.as_str() == "artifact:README.md"
+                && relation.target.as_str() == "artifact:docs/guide.md"
+                && relation.kind == RelationKind::References
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn builder_assigns_documentation_and_build_command_provenance()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("README.md"),
+            "# Setup\n\n```sh\n$ . .venv/bin/activate\n```\n",
+        )?;
+        std::fs::create_dir(temp.path().join("docs"))?;
+        std::fs::write(
+            temp.path().join("docs/Makefile"),
+            "html:\n\tsphinx-build -M html . _build\n",
+        )?;
+        std::fs::write(temp.path().join("Makefile"), "test:\n\tcargo test\n")?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+        let commands = graph.nodes.iter().filter_map(|node| match node {
+            GraphNode::Command(command) => Some(command),
+            _ => None,
+        });
+        let provenances = commands
+            .map(|command| (command.text.as_str(), command.provenance))
+            .collect::<BTreeMap<_, _>>();
+
+        assert_eq!(
+            provenances.get(". .venv/bin/activate"),
+            Some(&CommandProvenance::DocumentationExample)
+        );
+        assert!(
+            provenances
+                .get("sphinx-build -M html . _build")
+                .is_none_or(|provenance| *provenance == CommandProvenance::DocumentationExample)
+        );
+        assert_eq!(
+            provenances.get("cargo test"),
+            Some(&CommandProvenance::BuildAutomation)
+        );
+        Ok(())
+    }
 
     #[test]
     fn graph_links_dockerfile_and_compose_to_image_nodes() -> Result<(), Box<dyn std::error::Error>>

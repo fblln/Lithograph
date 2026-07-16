@@ -7,7 +7,8 @@ describe('parseUrlState', () => {
   })
 
   it('reads center, view, budget, filters, and selection params', () => {
-    expect(parseUrlState('?center=artifact%3Areadme.md&view=matrix&maxNodes=300&maxEdges=900&labels=Artifact,Symbol&selected=symbol%3Areadme.md%23title&tension=t1')).toEqual({
+    expect(parseUrlState('?project=web&center=artifact%3Areadme.md&view=matrix&maxNodes=300&maxEdges=900&labels=Artifact,Symbol&selected=symbol%3Areadme.md%23title&tension=t1')).toEqual({
+      projectId: 'web',
       centerNode: 'artifact:readme.md',
       viewMode: 'matrix',
       maxNodes: 300,
@@ -37,10 +38,18 @@ describe('serializeUrlState', () => {
   it('only encodes params that differ from the default', () => {
     expect(serializeUrlState({ viewMode: 'matrix', maxNodes: undefined })).toBe('?view=matrix')
     expect(serializeUrlState({ viewMode: 'cluster', maxNodes: 300 })).toBe('?maxNodes=300')
+    expect(serializeUrlState({ projectId: 'primary', viewMode: 'cluster' })).toBe('')
+    expect(serializeUrlState({ projectId: 'web', viewMode: 'cluster' })).toBe('?project=web')
   })
 
   it('round-trips through parseUrlState', () => {
-    const state = { centerNode: 'symbol:a.rs#f', viewMode: 'matrix' as const, maxNodes: 250, maxEdges: 800, nodeLabels: ['Artifact', 'Symbol'], selectedNode: 'symbol:a.rs#f', tensionId: 'cycle-1', tagExpression: 'kind:artifact,!role:test', workspaceMode: 'docs' as const, docSectionId: 'section:overview' }
+    const state = { projectId: 'web', centerNode: 'symbol:a.rs#f', viewMode: 'matrix' as const, maxNodes: 250, maxEdges: 800, nodeLabels: ['Artifact', 'Symbol'], selectedNode: 'symbol:a.rs#f', tensionId: 'cycle-1', tagExpression: 'kind:artifact,!role:test', workspaceMode: 'docs' as const, docSectionId: 'section:overview', showUnprovenEdges: false }
     expect(parseUrlState(serializeUrlState(state))).toEqual(state)
+  })
+
+  it('keeps unproven edges visible by default and only serializes the hidden state', () => {
+    expect(parseUrlState('').showUnprovenEdges).toBeUndefined()
+    expect(parseUrlState('?unproven=hide').showUnprovenEdges).toBe(false)
+    expect(serializeUrlState({ viewMode: 'cluster', showUnprovenEdges: false })).toBe('?unproven=hide')
   })
 })

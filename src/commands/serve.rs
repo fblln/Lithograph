@@ -41,6 +41,24 @@ pub(crate) fn execute_serve<W>(
 where
     W: Write,
 {
+    let projects = args
+        .projects
+        .iter()
+        .map(|value| {
+            let (id, path) = value
+                .split_once('=')
+                .ok_or_else(|| format!("invalid --project `{value}`; expected ID=PATH"))?;
+            if path.is_empty() {
+                return Err(format!(
+                    "invalid --project `{value}`; PATH must not be empty"
+                ));
+            }
+            Ok(crate::serve::NamedProjectRoot::new(
+                id,
+                std::path::PathBuf::from(path),
+            ))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
     let assets = if args.assets.is_absolute() {
         args.assets
     } else {
@@ -49,6 +67,8 @@ where
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    runtime.block_on(crate::serve::run(&args.path, &assets, args.port, writer))?;
+    runtime.block_on(crate::serve::run_projects(
+        &args.path, projects, &assets, args.port, writer,
+    ))?;
     Ok(())
 }
