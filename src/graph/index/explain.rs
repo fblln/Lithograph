@@ -105,6 +105,8 @@ fn node_evidence(node: &GraphNode) -> Vec<EvidenceRef> {
         GraphNode::Documentation(node) => vec![node.evidence.clone()],
         GraphNode::Command(node) => vec![node.evidence.clone()],
         GraphNode::Module(node) => vec![node.evidence.clone()],
+        // LIT-46: a rationale note's evidence is the comment's own span.
+        GraphNode::Rationale(node) => vec![node.evidence.clone()],
         GraphNode::Container(_)
         | GraphNode::EnvVar(_)
         | GraphNode::Package(_)
