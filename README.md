@@ -23,8 +23,8 @@ regenerating only what actually went stale.
   report `Low`/`Unknown` rather than guessing when there isn't real signal.
 - **A real graph, not a text index.** 29 typed relation kinds (calls,
   imports, inheritance, type references, data flow, cross-service protocol
-  edges, near-clone similarity, and more), a Cypher-like query subset, and a
-  durable LadybugDB projection you can query directly.
+  edges, near-clone similarity, and more) and a Cypher-like query subset over
+  a deterministic, versioned graph snapshot.
 - **Built for agents.** 25 MCP tools cover graph queries, three distinct
   search modes, tag/taxonomy lookups, trace/impact analysis, dead-code
   detection, drift detection, ADR CRUD, and subsystem doc generation —
@@ -39,10 +39,9 @@ Running `lithograph init <repo>` creates:
   and an ADR-and-drift page, plus a `modules/` tree with per-module pages
   grouped by kind (directories, configuration, documentation, infrastructure,
   language packages/crates).
-- `.lithograph/graph.json` and `.lithograph/graph/ladybug.lbug`: a
-  deterministic semantic graph export and a durable, queryable LadybugDB
-  projection (JSON snapshots retained for compatibility and portable
-  exports). See [Ladybug graph operations](docs/dev/ladybug-operations.md).
+- `.lithograph/graph.json` and `.lithograph/graph/current.json`: a
+  deterministic semantic graph export and its versioned snapshot envelope
+  (used for loading, migration, and portable graph artifact exports).
 - `.lithograph/manifest.json`: page/task manifest with dependencies,
   evidence, prompt versions, context schema versions, input hashes, and
   output hashes.
@@ -191,9 +190,9 @@ MCP tools for agent access):
 
 ```sh
 cargo run -- adr create /path/to/repo \
-  --title "Use LadybugDB for graph storage" \
-  --context "Need a durable, queryable projection of the semantic graph" \
-  --decision "Adopt LadybugDB as the on-disk graph store"
+  --title "Use versioned JSON snapshots for graph storage" \
+  --context "Need a deterministic, portable on-disk projection of the semantic graph" \
+  --decision "Adopt versioned JSON snapshots as the on-disk graph store"
 cargo run -- adr list /path/to/repo
 ```
 
@@ -385,8 +384,8 @@ just coverage
   and safety policy.
 - `src/analysis/`: deterministic analyzers for supported file types.
 - `src/resolve/`: per-language hybrid import/symbol/type resolvers.
-- `src/graph/`: semantic graph model, builder, validation, LadybugDB store,
-  analytics, communities, tensions, and tags.
+- `src/graph/`: semantic graph model, builder, validation, versioned JSON
+  store, analytics, communities, tensions, and tags.
 - `src/query.rs`: the Cypher-like graph query subset.
 - `src/fts.rs`, `src/semantic_search.rs`, `src/search.rs`: full-text,
   semantic, and graph-scoped code search.
@@ -412,8 +411,7 @@ just coverage
   configuration, curated expectations, and accepted summaries.
 - `tests/`: integration and snapshot coverage.
 - `docs/dev/`: design notes — parser spike decisions, prompt/context
-  versioning, type-aware resolution, LadybugDB schema and operations, plus
-  distribution and security posture.
+  versioning, type-aware resolution, plus distribution and security posture.
 
 ## Distribution and Security
 
@@ -435,7 +433,7 @@ with bounded, evidence-scoped excerpts — never a whole-repo dump. See
 
 ## Current Status
 
-Lithograph's local CLI, C4-oriented generated wiki, durable LadybugDB graph,
+Lithograph's local CLI, C4-oriented generated wiki, versioned JSON graph,
 incremental update path with content-addressed caching, three search modes,
 graph query language, ADR store, drift/quality checks, 35-tool MCP server,
 a local embedded server (`serve`) with a budgeted/cached graph layout API,
