@@ -66,6 +66,18 @@ impl GenericTextExtractor {
             return Vec::new();
         }
 
+        // LIT-78 (same category error as LIT-73's HTML fix, LIT-23.2's CSS
+        // fix): a markup document's tags, namespace declarations, and
+        // presentation attributes are what the file *is*, not code
+        // references to something else. The token/URL/package heuristics
+        // below treat `xmlns:cc="http://..."` or `<dc:format>image/svg+xml`
+        // as a URL/package reference and mint one Unresolved node apiece --
+        // most visibly on `.svg` logos and `.mjml` email templates, which
+        // are wholly markup. Markup contributes no generic-text code facts.
+        if is_markup(text) {
+            return Vec::new();
+        }
+
         let mut findings = Vec::new();
         for (index, line) in text.lines().enumerate() {
             let line_number = u32::try_from(index + 1).unwrap_or(u32::MAX);
@@ -73,6 +85,19 @@ impl GenericTextExtractor {
         }
         findings
     }
+}
+
+/// Whether `text` is a markup document (XML/SVG/HTML/MJML). The first
+/// non-blank line beginning with `<` is a reliable, deterministic tell: a
+/// code or config file whose analyzer fell through to generic text never
+/// opens with an angle bracket, while every markup dialect does (`<?xml`,
+/// `<svg`, `<!DOCTYPE`, `<mjml>`). Content-based rather than
+/// extension-based so an unregistered markup extension is covered too.
+fn is_markup(text: &str) -> bool {
+    text.lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .is_some_and(|line| line.starts_with('<'))
 }
 
 fn extract_line(line: &str, line_number: u32, findings: &mut Vec<TextFinding>) {
@@ -433,6 +458,45 @@ include \"config/settings.yaml\"
                 .iter()
                 .all(|finding| finding.kind != TextFindingKind::LocalPath),
             "{findings:#?}"
+        );
+        Ok(())
+    }
+
+    /// LIT-78: a markup document (SVG logo, MJML email template, raw XML)
+    /// contributes no generic-text code references. Its namespace URLs,
+    /// `image/svg+xml`-style mime tokens, and tag fragments are markup, not
+    /// references to a missing symbol, and each one otherwise minted a
+    /// spurious Unresolved node.
+    #[test]
+    fn markup_documents_produce_no_reference_findings() -> Result<(), Box<dyn std::error::Error>> {
+        let svg = safe_text_artifact("logo.svg")?;
+        let svg_text = "<?xml version=\"1.0\"?>\n<svg xmlns:cc=\"http://creativecommons.org/ns#\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n  <metadata><rdf:RDF><cc:Work><dc:format>image/svg+xml</dc:format></cc:Work></rdf:RDF></metadata>\n</svg>\n";
+        assert!(
+            GenericTextExtractor.extract(&svg, svg_text).is_empty(),
+            "SVG markup must not produce generic-text findings"
+        );
+
+        let mjml = safe_text_artifact("welcome.mjml")?;
+        let mjml_text = "<mjml>\n  <mj-body>\n    <mj-text>Verify your email by clicking below:</mj-text>\n  </mj-body>\n</mjml>\n";
+        assert!(
+            GenericTextExtractor.extract(&mjml, mjml_text).is_empty(),
+            "MJML markup must not produce generic-text findings"
+        );
+
+        // A leading blank line before the markup is still recognized, and a
+        // non-markup file that merely contains a `<` mid-line is unaffected.
+        let leading_blank = safe_text_artifact("indented.svg")?;
+        assert!(
+            GenericTextExtractor
+                .extract(&leading_blank, "\n\n  <svg><metadata/></svg>\n")
+                .is_empty()
+        );
+        let code = safe_text_artifact("source.txt")?;
+        assert!(
+            !GenericTextExtractor
+                .extract(&code, "value = a < b && c > d\nimport os\n")
+                .is_empty(),
+            "a code file with mid-line angle brackets is not markup"
         );
         Ok(())
     }

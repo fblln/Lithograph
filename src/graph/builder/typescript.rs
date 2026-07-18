@@ -541,10 +541,7 @@ mod tests {
             .as_ref()
             .ok_or("missing call provenance")?;
         assert_eq!(provenance.resolution, RelationResolution::HybridResolved);
-        assert_eq!(
-            provenance.resolver_strategy,
-            "typescript-import-binding-call"
-        );
+        assert_eq!(provenance.resolver_strategy, "typescript-import-binding");
 
         let unknown = graph
             .relations
@@ -560,6 +557,114 @@ mod tests {
             .ok_or("missing unresolved imported-file call")?;
         assert_eq!(unknown.confidence, Confidence::Low);
 
+        Ok(())
+    }
+
+    /// LIT-75: a use-site reference to a name this file imported from a
+    /// relative local module resolves to that module's exported symbol, not
+    /// a per-file `unresolved:<name>` node -- covering both a named import
+    /// (`{ ApiError }`) and a default import (`Widget`) used as a JSX
+    /// component. A name that is not imported at all stays unresolved rather
+    /// than being guessed toward some same-named symbol elsewhere.
+    #[test]
+    fn typescript_local_import_references_resolve_at_use_sites()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("Widget.tsx"),
+            "const Widget = () => null;\nexport default Widget;\n",
+        )?;
+        std::fs::write(temp.path().join("errors.ts"), "export class ApiError {}\n")?;
+        std::fs::write(
+            temp.path().join("Panel.tsx"),
+            concat!(
+                "import Widget from \"./Widget\";\n",
+                "import { ApiError } from \"./errors\";\n",
+                "interface PanelProps {\n  title: string;\n}\n",
+                "const handle = (e: ApiError) => e;\n",
+                "const view = (props: PanelProps) => <Widget />;\n",
+                "const other = () => <Missing />;\n",
+            ),
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let resolved_to = |target: &str| {
+            graph.relations.iter().any(|relation| {
+                relation.source.as_str() == "artifact:Panel.tsx"
+                    && relation.target.as_str() == target
+                    && relation.provenance.as_ref().is_some_and(|provenance| {
+                        provenance.resolution == RelationResolution::HybridResolved
+                            && provenance.resolver_strategy == "typescript-import-binding"
+                    })
+            })
+        };
+        // Named import referenced in a type annotation -> the local class.
+        assert!(
+            resolved_to("symbol:errors.ts#errors.ts::ApiError"),
+            "ApiError reference should resolve to the local class"
+        );
+        // Default import used as a JSX component -> the local default export.
+        assert!(
+            resolved_to("symbol:Widget.tsx#Widget.tsx::Widget"),
+            "Widget JSX usage should resolve to the local default export"
+        );
+        // A same-file interface referenced in a type annotation -> the
+        // now name-bearing local interface symbol (LIT-75 AC2).
+        assert!(
+            resolved_to("symbol:Panel.tsx::PanelProps"),
+            "PanelProps should resolve to the same-file interface"
+        );
+        // A name imported by nobody stays unresolved rather than being guessed.
+        assert!(
+            graph
+                .nodes
+                .iter()
+                .any(|node| matches!(node, GraphNode::Unresolved(node) if node.value == "Missing")),
+            "an unimported JSX name must stay unresolved"
+        );
+        Ok(())
+    }
+
+    /// LIT-77: a bare reference to a JS/TS builtin global (`JSON`, `Array`)
+    /// is classified as an external `javascript::<name>` symbol rather than a
+    /// per-file `Unresolved` node, but a local declaration that shadows a
+    /// builtin name still wins -- resolution runs before builtin
+    /// classification, so the shadowed name never reaches it.
+    #[test]
+    fn typescript_builtins_classify_externally_but_locals_shadow_them()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        // `Array` is defined locally here, so it must stay local, not builtin.
+        std::fs::write(
+            temp.path().join("app.ts"),
+            "class Array {}\nconst a = new Array();\nconst s = JSON.stringify(a);\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        // `JSON` has no local declaration -> external builtin symbol.
+        assert!(
+            graph.nodes.iter().any(|node| matches!(
+                node,
+                GraphNode::Symbol(symbol)
+                    if symbol.qualified_name == "javascript::JSON"
+                    && symbol.kind == SymbolKind::External
+            )),
+            "JSON should be classified as an external builtin"
+        );
+        // The locally-declared `Array` must NOT be reclassified as a builtin:
+        // no `javascript::Array` symbol exists, and the reference resolves to
+        // the local class instead.
+        assert!(
+            !graph
+                .nodes
+                .iter()
+                .any(|node| node.id().as_str() == "symbol:javascript::Array"),
+            "a locally-declared name that shadows a builtin must not be reclassified"
+        );
         Ok(())
     }
 

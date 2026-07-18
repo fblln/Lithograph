@@ -352,6 +352,7 @@ impl BuilderState {
                     let target = self
                         .python_modules
                         .get(&name.name)
+                        .or_else(|| self.python_package_relative_modules.get(&name.name))
                         .cloned()
                         .unwrap_or_else(|| self.python_external_target(&name.name));
                     self.relate_with_provenance(
@@ -377,7 +378,15 @@ impl BuilderState {
                 );
                 let target = resolved
                     .as_ref()
-                    .and_then(|resolved| self.python_modules.get(resolved).cloned())
+                    .and_then(|resolved| {
+                        // LIT-76: an absolute import of the repo's own package
+                        // (`from app.core.config import ...`) matches by
+                        // package-relative path when the whole-repo key misses.
+                        self.python_modules
+                            .get(resolved)
+                            .or_else(|| self.python_package_relative_modules.get(resolved))
+                            .cloned()
+                    })
                     .unwrap_or_else(|| match (import.relative_level, &resolved) {
                         // Only an absolute (non-relative) import can ever name
                         // a stdlib module, so relative imports always fall
@@ -1003,6 +1012,52 @@ mod tests {
             "expected a resolved same-file call relation"
         );
 
+        Ok(())
+    }
+
+    /// LIT-76: a repo whose top-level package `app` lives under a source-root
+    /// directory (`backend/`) imports its own modules by their installed name
+    /// (`from app.core.config import ...`). That absolute import resolves to
+    /// the local module, not an `Unresolved` node, while a genuinely
+    /// third-party absolute import is left for external classification.
+    #[test]
+    fn python_intra_package_absolute_import_resolves_to_local_module()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        let root = temp.path();
+        std::fs::create_dir_all(root.join("backend/app/core"))?;
+        // `app` is a package (has __init__.py); `backend` is not, so it is
+        // the source root and imports start at `app`.
+        std::fs::write(root.join("backend/app/__init__.py"), "")?;
+        std::fs::write(root.join("backend/app/core/__init__.py"), "")?;
+        std::fs::write(root.join("backend/app/core/config.py"), "settings = 1\n")?;
+        std::fs::write(
+            root.join("backend/app/main.py"),
+            "from app.core.config import settings\nimport requests\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(root)?;
+        let graph = GraphBuilder.build(root, &artifacts);
+
+        // The intra-package import resolves to the local module node, whose
+        // identity remains the whole-repo path.
+        assert!(
+            graph.relations.iter().any(|relation| {
+                relation.kind == RelationKind::Imports
+                    && relation.source.as_str() == "artifact:backend/app/main.py"
+                    && relation.target.as_str() == "module:backend.app.core.config"
+            }),
+            "intra-package `from app.core.config` should resolve to the local module"
+        );
+        // A third-party absolute import is unaffected: no local module named
+        // `requests` exists, so it must not fabricate one.
+        assert!(
+            !graph
+                .nodes
+                .iter()
+                .any(|node| node.id().as_str() == "module:requests"),
+            "a third-party import must not resolve to a local module"
+        );
         Ok(())
     }
 

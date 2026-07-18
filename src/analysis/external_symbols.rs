@@ -299,12 +299,182 @@ pub fn is_rust_prelude_type(name: &str) -> bool {
     RUST_PRELUDE_TYPES.contains(&name)
 }
 
+/// ECMAScript, DOM/BOM, Node, and TypeScript-library global names that a
+/// TS/JS file references by bare name without importing them -- the JS
+/// counterpart of [`is_python_stdlib_module`] (LIT-6) and
+/// [`is_rust_prelude_type`] (LIT-66). Deliberately a curated list of *global*
+/// identifiers and standard library types only. Prototype method names
+/// (`forEach`, `map`, `filter`) are excluded on purpose: they are receiver
+/// members, not globals, so a bare `filter` could equally be a lodash import
+/// or a local method, and classifying it as a builtin would be a guess. Those
+/// stay `Unresolved`, which is the honest answer.
+const JAVASCRIPT_BUILTINS: &[&str] = &[
+    // ECMAScript globals and constructors.
+    "Array",
+    "ArrayBuffer",
+    "BigInt",
+    "BigInt64Array",
+    "BigUint64Array",
+    "Boolean",
+    "DataView",
+    "Date",
+    "Error",
+    "EvalError",
+    "FinalizationRegistry",
+    "Float32Array",
+    "Float64Array",
+    "Function",
+    "Infinity",
+    "Int8Array",
+    "Int16Array",
+    "Int32Array",
+    "JSON",
+    "Map",
+    "Math",
+    "NaN",
+    "Number",
+    "Object",
+    "Promise",
+    "Proxy",
+    "RangeError",
+    "ReferenceError",
+    "Reflect",
+    "RegExp",
+    "Set",
+    "String",
+    "Symbol",
+    "SyntaxError",
+    "TypeError",
+    "URIError",
+    "Uint8Array",
+    "Uint8ClampedArray",
+    "Uint16Array",
+    "Uint32Array",
+    "WeakMap",
+    "WeakRef",
+    "WeakSet",
+    "globalThis",
+    "decodeURI",
+    "decodeURIComponent",
+    "encodeURI",
+    "encodeURIComponent",
+    "eval",
+    "isFinite",
+    "isNaN",
+    "parseFloat",
+    "parseInt",
+    "structuredClone",
+    "undefined",
+    // DOM/BOM globals and interfaces.
+    "AbortController",
+    "AbortSignal",
+    "Blob",
+    "CustomEvent",
+    "Document",
+    "DocumentFragment",
+    "Element",
+    "Event",
+    "EventTarget",
+    "File",
+    "FileReader",
+    "FormData",
+    "Headers",
+    "HTMLAnchorElement",
+    "HTMLButtonElement",
+    "HTMLCanvasElement",
+    "HTMLDivElement",
+    "HTMLElement",
+    "HTMLFormElement",
+    "HTMLImageElement",
+    "HTMLInputElement",
+    "HTMLSelectElement",
+    "HTMLTextAreaElement",
+    "IntersectionObserver",
+    "MutationObserver",
+    "Node",
+    "Request",
+    "Response",
+    "ResizeObserver",
+    "URL",
+    "URLSearchParams",
+    "WebSocket",
+    "Window",
+    "Worker",
+    "XMLHttpRequest",
+    "alert",
+    "atob",
+    "btoa",
+    "clearInterval",
+    "clearTimeout",
+    "confirm",
+    "console",
+    "document",
+    "fetch",
+    "history",
+    "localStorage",
+    "location",
+    "navigator",
+    "queueMicrotask",
+    "requestAnimationFrame",
+    "sessionStorage",
+    "setInterval",
+    "setTimeout",
+    "window",
+    // Node globals.
+    "Buffer",
+    "__dirname",
+    "__filename",
+    "global",
+    "process",
+    // TypeScript standard-library utility types.
+    "Awaited",
+    "Capitalize",
+    "Exclude",
+    "Extract",
+    "InstanceType",
+    "Lowercase",
+    "NonNullable",
+    "Omit",
+    "Parameters",
+    "Partial",
+    "Pick",
+    "Readonly",
+    "Record",
+    "Required",
+    "ReturnType",
+    "Uppercase",
+];
+
+/// True when `name` is a bare global identifier or standard-library type built
+/// into JavaScript/TypeScript runtimes, so a reference to it is external
+/// rather than a missing local symbol. Exact-match only: these are unqualified
+/// global names, not dotted paths.
+pub fn is_javascript_builtin(name: &str) -> bool {
+    JAVASCRIPT_BUILTINS.contains(&name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        is_python_stdlib_module, is_rust_prelude_type, normalize_python_package_name,
-        rust_std_crate,
+        is_javascript_builtin, is_python_stdlib_module, is_rust_prelude_type,
+        normalize_python_package_name, rust_std_crate,
     };
+
+    #[test]
+    fn recognizes_javascript_builtins_by_exact_bare_name() {
+        assert!(is_javascript_builtin("Array"));
+        assert!(is_javascript_builtin("JSON"));
+        assert!(is_javascript_builtin("btoa"));
+        assert!(is_javascript_builtin("Record"));
+        assert!(is_javascript_builtin("HTMLButtonElement"));
+        // A dotted path is not a bare global; user types are not builtins.
+        assert!(!is_javascript_builtin("Array.prototype"));
+        assert!(!is_javascript_builtin("ApiError"));
+        // Prototype method names are deliberately excluded (receiver members,
+        // not globals): a bare `filter` could be a local or an import.
+        assert!(!is_javascript_builtin("filter"));
+        assert!(!is_javascript_builtin("forEach"));
+    }
 
     #[test]
     fn recognizes_python_stdlib_modules_by_top_level_segment() {
