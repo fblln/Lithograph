@@ -17,12 +17,7 @@ impl JsonStore {
     /// Serializes `value` as pretty JSON and writes it to `path`, creating
     /// parent directories as needed.
     pub fn write<T: Serialize>(&self, path: &Path, value: &T) -> io::Result<()> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let mut json = serde_json::to_string_pretty(value).map_err(to_io_error)?;
-        json.push('\n');
-        std::fs::write(path, json)
+        self.write_rendered(path, &render(value, Layout::Pretty)?)
     }
 
     /// Reads and parses `path`, returning `Ok(None)` when it does not exist.
@@ -34,21 +29,80 @@ impl JsonStore {
         }
     }
 
-    /// Writes `value` only when it differs from what is already at `path`,
-    /// so an unchanged run leaves the file's mtime untouched. Returns
-    /// whether a write happened.
-    pub fn write_if_changed<T: Serialize + DeserializeOwned + PartialEq>(
+    /// Writes `value` only when its rendered JSON differs from what is already
+    /// at `path`, so an unchanged run leaves the file's mtime untouched.
+    /// Returns whether a write happened.
+    ///
+    /// Serialization is deterministic, so comparing the freshly rendered bytes
+    /// against the file on disk is equivalent to comparing values -- and it
+    /// avoids deserializing the existing file back into `T` (a full parse of a
+    /// tens-of-megabytes graph snapshot) just to decide whether to write. It
+    /// also renders once instead of the previous read-parse-then-serialize
+    /// path, and drops the `DeserializeOwned + PartialEq` bound so borrowed,
+    /// non-owning views (e.g. a graph snapshot referencing its graph) can be
+    /// persisted without cloning.
+    pub fn write_if_changed<T: Serialize>(&self, path: &Path, value: &T) -> io::Result<bool> {
+        self.write_if_changed_layout(path, value, Layout::Pretty)
+    }
+
+    /// Like [`write_if_changed`] but emits compact (unindented) JSON. Reserved
+    /// for large, purely machine-read artifacts -- e.g. the graph snapshot,
+    /// tens of megabytes where indentation is pure size and parse overhead --
+    /// while small human-inspectable state files stay pretty.
+    pub fn write_if_changed_compact<T: Serialize>(
         &self,
         path: &Path,
         value: &T,
     ) -> io::Result<bool> {
-        let existing: Option<T> = self.read(path)?;
-        if existing.as_ref() == Some(value) {
+        self.write_if_changed_layout(path, value, Layout::Compact)
+    }
+
+    fn write_if_changed_layout<T: Serialize>(
+        &self,
+        path: &Path,
+        value: &T,
+        layout: Layout,
+    ) -> io::Result<bool> {
+        let rendered = render(value, layout)?;
+        if let Ok(existing) = std::fs::read_to_string(path)
+            && existing == rendered
+        {
             return Ok(false);
         }
-        self.write(path, value)?;
+        self.write_rendered(path, &rendered)?;
         Ok(true)
     }
+
+    /// Writes already-rendered JSON bytes to `path`, creating parent
+    /// directories as needed.
+    fn write_rendered(&self, path: &Path, rendered: &str) -> io::Result<()> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, rendered)
+    }
+}
+
+/// JSON indentation choice for on-disk artifacts.
+#[derive(Debug, Clone, Copy)]
+enum Layout {
+    /// Human-inspectable pretty JSON. The default for small state files.
+    Pretty,
+    /// Compact single-line JSON for large machine-read artifacts.
+    Compact,
+}
+
+/// Renders `value` to the exact bytes written on disk: JSON in the requested
+/// layout with a trailing newline. The single source of truth for both `write`
+/// and the change check in `write_if_changed*`.
+fn render<T: Serialize>(value: &T, layout: Layout) -> io::Result<String> {
+    let mut json = match layout {
+        Layout::Pretty => serde_json::to_string_pretty(value),
+        Layout::Compact => serde_json::to_string(value),
+    }
+    .map_err(to_io_error)?;
+    json.push('\n');
+    Ok(json)
 }
 
 fn to_io_error(error: serde_json::Error) -> io::Error {

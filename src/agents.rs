@@ -77,7 +77,7 @@ fn section_content() -> String {
          - Quickstart: `docs/lithograph/quickstart.md`\n\
          - Architecture: `docs/lithograph/architecture.md`\n\
          - Module pages: `docs/lithograph/modules/`\n\
-         - Semantic graph: `.lithograph/graph.json`\n\
+         - Semantic graph: `.lithograph/graph/current.json`\n\
          - Page manifest: `.lithograph/manifest.json`\n\
          \n\
          Regenerate after making changes with `lithograph update <path>`.\n\

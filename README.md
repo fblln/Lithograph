@@ -39,9 +39,10 @@ Running `lithograph init <repo>` creates:
   and an ADR-and-drift page, plus a `modules/` tree with per-module pages
   grouped by kind (directories, configuration, documentation, infrastructure,
   language packages/crates).
-- `.lithograph/graph.json` and `.lithograph/graph/current.json`: a
-  deterministic semantic graph export and its versioned snapshot envelope
-  (used for loading, migration, and portable graph artifact exports).
+- `.lithograph/graph/current.json`: the deterministic semantic graph as a
+  versioned snapshot envelope (compact JSON, used for loading, migration, and
+  portable graph artifact exports). Graphs written before this snapshot existed
+  used a flat `.lithograph/graph.json`, which `load` still reads as a fallback.
 - `.lithograph/manifest.json`: page/task manifest with dependencies,
   evidence, prompt versions, context schema versions, input hashes, and
   output hashes.

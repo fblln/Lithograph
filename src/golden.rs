@@ -130,7 +130,6 @@ pub fn check_or_update(
 /// run, see `orchestrate.rs`) -- is never accidentally golden-tracked.
 const LITHOGRAPH_SNAPSHOT_FILES: &[&str] = &[
     ".lithograph/manifest.json",
-    ".lithograph/graph.json",
     ".lithograph/graph/current.json",
     ".lithograph/GRAPH_REPORT.md",
     ".lithograph/fts-index.json",

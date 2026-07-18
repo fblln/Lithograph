@@ -38,6 +38,15 @@ pub struct GraphSnapshot {
     pub graph: Graph,
 }
 
+/// Borrowing, serialize-only twin of [`GraphSnapshot`] used on the save path.
+/// Its field names and order match `GraphSnapshot` exactly, so it renders to
+/// byte-identical JSON while borrowing the graph instead of cloning it.
+#[derive(Serialize)]
+struct GraphSnapshotRef<'a> {
+    metadata: GraphStoreMetadata,
+    graph: &'a Graph,
+}
+
 /// Metadata carried by every persisted graph snapshot.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GraphStoreMetadata {
@@ -81,8 +90,6 @@ pub struct GraphArtifactReport {
     pub artifact_path: PathBuf,
     /// Graph snapshot path read or written.
     pub snapshot_path: PathBuf,
-    /// Legacy graph export path read or written.
-    pub legacy_graph_path: PathBuf,
     /// Artifact metadata.
     pub metadata: GraphArtifactMetadata,
 }
@@ -135,14 +142,27 @@ impl GraphStore {
 
     /// Saves a current-version graph snapshot and the legacy graph export.
     pub fn save(&self, graph: &Graph) -> io::Result<GraphStoreWriteOutcome> {
-        let snapshot = GraphSnapshot::current(graph.clone());
-        let snapshot_written = JsonStore.write_if_changed(&self.snapshot_path(), &snapshot)?;
-        let legacy_written = JsonStore.write_if_changed(&self.legacy_graph_path(), graph)?;
+        // Persist a borrowing view so the snapshot never clones the graph. It
+        // renders to the same JSON as `GraphSnapshot::current(graph.clone())`.
+        let snapshot = GraphSnapshotRef {
+            metadata: GraphStoreMetadata {
+                schema_version: GRAPH_STORE_SCHEMA_VERSION,
+                graph_model_version: GRAPH_MODEL_VERSION,
+                node_count: graph.nodes.len(),
+                relation_count: graph.relations.len(),
+                migrations_applied: Vec::new(),
+            },
+            graph,
+        };
+        // The snapshot is a large, purely machine-read artifact, so it is
+        // written as compact JSON. The legacy flat `graph.json` export is no
+        // longer written -- `load` still reads it as a fallback for graphs
+        // generated before the versioned snapshot existed.
+        let snapshot_written =
+            JsonStore.write_if_changed_compact(&self.snapshot_path(), &snapshot)?;
         Ok(GraphStoreWriteOutcome {
             snapshot_path: self.snapshot_path(),
-            legacy_graph_path: self.legacy_graph_path(),
             snapshot_written,
-            legacy_written,
         })
     }
 
@@ -180,14 +200,13 @@ impl GraphStore {
         Ok(GraphArtifactReport {
             artifact_path: artifact_path.to_path_buf(),
             snapshot_path: self.snapshot_path(),
-            legacy_graph_path: self.legacy_graph_path(),
             metadata: artifact.metadata,
         })
     }
 
     /// Imports a gzip-compressed graph artifact after checksum and schema
-    /// compatibility validation. A successful import writes both the current
-    /// versioned snapshot and the legacy graph export.
+    /// compatibility validation. A successful import writes the current
+    /// versioned snapshot.
     pub fn import_artifact(&self, artifact_path: &Path) -> io::Result<GraphArtifactReport> {
         let artifact = read_compressed_artifact(artifact_path)?;
         verify_artifact(&artifact)?;
@@ -197,7 +216,6 @@ impl GraphStore {
         Ok(GraphArtifactReport {
             artifact_path: artifact_path.to_path_buf(),
             snapshot_path: self.snapshot_path(),
-            legacy_graph_path: self.legacy_graph_path(),
             metadata,
         })
     }
@@ -208,12 +226,8 @@ impl GraphStore {
 pub struct GraphStoreWriteOutcome {
     /// Versioned graph snapshot path.
     pub snapshot_path: PathBuf,
-    /// Legacy graph export path.
-    pub legacy_graph_path: PathBuf,
     /// Whether the versioned snapshot changed on disk.
     pub snapshot_written: bool,
-    /// Whether the legacy graph export changed on disk.
-    pub legacy_written: bool,
 }
 
 fn migrate(mut snapshot: GraphSnapshot) -> io::Result<GraphSnapshot> {
@@ -347,7 +361,7 @@ mod tests {
     use crate::storage::JsonStore;
 
     #[test]
-    fn saves_versioned_snapshot_and_legacy_export() -> Result<(), Box<dyn std::error::Error>> {
+    fn saves_versioned_snapshot() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::TempDir::new()?;
         let graph = Graph::default();
         let store = GraphStore::new(temp.path());
@@ -355,9 +369,9 @@ mod tests {
         let outcome = store.save(&graph)?;
 
         assert!(outcome.snapshot_written);
-        assert!(outcome.legacy_written);
         assert!(store.snapshot_path().exists());
-        assert!(store.legacy_graph_path().exists());
+        // The legacy flat export is no longer written on save.
+        assert!(!store.legacy_graph_path().exists());
 
         let snapshot = store.load()?;
 
@@ -426,7 +440,6 @@ mod tests {
         );
         assert_eq!(destination_store.load()?.graph, graph);
         assert!(destination_store.snapshot_path().exists());
-        assert!(destination_store.legacy_graph_path().exists());
 
         Ok(())
     }
