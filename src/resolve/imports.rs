@@ -306,12 +306,31 @@ impl Resolver for LanguageImportResolver {
     }
 }
 
+/// The local name bound by a default import clause (`import Foo from
+/// "pkg"`, `import Foo, { Bar } from "pkg"`), or `None` for a side-effect
+/// import (`import "pkg"`, which binds nothing), a named-only import, or a
+/// namespace import (`import * as NS from "pkg"`). A namespace import
+/// deliberately returns `None` too: `NS` denotes the whole module rather
+/// than one importable member, and resolving `NS.member` usages would need
+/// call-site member typing this function doesn't do (LIT-71 non-goal).
+pub(crate) fn extract_typescript_default_import_binding(raw_text: &str) -> Option<String> {
+    let after_import = raw_text.trim().strip_prefix("import")?;
+    let (clause, _) = after_import.split_once(" from ")?;
+    let clause = clause.trim();
+    let clause = clause.strip_prefix("type ").unwrap_or(clause);
+    if clause.is_empty() || clause.starts_with('*') || clause.starts_with('{') {
+        return None;
+    }
+    let default_part = clause.split(',').next()?.trim();
+    (!default_part.is_empty() && !default_part.starts_with('{')).then(|| default_part.to_owned())
+}
+
 /// Returns the npm dependency name at the root of a bare TS/JS specifier.
 ///
 /// Plain packages use their first segment; scoped packages require both the
 /// scope and package segment. Relative/absolute paths and malformed scopes
 /// are not package names and deliberately produce no candidate.
-fn typescript_dependency_root(specifier: &str) -> Option<&str> {
+pub(crate) fn typescript_dependency_root(specifier: &str) -> Option<&str> {
     if specifier.is_empty()
         || specifier.starts_with('.')
         || specifier.starts_with('/')
@@ -338,7 +357,8 @@ fn typescript_dependency_root(specifier: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        extract_import_reference, extract_typescript_import_bindings, typescript_dependency_root,
+        extract_import_reference, extract_typescript_default_import_binding,
+        extract_typescript_import_bindings, typescript_dependency_root,
     };
 
     #[test]
@@ -373,6 +393,39 @@ mod tests {
             ]
         );
         assert!(extract_typescript_import_bindings("import App from \"./App\";").is_empty());
+    }
+
+    #[test]
+    fn extracts_typescript_default_import_binding_only_from_a_default_clause() {
+        assert_eq!(
+            extract_typescript_default_import_binding("import React from \"react\";"),
+            Some("React".to_owned())
+        );
+        assert_eq!(
+            extract_typescript_default_import_binding("import React, { useState } from \"react\";"),
+            Some("React".to_owned())
+        );
+        assert_eq!(
+            extract_typescript_default_import_binding("import type Config from \"./config\";"),
+            Some("Config".to_owned())
+        );
+        assert_eq!(
+            extract_typescript_default_import_binding(
+                "import { useForm } from \"react-hook-form\";"
+            ),
+            None,
+            "named-only import binds no default"
+        );
+        assert_eq!(
+            extract_typescript_default_import_binding("import * as React from \"react\";"),
+            None,
+            "a namespace import denotes the whole module, not one member"
+        );
+        assert_eq!(
+            extract_typescript_default_import_binding("import \"./setup\";"),
+            None,
+            "a side-effect import binds nothing"
+        );
     }
 
     #[test]

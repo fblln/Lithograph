@@ -23,30 +23,30 @@
     "unresolved reference: RouteBaker::from_env",
     "unresolved reference: RouteSummary",
     "unresolved reference: assets/",
-    "unresolved reference: body",
-    "unresolved reference: charset",
     "unresolved reference: dict[str, object]",
-    "unresolved reference: div",
     "unresolved reference: fixture_worker::bake_route",
     "unresolved reference: ghcr.io/example/route-api:dev",
     "unresolved reference: h1",
-    "unresolved reference: head",
-    "unresolved reference: html",
     "unresolved reference: https://json-schema.org/draft/2020-12/schema",
-    "unresolved reference: id",
     "unresolved reference: import React from \"react\";",
-    "unresolved reference: lang",
     "unresolved reference: main",
-    "unresolved reference: meta",
     "unresolved reference: p",
-    "unresolved reference: route"
+    "unresolved reference: route",
+    "unresolved reference: str",
+    "unresolved reference: xmlns=\"http://www.w3.org/2000/svg",
+    "Dockerfile crosses boundary via ReadsEnv to RIDGELINE_WORKER",
+    "Makefile crosses boundary via References to rust/Cargo.toml",
+    "Makefile crosses boundary via References to ghcr.io/example/route-api:dev",
+    "Makefile crosses boundary via References to ghcr.io/example/route-api:dev",
+    "README.md crosses boundary via References to Dockerfile",
+    "README.md crosses boundary via References to Makefile"
   ],
   "evidence": [
     {
       "reference": "relation:3"
     },
     {
-      "reference": "relation:149"
+      "reference": "relation:137"
     },
     {
       "reference": "relation:6"

@@ -1,5 +1,24 @@
 use super::*;
 
+/// What a language-specific typed pass already contributed before handing
+/// off to [`BuilderState::process_syntax_indexed_facts`]. Bundled into one
+/// struct (rather than three more parameters) to keep the function under
+/// Clippy's argument-count limit; `Default` gives every language with no
+/// typed pass of its own an all-empty, all-no-op value.
+#[derive(Default)]
+pub(super) struct TypedPassFacts<'a> {
+    /// Definition kinds the typed pass already represented precisely, so
+    /// this pass skips re-creating a generic `Definition` symbol for them.
+    pub(super) definition_kinds: &'a [&'a str],
+    /// Spans of symbols the typed pass already created (LIT-46), seeded so
+    /// a rationale comment can attach to the one it sits inside.
+    pub(super) symbol_spans: Vec<super::rationale::SymbolSpan>,
+    /// LIT-71: this file's own bare npm import bindings the typed pass
+    /// resolved (local name -> (package, exported member)); empty outside
+    /// TypeScript/JSX, which is the only place one is built.
+    pub(super) bare_package_imports: BTreeMap<String, (String, String)>,
+}
+
 impl BuilderState {
     pub(super) fn materialize_environment_facts(&mut self) {
         let mut facts = std::mem::take(&mut self.environment_facts);
@@ -157,22 +176,26 @@ impl BuilderState {
             language,
             output,
             artifact_node,
-            &[],
-            Vec::new(),
+            TypedPassFacts::default(),
         );
     }
     /// Applies syntax-level facts after a language-specific declaration pass.
-    /// `typed_definition_kinds` suppresses generic `Definition` symbols for
-    /// declarations the specialized pass already represented precisely.
+    /// `facts` carries what that typed pass already contributed -- empty
+    /// (`TypedPassFacts::default()`) for a language with no typed pass of
+    /// its own, so every field below is a no-op there.
     pub(super) fn process_syntax_indexed_facts(
         &mut self,
         artifact: &Artifact,
         language: SyntaxIndexedLanguage,
         output: TreeSitterAdapterOutput,
         artifact_node: &GraphNodeId,
-        typed_definition_kinds: &[&str],
-        typed_symbols: Vec<super::rationale::SymbolSpan>,
+        facts: TypedPassFacts<'_>,
     ) {
+        let TypedPassFacts {
+            definition_kinds: typed_definition_kinds,
+            symbol_spans: typed_symbols,
+            bare_package_imports,
+        } = facts;
         let registry_id = language.registry_id();
 
         // LIT-46: every symbol in the file, so a note can be attached to the
@@ -242,6 +265,12 @@ impl BuilderState {
         // syntax alone can't tell whether `Widget` is a locally-defined
         // type, an imported one, or a typo, so resolving it correctly is a
         // hybrid-resolver's job (AC3: never fabricate a match here).
+        //
+        // LIT-71 exception: a name this same file imported directly from a
+        // declared npm dependency is not a guess -- the import statement
+        // already says where it comes from -- so it resolves to that
+        // package's member instead of `Unresolved`. `bare_package_imports`
+        // is empty for every non-TS/JS caller, so this is a no-op elsewhere.
         let mut seen_symbols: BTreeSet<&str> = BTreeSet::new();
         for symbol in &output.symbols {
             if !seen_symbols.insert(symbol.text.as_str()) {
@@ -253,7 +282,12 @@ impl BuilderState {
                 RelationKind::Usages
             };
             let evidence = syntax_fact_evidence(artifact, symbol.span.clone());
-            let target = self.unresolved(&symbol.text);
+            let target = match bare_package_imports.get(symbol.text.as_str()) {
+                Some((package, member)) => {
+                    self.typescript_external_symbol(package, member, evidence.clone())
+                }
+                None => self.unresolved(&symbol.text),
+            };
             self.relate_with_provenance(
                 artifact_node.clone(),
                 target,

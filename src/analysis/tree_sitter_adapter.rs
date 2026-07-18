@@ -333,14 +333,22 @@ impl TreeSitterParserAdapter {
     }
 
     /// Adapter for HTML syntax facts. HTML has no import-like construct, so
-    /// `imports` is always empty.
+    /// `imports` is always empty. `symbol_kinds` is deliberately empty
+    /// (LIT-73, same reasoning as `css()`'s LIT-23.2 fix): a tag name or
+    /// presentation attribute (`table`, `cellpadding`, `bgcolor`, MSO
+    /// namespace attributes like `xmlns:o`) is what the markup *is*, not a
+    /// reference to something else, so routing them through the generic
+    /// Usages/TypeRefs reference-extraction pass produced one spurious
+    /// Unresolved node per tag/attribute name -- most visibly on
+    /// Outlook-conditional email templates, which are almost entirely
+    /// table-based presentation markup.
     pub fn html() -> Self {
         Self {
             language_id: "html",
             language: tree_sitter_html::LANGUAGE.into(),
             definition_kinds: &["element", "script_element", "style_element"],
             import_kinds: &[],
-            symbol_kinds: &["tag_name", "attribute_name"],
+            symbol_kinds: &[],
             comment_kinds: &["comment"],
         }
     }
@@ -811,6 +819,38 @@ const notGlobal = loader.require('./other');
                 .iter()
                 .map(|fact| (fact.kind.as_str(), fact.span.clone()))
                 .collect::<Vec<_>>(),
+        );
+    }
+
+    /// LIT-73: an MSO/Outlook-conditional email template is almost entirely
+    /// table-based presentation markup (`xmlns:o`, `cellpadding`, `bgcolor`,
+    /// `valign`...). Its tag and attribute names must not be mined as code
+    /// references -- same reasoning as `css()`'s LIT-23.2 fix -- while its
+    /// elements remain real definitions and a template-engine expression
+    /// embedded in text content is left alone either way.
+    #[test]
+    fn html_symbols_stay_empty_for_outlook_conditional_email_markup() {
+        let template = "\
+<html xmlns:o=\"urn:schemas-microsoft-com:office:office\">
+<head><meta charset=\"utf-8\"></head>
+<body>
+<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" bgcolor=\"#ffffff\">
+<tr><td valign=\"top\">{{ user.name }}</td></tr>
+</table>
+</body>
+</html>
+";
+        let output = TreeSitterParserAdapter::html().parse(template);
+
+        assert_eq!(output.status, TreeSitterParseStatus::Parsed);
+        assert!(
+            output.symbols.is_empty(),
+            "tag/attribute names are markup structure, not code references: {:?}",
+            output.symbols
+        );
+        assert!(
+            !output.definitions.is_empty(),
+            "element/script/style definitions must stay unaffected by the symbol_kinds change"
         );
     }
 
