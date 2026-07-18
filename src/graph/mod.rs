@@ -7,13 +7,10 @@ pub mod communities;
 pub mod enrichment;
 pub mod health;
 pub mod index;
-pub mod ladybug_schema;
-pub mod ladybug_store;
 pub mod layout;
 pub mod model;
 pub mod parity_benchmark;
 pub mod pipeline;
-pub mod query_api;
 pub mod report;
 pub mod semantic;
 pub mod store;
@@ -39,11 +36,6 @@ pub use index::{
     PathHop, PathResult, SearchParams, SearchResult, TraceDirection, TraceParams, TraceRelation,
     TraceResult, TypeCount,
 };
-pub use ladybug_schema::{
-    LADYBUG_ALGORITHM_VERSION, LADYBUG_SCHEMA_VERSION, LADYBUG_TABLES_V1, LadybugTable,
-    creation_statements as ladybug_creation_statements, migration_id as ladybug_migration_id,
-};
-pub use ladybug_store::LadybugGraphStore;
 pub use layout::{
     LAYOUT_ALGORITHM_VERSION, LayoutBudget, LayoutEdge, LayoutRequest, LayoutResult,
     LayoutSnapshot, LayoutSnapshotStore, PositionedNode, compute_layout, compute_layout_cached,
@@ -60,7 +52,6 @@ pub use pipeline::{
     GraphBuildOutput, GraphBuildPass, GraphBuildPassResult, GraphBuildStageTrace, GraphBuildTrace,
     GraphBuildTraceConfig, GraphBuildTraceDetail, GraphDecisionTrace,
 };
-pub use query_api::{LadybugQueryApi, NeighborhoodQuery, RawQueryAccess};
 pub use report::{GraphReport, graph_report_path, persist_graph_report};
 pub use semantic::{
     SemanticClassMatch, SemanticClassProfile, SemanticScore, class_profiles, filter_classes,

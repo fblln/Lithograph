@@ -1,6 +1,6 @@
 //! Versioned persistent graph snapshots.
 
-use crate::graph::{Graph, LadybugGraphStore};
+use crate::graph::Graph;
 use crate::storage::JsonStore;
 use flate2::Compression;
 use flate2::read::GzDecoder;
@@ -133,22 +133,14 @@ impl GraphStore {
         self.repo_root.join(".lithograph/graph/current.json")
     }
 
-    /// Path to the primary embedded LadybugDB graph projection.
-    pub fn ladybug_path(&self) -> PathBuf {
-        self.repo_root.join(".lithograph/graph/ladybug.lbug")
-    }
-
     /// Saves a current-version graph snapshot and the legacy graph export.
     pub fn save(&self, graph: &Graph) -> io::Result<GraphStoreWriteOutcome> {
         let snapshot = GraphSnapshot::current(graph.clone());
-        let ladybug_written = LadybugGraphStore::new(self.ladybug_path()).save(&snapshot)?;
         let snapshot_written = JsonStore.write_if_changed(&self.snapshot_path(), &snapshot)?;
         let legacy_written = JsonStore.write_if_changed(&self.legacy_graph_path(), graph)?;
         Ok(GraphStoreWriteOutcome {
             snapshot_path: self.snapshot_path(),
-            ladybug_path: self.ladybug_path(),
             legacy_graph_path: self.legacy_graph_path(),
-            ladybug_written,
             snapshot_written,
             legacy_written,
         })
@@ -158,12 +150,6 @@ impl GraphStore {
     /// export when a repository was generated before the store envelope
     /// existed.
     pub fn load(&self) -> io::Result<GraphSnapshot> {
-        let ladybug_store = LadybugGraphStore::new(self.ladybug_path());
-        if ladybug_store.path().exists()
-            && let Some(snapshot) = ladybug_store.load()?
-        {
-            return migrate(snapshot);
-        }
         if let Some(snapshot) = JsonStore.read::<GraphSnapshot>(&self.snapshot_path())? {
             return migrate(snapshot);
         }
@@ -222,12 +208,8 @@ impl GraphStore {
 pub struct GraphStoreWriteOutcome {
     /// Versioned graph snapshot path.
     pub snapshot_path: PathBuf,
-    /// Primary LadybugDB projection path.
-    pub ladybug_path: PathBuf,
     /// Legacy graph export path.
     pub legacy_graph_path: PathBuf,
-    /// Whether the Ladybug projection changed on disk.
-    pub ladybug_written: bool,
     /// Whether the versioned snapshot changed on disk.
     pub snapshot_written: bool,
     /// Whether the legacy graph export changed on disk.
