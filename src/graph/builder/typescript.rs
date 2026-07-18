@@ -1,6 +1,61 @@
 use super::*;
 
 impl BuilderState {
+    /// LIT-71: this file's own bare (non-relative, non-tsconfig-alias) npm
+    /// imports, local binding name -> (declared package name, member name as
+    /// exported), restricted to packages this repo's own `package.json`
+    /// actually declares (`js_manifest_packages`, populated by a pre-pass
+    /// mirroring LIT-44.1's Python one). An undeclared or unknown bare
+    /// specifier contributes no binding, leaving its usage sites exactly as
+    /// `Unresolved` as before -- classification only, never fabrication.
+    ///
+    /// Deliberately separate from `record_typescript_type_facts`'s `imports`
+    /// (LIT-57): that list exists to type call receivers against this
+    /// repository's *own* symbols, so it intentionally skips bare package
+    /// specifiers entirely. This is the complementary case.
+    fn typescript_bare_package_imports(
+        &self,
+        source_path: &str,
+        analysis: &TypeScriptAnalysis,
+        language_id: &str,
+    ) -> BTreeMap<String, (String, String)> {
+        let mut bindings = BTreeMap::new();
+        for import in &analysis.syntax.imports {
+            let Some(reference) =
+                crate::resolve::extract_import_reference(language_id, &import.text)
+            else {
+                continue;
+            };
+            if reference.starts_with("./") || reference.starts_with("../") {
+                continue;
+            }
+            if !self.ts_aliases.resolve(source_path, &reference).is_empty() {
+                continue;
+            }
+            let Some(root) = crate::resolve::typescript_dependency_root(&reference) else {
+                continue;
+            };
+            if !self.js_manifest_packages.contains(root) {
+                continue;
+            }
+            for (exported, local) in
+                crate::resolve::extract_typescript_import_bindings(&import.text)
+            {
+                bindings
+                    .entry(local)
+                    .or_insert_with(|| (root.to_owned(), exported));
+            }
+            if let Some(local) =
+                crate::resolve::extract_typescript_default_import_binding(&import.text)
+            {
+                bindings
+                    .entry(local)
+                    .or_insert_with(|| (root.to_owned(), "default".to_owned()));
+            }
+        }
+        bindings
+    }
+
     /// LIT-57: hands this file's receiver-typing facts to the cross-file
     /// propagation pass, which runs once every file's symbols exist.
     ///
@@ -250,6 +305,8 @@ impl BuilderState {
         }
 
         self.record_typescript_type_facts(artifact, &analysis, language_id);
+        let bare_imports =
+            self.typescript_bare_package_imports(artifact.path.as_str(), &analysis, language_id);
 
         for call in &analysis.calls {
             if let Some([target]) = callable_ids.get(call.name.as_str()).map(Vec::as_slice) {
@@ -263,6 +320,25 @@ impl BuilderState {
                         language_id,
                         RelationResolution::HybridResolved,
                         Confidence::High,
+                    )),
+                );
+            } else if let Some((package, member)) = bare_imports.get(call.name.as_str()) {
+                // LIT-71: a bare call to a name this file imported directly
+                // from a declared npm dependency (`useForm(...)` after
+                // `import { useForm } from "react-hook-form"`) resolves to
+                // the known package member instead of `Unresolved`.
+                let target =
+                    self.typescript_external_symbol(package, member, call.evidence.clone());
+                self.relate_with_provenance(
+                    artifact_node.clone(),
+                    target,
+                    RelationKind::Calls,
+                    Confidence::Low,
+                    vec![call.evidence.clone()],
+                    Some(format_provenance(
+                        language_id,
+                        RelationResolution::SyntaxOnly,
+                        Confidence::Low,
                     )),
                 );
             } else {
@@ -290,14 +366,17 @@ impl BuilderState {
             },
             analysis.syntax,
             artifact_node,
-            &[
-                "class_declaration",
-                "abstract_class_declaration",
-                "function_declaration",
-                "generator_function_declaration",
-                "method_definition",
-            ],
-            typed_symbols,
+            super::evidence::TypedPassFacts {
+                definition_kinds: &[
+                    "class_declaration",
+                    "abstract_class_declaration",
+                    "function_declaration",
+                    "generator_function_declaration",
+                    "method_definition",
+                ],
+                symbol_spans: typed_symbols,
+                bare_package_imports: bare_imports,
+            },
         );
     }
 }
@@ -480,6 +559,77 @@ mod tests {
             })
             .ok_or("missing unresolved imported-file call")?;
         assert_eq!(unknown.confidence, Confidence::Low);
+
+        Ok(())
+    }
+
+    /// LIT-71: a name this file imports directly from a declared npm
+    /// dependency resolves to that package's own member -- via the bare
+    /// `Calls` fallback for a plain call, and via the generic Usages pass
+    /// for a name used only as a receiver -- instead of a fresh per-file
+    /// `Unresolved` node. A bare specifier with no matching `package.json`
+    /// dependency is never fabricated into one.
+    #[test]
+    fn typescript_bare_package_imports_resolve_default_and_named_bindings()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("package.json"),
+            r#"{"name":"app","dependencies":{"react":"^18.0.0","react-hook-form":"^7.0.0"}}"#,
+        )?;
+        std::fs::write(
+            temp.path().join("form.ts"),
+            concat!(
+                "import React from \"react\";\n",
+                "import { useForm } from \"react-hook-form\";\n",
+                "import { useQuery } from \"not-declared-pkg\";\n\n",
+                "export function run() {\n",
+                "  useForm();\n",
+                "  React.createElement(\"div\");\n",
+                "  useQuery();\n",
+                "}\n",
+            ),
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let target_of = |kind: RelationKind| {
+            graph
+                .relations
+                .iter()
+                .filter(|relation| relation.kind == kind)
+                .map(|relation| relation.target.as_str().to_owned())
+                .collect::<Vec<_>>()
+        };
+
+        assert!(
+            target_of(RelationKind::Calls).contains(&"symbol:react-hook-form::useForm".to_owned()),
+            "a bare call to a directly-imported declared-dependency name must resolve to its \
+             package member, got {:?}",
+            target_of(RelationKind::Calls),
+        );
+        assert!(
+            target_of(RelationKind::Usages).contains(&"symbol:react::default".to_owned()),
+            "a default-imported declared-dependency name used as a receiver must resolve, got {:?}",
+            target_of(RelationKind::Usages),
+        );
+        assert!(
+            target_of(RelationKind::Calls).contains(&"unresolved:useQuery".to_owned()),
+            "a bare specifier absent from package.json must never be fabricated into a package, \
+             got {:?}",
+            target_of(RelationKind::Calls),
+        );
+
+        let invalid: Vec<_> = crate::graph::GraphValidator
+            .validate(&graph, &artifacts)
+            .into_iter()
+            .filter(|issue| issue.kind == crate::graph::GraphIssueKind::InvalidRelationTarget)
+            .collect();
+        assert!(
+            invalid.is_empty(),
+            "builder produced invalid targets: {invalid:?}"
+        );
 
         Ok(())
     }

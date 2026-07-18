@@ -39,7 +39,10 @@ pub use environment::{
     SafeFactValue, explain_environment, is_secret_like, resolve_environment_links,
 };
 pub use imports::{LanguageImportResolver, extract_import_reference};
-pub(crate) use imports::{extract_typescript_import_bindings, import_candidates};
+pub(crate) use imports::{
+    extract_typescript_default_import_binding, extract_typescript_import_bindings,
+    import_candidates, typescript_dependency_root,
+};
 pub use propagate::{
     BaseClassFact, BindingFact, FileTypeFacts, ImportBindingFact, MemberCallFact,
     PROPAGATE_STRATEGY, PropagateReport, Receiver, TypeFacts, propagate_types,

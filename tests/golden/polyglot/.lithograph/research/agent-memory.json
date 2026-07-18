@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "input_hash": "8ea7a4904079ddd0b12f041278f99678422f58895024c79231ccc0c78b16dc8a",
+  "input_hash": "82ac291e14d28c45eb4877f91e83f058fe5aacefba4d86e1e5cc669669a5e596",
   "produced_by_stage": "Research",
   "report_keys": [
     "system-context",
@@ -12,7 +12,7 @@
     "deployment"
   ],
   "system_context": {
-    "project_summary": "Repository contains 22 artifact(s), 148 graph node(s), 173 graph relation(s), and 11 documentation module(s).",
+    "project_summary": "Repository contains 22 artifact(s), 136 graph node(s), 161 graph relation(s), and 11 documentation module(s).",
     "included_components": [
       "Configuration (Configuration)",
       "assets (Directory)",
@@ -139,7 +139,7 @@
       {
         "name": "web",
         "kind": "Directory",
-        "member_count": 33,
+        "member_count": 21,
         "evidence": [
           "artifact:web/index.html",
           "artifact:web/src/App.tsx",
@@ -512,7 +512,7 @@
       }
     ],
     "architecture_facts": [
-      "knowledge graph schema: 148 node(s), 173 relation(s)",
+      "knowledge graph schema: 136 node(s), 161 relation(s)",
       "container/component candidate: Configuration (Configuration)",
       "container/component candidate: assets (Directory)",
       "container/component candidate: data (Directory)",
@@ -526,8 +526,8 @@
     ],
     "hotspots": [
       "Configuration (Configuration) score 99",
-      "web (Directory) score 66",
       "python_app (PythonPackage) score 59",
+      "web (Directory) score 42",
       "Documentation (Documentation) score 37",
       "fixture-worker (RustCrate) score 37",
       "Infrastructure (Infrastructure) score 31",
@@ -614,7 +614,7 @@
         "reference": "relation:3"
       },
       {
-        "reference": "relation:149"
+        "reference": "relation:137"
       },
       {
         "reference": "relation:6"
@@ -674,30 +674,30 @@
       "unresolved reference: RouteBaker::from_env",
       "unresolved reference: RouteSummary",
       "unresolved reference: assets/",
-      "unresolved reference: body",
-      "unresolved reference: charset",
       "unresolved reference: dict[str, object]",
-      "unresolved reference: div",
       "unresolved reference: fixture_worker::bake_route",
       "unresolved reference: ghcr.io/example/route-api:dev",
       "unresolved reference: h1",
-      "unresolved reference: head",
-      "unresolved reference: html",
       "unresolved reference: https://json-schema.org/draft/2020-12/schema",
-      "unresolved reference: id",
       "unresolved reference: import React from \"react\";",
-      "unresolved reference: lang",
       "unresolved reference: main",
-      "unresolved reference: meta",
       "unresolved reference: p",
-      "unresolved reference: route"
+      "unresolved reference: route",
+      "unresolved reference: str",
+      "unresolved reference: xmlns=\"http://www.w3.org/2000/svg",
+      "Dockerfile crosses boundary via ReadsEnv to RIDGELINE_WORKER",
+      "Makefile crosses boundary via References to rust/Cargo.toml",
+      "Makefile crosses boundary via References to ghcr.io/example/route-api:dev",
+      "Makefile crosses boundary via References to ghcr.io/example/route-api:dev",
+      "README.md crosses boundary via References to Dockerfile",
+      "README.md crosses boundary via References to Makefile"
     ],
     "evidence": [
       {
         "reference": "relation:3"
       },
       {
-        "reference": "relation:149"
+        "reference": "relation:137"
       },
       {
         "reference": "relation:6"
@@ -735,8 +735,8 @@
   "key_modules": {
     "modules": [
       "Configuration (Configuration) score 99",
-      "web (Directory) score 66",
       "python_app (PythonPackage) score 59",
+      "web (Directory) score 42",
       "Documentation (Documentation) score 37",
       "fixture-worker (RustCrate) score 37",
       "Infrastructure (Infrastructure) score 31",

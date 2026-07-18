@@ -387,29 +387,149 @@ fn build_pyproject_profile(artifact: &Artifact, value: &Value) -> PyProjectProfi
         return PyProjectProfile::default();
     };
 
-    let project = map_obj(root, "project").map(|project| PythonProject {
-        name: map_str(project, "name").map(str::to_owned),
-        version: map_str(project, "version").map(str::to_owned),
-        requires_python: map_str(project, "requires-python").map(str::to_owned),
-        dependencies: map_arr(project, "dependencies")
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(|requirement| PythonDependency {
-                        requirement: requirement.to_owned(),
-                        evidence: evidence(artifact, "project.dependencies"),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default(),
-        evidence: evidence(artifact, "project"),
+    let pep621 = map_obj(root, "project");
+    let poetry = map_obj(root, "tool").and_then(|tool| map_obj(tool, "poetry"));
+    if pep621.is_none() && poetry.is_none() {
+        return PyProjectProfile::default();
+    }
+
+    let mut dependencies: Vec<PythonDependency> = pep621
+        .and_then(|project| map_arr(project, "dependencies"))
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(|requirement| PythonDependency {
+                    requirement: requirement.to_owned(),
+                    evidence: evidence(artifact, "project.dependencies"),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Poetry's legacy manifest shape (LIT-72): `[tool.poetry.dependencies]`
+    // plus one `[tool.poetry.group.<name>.dependencies]` table per dev
+    // group, each dependency a TOML key rather than a PEP 508 string. A
+    // pyproject.toml declaring only this shape (no `[project]` table at
+    // all) is common -- the official FastAPI template's own backend is one
+    // -- so without this, LIT-44.1's manifest-declared-name matching has
+    // nothing to match against and every backend import falls through to
+    // Unresolved.
+    if let Some(poetry) = poetry {
+        if let Some(main) = map_obj(poetry, "dependencies") {
+            collect_poetry_dependencies(
+                artifact,
+                main,
+                "tool.poetry.dependencies",
+                &mut dependencies,
+            );
+        }
+        if let Some(groups) = map_obj(poetry, "group") {
+            for (group_name, group_value) in groups {
+                let Some(group_table) = group_value.as_object() else {
+                    continue;
+                };
+                let Some(group_deps) = map_obj(group_table, "dependencies") else {
+                    continue;
+                };
+                let path = format!("tool.poetry.group.{group_name}.dependencies");
+                collect_poetry_dependencies(artifact, group_deps, &path, &mut dependencies);
+            }
+        }
+    }
+    // PEP 621 `[project.dependencies]` wins when both shapes declare the
+    // same package -- it was collected first, so this keeps the earliest.
+    let mut seen_names = std::collections::HashSet::new();
+    dependencies.retain(|dependency| {
+        seen_names.insert(dependency_name(&dependency.requirement).to_ascii_lowercase())
     });
 
+    let name = pep621
+        .and_then(|project| map_str(project, "name"))
+        .or_else(|| poetry.and_then(|poetry| map_str(poetry, "name")))
+        .map(str::to_owned);
+    let version = pep621
+        .and_then(|project| map_str(project, "version"))
+        .or_else(|| poetry.and_then(|poetry| map_str(poetry, "version")))
+        .map(str::to_owned);
+    let requires_python = pep621
+        .and_then(|project| map_str(project, "requires-python"))
+        .map(str::to_owned);
+    let evidence_path = if pep621.is_some() {
+        "project"
+    } else {
+        "tool.poetry"
+    };
+
     PyProjectProfile {
-        project,
+        project: Some(PythonProject {
+            name,
+            version,
+            requires_python,
+            dependencies,
+            evidence: evidence(artifact, evidence_path),
+        }),
         parse_error: None,
     }
+}
+
+/// Reads one Poetry dependency table (main or a dev group) into
+/// [`PythonDependency`] entries, skipping the `python` version-constraint
+/// key and path/git/url-sourced entries that name a local or VCS package
+/// rather than an external one.
+fn collect_poetry_dependencies(
+    artifact: &Artifact,
+    table: &Map<String, Value>,
+    structured_path: &str,
+    dependencies: &mut Vec<PythonDependency>,
+) {
+    for (name, value) in table {
+        if name == "python" {
+            continue;
+        }
+        let Some(requirement) = poetry_dependency_requirement(name, value) else {
+            continue;
+        };
+        dependencies.push(PythonDependency {
+            requirement,
+            evidence: evidence(artifact, structured_path),
+        });
+    }
+}
+
+/// Builds a PEP 508-shaped requirement string (`name` immediately followed
+/// by its version constraint, e.g. `tenacity^8.2.3`) from one Poetry
+/// dependency value, which is either a bare version string or a table with
+/// `extras`/`version`/`path`/`git` keys. `python_dependency_name` only reads
+/// the leading name run, so the exact constraint syntax doesn't need to be
+/// valid PEP 508 -- it only needs to start where the name ends.
+fn poetry_dependency_requirement(name: &str, value: &Value) -> Option<String> {
+    match value {
+        Value::String(version) => Some(format!("{name}{version}")),
+        Value::Object(table) => {
+            if table.contains_key("path") || table.contains_key("git") || table.contains_key("url")
+            {
+                return None;
+            }
+            match table.get("version").and_then(Value::as_str) {
+                Some(version) => Some(format!("{name}{version}")),
+                None => Some(name.to_owned()),
+            }
+        }
+        _ => Some(name.to_owned()),
+    }
+}
+
+fn dependency_name(requirement: &str) -> &str {
+    let end = requirement
+        .find(|character: char| {
+            !(character.is_alphanumeric()
+                || character == '-'
+                || character == '_'
+                || character == '.')
+        })
+        .unwrap_or(requirement.len());
+    &requirement[..end]
 }
 
 /// `requirements.txt` package requirement.
@@ -846,6 +966,7 @@ mod tests {
     use super::{
         ActionsProfileAnalyzer, ActionsStepHint, CargoDependencyKind, CargoProfileAnalyzer,
         CargoTargetKind, ComposeProfileAnalyzer, PyProjectAnalyzer, RequirementsAnalyzer,
+        dependency_name,
     };
     use crate::domain::{
         Artifact, ArtifactCategory, ContentHash, ModelExposurePolicy, RepoPath, SupportTier,
@@ -1014,6 +1135,90 @@ serde = { workspace = true }
         assert_eq!(project.requires_python.as_deref(), Some(">=3.12"));
         assert_eq!(project.dependencies[0].requirement, "pydantic>=2");
 
+        Ok(())
+    }
+
+    #[test]
+    fn pyproject_profile_reads_poetry_only_manifest() -> Result<(), Box<dyn std::error::Error>> {
+        let artifact = profile_artifact("pyproject.toml", ArtifactCategory::PackageManifest)?;
+        let text = "\
+[tool.poetry]
+name = \"app\"
+version = \"0.1.0\"
+
+[tool.poetry.dependencies]
+python = \"^3.10\"
+fastapi = \"^0.109.1\"
+uvicorn = {extras = [\"standard\"], version = \"^0.24.0.post1\"}
+shared = {path = \"../shared\"}
+
+[tool.poetry.group.dev.dependencies]
+pytest = \"^7.4.3\"
+";
+        let profile = PyProjectAnalyzer.analyze(&artifact, text);
+        let project = profile.project.ok_or("project facts")?;
+
+        assert_eq!(project.name.as_deref(), Some("app"));
+        assert_eq!(project.version.as_deref(), Some("0.1.0"));
+        let names: std::collections::BTreeSet<_> = project
+            .dependencies
+            .iter()
+            .map(|dependency| dependency_name(&dependency.requirement))
+            .collect();
+        assert_eq!(
+            names,
+            std::collections::BTreeSet::from(["fastapi", "uvicorn", "pytest"])
+        );
+        assert!(
+            !project
+                .dependencies
+                .iter()
+                .any(|dependency| dependency.requirement.starts_with("python"))
+        );
+        assert!(
+            !project
+                .dependencies
+                .iter()
+                .any(|dependency| dependency_name(&dependency.requirement) == "shared"),
+            "a path-sourced dependency names a local package, not an external one"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn pyproject_profile_prefers_pep621_dependency_over_poetry_duplicate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let artifact = profile_artifact("pyproject.toml", ArtifactCategory::PackageManifest)?;
+        let text = "\
+[project]
+name = \"app\"
+dependencies = [\"pydantic>=2\"]
+
+[tool.poetry.dependencies]
+python = \"^3.10\"
+pydantic = \"^1.10\"
+";
+        let profile = PyProjectAnalyzer.analyze(&artifact, text);
+        let project = profile.project.ok_or("project facts")?;
+
+        let pydantic: Vec<_> = project
+            .dependencies
+            .iter()
+            .filter(|dependency| dependency_name(&dependency.requirement) == "pydantic")
+            .collect();
+        assert_eq!(pydantic.len(), 1);
+        assert_eq!(pydantic[0].requirement, "pydantic>=2");
+
+        Ok(())
+    }
+
+    #[test]
+    fn pyproject_profile_without_project_or_poetry_table_has_no_project_facts()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let artifact = profile_artifact("pyproject.toml", ArtifactCategory::PackageManifest)?;
+        let profile = PyProjectAnalyzer.analyze(&artifact, "[build-system]\nrequires = []\n");
+        assert!(profile.project.is_none());
         Ok(())
     }
 

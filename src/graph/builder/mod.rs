@@ -185,7 +185,10 @@ impl GraphBuilder {
         // once here is cheap.
         for artifact in artifacts {
             let Some(
-                kind @ (AnalyzerKind::PyProject | AnalyzerKind::Requirements | AnalyzerKind::Cargo),
+                kind @ (AnalyzerKind::PyProject
+                | AnalyzerKind::Requirements
+                | AnalyzerKind::Cargo
+                | AnalyzerKind::PackageManifest(PackageManifestFormat::Npm)),
             ) = analyzer_kind(artifact)
             else {
                 continue;
@@ -201,6 +204,7 @@ impl GraphBuilder {
             let output = compute_fresh(artifact, &text, repo_root, kind);
             state.register_python_manifest_packages(&output);
             state.register_rust_manifest_packages(&output);
+            state.register_javascript_manifest_packages(&output);
         }
 
         for artifact in artifacts {
@@ -589,6 +593,11 @@ struct BuilderState {
     python_manifest_packages: BTreeSet<String>,
     /// Crate names declared in Cargo.toml (LIT-66).
     rust_manifest_packages: BTreeSet<String>,
+    /// npm dependency names declared by this repo's own `package.json`
+    /// (LIT-71), populated by the same pre-pass as `python_manifest_packages`
+    /// so a bare-package import's usage sites can be classified regardless
+    /// of artifact walk order.
+    js_manifest_packages: BTreeSet<String>,
 }
 
 impl BuilderState {
@@ -612,6 +621,7 @@ impl BuilderState {
             ts_aliases: crate::resolve::TsAliasMap::default(),
             python_manifest_packages: BTreeSet::new(),
             rust_manifest_packages: BTreeSet::new(),
+            js_manifest_packages: BTreeSet::new(),
         }
     }
     /// Records each resolved Cargo target's source root directory, so
@@ -875,6 +885,36 @@ impl BuilderState {
         } else {
             self.unresolved(dotted_name)
         }
+    }
+    /// LIT-71: TS/JS counterpart of `python_external_symbol`. Interns the
+    /// member `name` of the declared npm package `package`, plus its
+    /// `BelongsToPackage` edge, so a call/usage/type-reference site that
+    /// resolves through `Self::typescript_bare_package_imports` gets the
+    /// same shared external-symbol node an `Imports` edge to this package
+    /// would already imply, instead of a fresh per-file `Unresolved` node.
+    fn typescript_external_symbol(
+        &mut self,
+        package: &str,
+        name: &str,
+        evidence: EvidenceRef,
+    ) -> GraphNodeId {
+        let qualified_name = format!("{package}::{name}");
+        let symbol_id = self.insert(GraphNode::Symbol(SymbolNode {
+            id: GraphNodeId::new(format!("symbol:{qualified_name}")),
+            kind: SymbolKind::External,
+            qualified_name,
+            doc: None,
+            evidence: evidence.clone(),
+        }));
+        let package_id = self.package(package, true);
+        self.relate(
+            symbol_id.clone(),
+            package_id,
+            RelationKind::BelongsToPackage,
+            Confidence::High,
+            vec![evidence],
+        );
+        symbol_id
     }
     fn config(
         &mut self,

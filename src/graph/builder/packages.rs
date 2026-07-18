@@ -299,6 +299,20 @@ impl BuilderState {
             _ => {}
         }
     }
+    /// Records this repo's own declared npm dependency names (LIT-71),
+    /// mirroring `register_python_manifest_packages`: populated by the same
+    /// pre-pass before any TS/JS file is indexed, so a bare import's usage
+    /// sites can be classified regardless of artifact walk order. Only
+    /// `package.json`'s own declared names are matched -- never a
+    /// dependency's own exports -- same boundary as every other manifest
+    /// classification in this file.
+    pub(super) fn register_javascript_manifest_packages(&mut self, output: &AnalyzerOutput) {
+        if let AnalyzerOutput::PackageManifest(PackageManifestFormat::Npm, analysis) = output {
+            for dependency in &analysis.dependencies {
+                self.js_manifest_packages.insert(dependency.name.clone());
+            }
+        }
+    }
     pub(super) fn process_pyproject(
         &mut self,
         profile: PyProjectProfile,
