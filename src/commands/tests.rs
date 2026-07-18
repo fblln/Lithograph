@@ -355,7 +355,6 @@ fn execute_graph_export_and_import_round_trips_artifact() -> Result<(), Box<dyn 
             .join(".lithograph/graph/current.json")
             .exists()
     );
-    assert!(destination.path().join(".lithograph/graph.json").exists());
     assert_eq!(
         report_output,
         std::fs::read(source.path().join(".lithograph/GRAPH_REPORT.md"))?

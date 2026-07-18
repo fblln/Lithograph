@@ -37,7 +37,7 @@ fn polyglot_docs_manifest_and_graph_match_committed_golden_snapshot()
         report
             .entries
             .iter()
-            .any(|entry| entry.source.ends_with(".lithograph/graph.json"))
+            .any(|entry| entry.source.ends_with(".lithograph/graph/current.json"))
     );
 
     Ok(())

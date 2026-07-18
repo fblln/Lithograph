@@ -212,7 +212,8 @@ impl From<std::io::Error> for InitError {
 }
 
 /// Runs the full `init` pipeline against `repo_root`, generating pages with
-/// `model` and writing `.lithograph/graph.json` and `.lithograph/manifest.json`.
+/// `model` and writing `.lithograph/graph/current.json` and
+/// `.lithograph/manifest.json`.
 pub fn run_init(
     repo_root: &Path,
     model: &dyn LanguageModel,
@@ -332,7 +333,7 @@ pub fn run_init_with_options(
         })?;
 
         let graph_store_outcome = GraphStore::new(repo_root).save(&graph)?;
-        let graph_path = graph_store_outcome.legacy_graph_path;
+        let graph_path = graph_store_outcome.snapshot_path;
         crate::graph::persist_graph_report(repo_root, &graph)?;
         // The FTS index is a pure function of the graph (LIT-22.4.3 AC1),
         // so it is rebuilt from scratch every run and only actually
@@ -596,7 +597,7 @@ pub fn run_update_with_options(
         })?;
 
         let graph_store_outcome = GraphStore::new(repo_root).save(&graph)?;
-        let graph_path = graph_store_outcome.legacy_graph_path;
+        let graph_path = graph_store_outcome.snapshot_path;
         crate::graph::persist_graph_report(repo_root, &graph)?;
         // The FTS index is a pure function of the graph (LIT-22.4.3 AC1),
         // so it is rebuilt from scratch every run and only actually
@@ -722,7 +723,6 @@ mod tests {
                 .join("docs/lithograph/adr-and-drift.md")
                 .exists()
         );
-        assert!(temp.path().join(".lithograph/graph.json").exists());
         assert!(temp.path().join(".lithograph/graph/current.json").exists());
         assert!(temp.path().join(".lithograph/manifest.json").exists());
 
@@ -746,13 +746,15 @@ mod tests {
 
         let default_init = run_init(temp.path(), &MockModel, "mock", "v1")?;
         assert_eq!(default_init.artifact_count, 1);
-        let default_graph = std::fs::read_to_string(temp.path().join(".lithograph/graph.json"))?;
+        let default_graph =
+            std::fs::read_to_string(temp.path().join(".lithograph/graph/current.json"))?;
         assert!(!default_graph.contains("tests/api_test.rs"));
 
         let opt_in_update =
             run_update_with_options(temp.path(), &MockModel, "mock", "v1", false, true)?;
         assert_eq!(opt_in_update.artifact_count, 2);
-        let opt_in_graph = std::fs::read_to_string(temp.path().join(".lithograph/graph.json"))?;
+        let opt_in_graph =
+            std::fs::read_to_string(temp.path().join(".lithograph/graph/current.json"))?;
         assert!(opt_in_graph.contains("tests/api_test.rs"));
 
         let default_update = run_update(temp.path(), &MockModel, "mock", "v1")?;
@@ -777,7 +779,7 @@ mod tests {
 
         let result = run_init(temp.path(), &MockModel, "mock", "v1")?;
         assert_eq!(result.artifact_count, 2);
-        let graph = std::fs::read_to_string(temp.path().join(".lithograph/graph.json"))?;
+        let graph = std::fs::read_to_string(temp.path().join(".lithograph/graph/current.json"))?;
         assert!(graph.contains(".env.example"));
         assert!(!graph.contains(".github/workflows/ci.yml"));
         Ok(())
@@ -884,7 +886,7 @@ mod tests {
         }
         assert!(!temp.path().join(".lithograph/manifest.json").exists());
         assert!(!temp.path().join(".lithograph/run.json").exists());
-        assert!(!temp.path().join(".lithograph/graph.json").exists());
+        assert!(!temp.path().join(".lithograph/graph/current.json").exists());
 
         Ok(())
     }

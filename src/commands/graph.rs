@@ -60,7 +60,6 @@ fn render_graph_artifact_report(action: &str, report: &GraphArtifactReport) -> S
         "graph artifact {action}\n\
          artifact: {}\n\
          snapshot: {}\n\
-         legacy graph: {}\n\
          format: {}\n\
          compression: {}\n\
          checksum: {}\n\
@@ -70,7 +69,6 @@ fn render_graph_artifact_report(action: &str, report: &GraphArtifactReport) -> S
          relations: {}\n",
         report.artifact_path.display(),
         report.snapshot_path.display(),
-        report.legacy_graph_path.display(),
         report.metadata.artifact_format_version,
         report.metadata.compression,
         report.metadata.snapshot_checksum,
