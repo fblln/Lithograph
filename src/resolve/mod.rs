@@ -43,6 +43,7 @@ pub(crate) use imports::{
     extract_typescript_default_import_binding, extract_typescript_import_bindings,
     import_candidates, typescript_dependency_root,
 };
+pub(crate) use propagate::re_export_map;
 pub use propagate::{
     BaseClassFact, BindingFact, FileTypeFacts, ImportBindingFact, MemberCallFact,
     PROPAGATE_STRATEGY, PropagateReport, Receiver, TypeFacts, propagate_types,
@@ -93,17 +94,35 @@ pub struct ResolverContext<'a> {
     /// supplied rather than indexed here. Empty for repositories with no
     /// tsconfig, which leaves every resolver's behaviour unchanged.
     pub ts_aliases: TsAliasMap,
+    /// LIT-79: `export ... from` re-export statements by containing artifact,
+    /// so a use-site reference imported through a barrel can be chased to the
+    /// module that actually declares it. Like `ts_aliases`, this is builder
+    /// state (from `FileTypeFacts::re_exports`) rather than a graph fact, so it
+    /// is supplied; empty for repositories with no barrels, leaving resolution
+    /// unchanged.
+    pub re_exports: ReExportMap,
 }
 
 impl<'a> ResolverContext<'a> {
     /// Builds every index in one pass over `graph.nodes`, with no tsconfig
     /// aliases.
     pub fn build(graph: &'a Graph) -> Self {
-        Self::build_with_aliases(graph, TsAliasMap::default())
+        Self::build_with_aliases_and_re_exports(graph, TsAliasMap::default(), ReExportMap::new())
     }
 
-    /// Builds every index in one pass over `graph.nodes` (LIT-45.2).
+    /// Builds every index with tsconfig aliases but no barrel re-export map
+    /// (LIT-45.2); barrel-unaware callers keep resolution unchanged.
     pub fn build_with_aliases(graph: &'a Graph, ts_aliases: TsAliasMap) -> Self {
+        Self::build_with_aliases_and_re_exports(graph, ts_aliases, ReExportMap::new())
+    }
+
+    /// Builds every index in one pass over `graph.nodes`, with tsconfig aliases
+    /// (LIT-45.2) and barrel re-exports (LIT-79) both available to resolvers.
+    pub fn build_with_aliases_and_re_exports(
+        graph: &'a Graph,
+        ts_aliases: TsAliasMap,
+        re_exports: ReExportMap,
+    ) -> Self {
         let mut modules_by_path = BTreeMap::new();
         let mut packages_by_name = BTreeMap::new();
         let mut local_package_names = BTreeSet::new();
@@ -174,6 +193,7 @@ impl<'a> ResolverContext<'a> {
             unresolved_values_by_id,
             callable_symbol_ids,
             ts_aliases,
+            re_exports,
         }
     }
 }
@@ -261,6 +281,18 @@ impl HybridResolverPipeline {
     /// Resolves with tsconfig path aliases available to the resolvers
     /// (LIT-45.2).
     pub fn resolve_with_aliases(&self, graph: &mut Graph, ts_aliases: TsAliasMap) -> ResolveReport {
+        self.resolve_with_aliases_and_re_exports(graph, ts_aliases, ReExportMap::new())
+    }
+
+    /// Resolves with tsconfig aliases (LIT-45.2) and barrel re-exports
+    /// (LIT-79) both available, so a use-site reference imported through a
+    /// barrel can be chased to its declaring module.
+    pub fn resolve_with_aliases_and_re_exports(
+        &self,
+        graph: &mut Graph,
+        ts_aliases: TsAliasMap,
+        re_exports: ReExportMap,
+    ) -> ResolveReport {
         let unresolved_values = unresolved_node_values(graph);
         let mut report = ResolveReport::default();
 
@@ -270,7 +302,8 @@ impl HybridResolverPipeline {
         // resolvers can never observe each other's output within one run,
         // keeping ordering effects limited to "who claims a relation
         // first," not "what facts are visible."
-        let context = ResolverContext::build_with_aliases(&*graph, ts_aliases);
+        let context =
+            ResolverContext::build_with_aliases_and_re_exports(&*graph, ts_aliases, re_exports);
         let mut updates: Vec<(usize, ResolvedTarget, &'static str)> = Vec::new();
 
         for (index, relation) in graph.relations.iter().enumerate() {
@@ -328,19 +361,38 @@ impl Resolver for SymbolNameResolver {
         relation: &Relation,
         unresolved_value: &str,
     ) -> Option<ResolvedTarget> {
-        if relation.kind != crate::graph::RelationKind::Calls {
-            return None;
-        }
-        match ImportMap::new(&context.symbols).lookup(None, None, unresolved_value) {
-            ImportLookup::Suffix { target, confidence }
-            | ImportLookup::UniqueName { target, confidence } => {
-                Some(ResolvedTarget { target, confidence })
+        use crate::graph::RelationKind;
+        let map = ImportMap::new(&context.symbols);
+        // The original whole-project unique-name/suffix match, for calls only.
+        if relation.kind == RelationKind::Calls {
+            match map.lookup(None, None, unresolved_value) {
+                ImportLookup::Suffix { target, confidence }
+                | ImportLookup::UniqueName { target, confidence } => {
+                    return Some(ResolvedTarget { target, confidence });
+                }
+                ImportLookup::SameModule { .. }
+                | ImportLookup::ExplicitImport { .. }
+                | ImportLookup::Ambiguous { .. }
+                | ImportLookup::Unresolved => {}
             }
-            ImportLookup::SameModule { .. }
-            | ImportLookup::ExplicitImport { .. }
-            | ImportLookup::Ambiguous { .. }
-            | ImportLookup::Unresolved => None,
         }
+        // LIT-82: a call or type reference whose name is unique among symbols of
+        // its own language resolves there even when a same-named symbol in
+        // another language makes the whole-project lookup `Ambiguous` -- e.g.
+        // `from app.models import Message; Message(...)` in a `.py` route, where
+        // an unrelated TypeScript `Message` model shares the name. A reference
+        // can only bind within its language, so this is a disambiguation, not a
+        // new guess: two same-language rivals still stay unresolved.
+        if matches!(relation.kind, RelationKind::Calls | RelationKind::UsesType) {
+            let language = relation.provenance.as_ref()?.language.as_deref()?;
+            if let Some(target) = map.unique_in_language(unresolved_value, language) {
+                return Some(ResolvedTarget {
+                    target,
+                    confidence: Confidence::Low,
+                });
+            }
+        }
+        None
     }
 }
 
@@ -404,6 +456,27 @@ impl Resolver for TypeScriptImportBindingResolver {
             candidates.insert((*symbol_id).clone());
         }
 
+        // LIT-79 barrel-file case: the source file is itself a barrel that
+        // re-exports this name (`client/index.ts` says
+        // `export { ItemsService } from './services/ItemsService'`). The
+        // re-export specifier's own identifier reaches this pass as an
+        // unresolved `Usages`, and left alone it keeps the `unresolved:<name>`
+        // node alive even after every importer has resolved. Chasing the file's
+        // own re-export chain resolves that last edge to the declaring symbol,
+        // turning a spurious use into the true fact that the barrel republishes
+        // it. A no-op for a non-barrel file, whose re-export map entry is empty.
+        for (declaring_module, declared_name) in
+            barrel_targets(source_path, unresolved_value, &context.re_exports)
+        {
+            if let Some(symbol_id) = context
+                .symbols_by_qualified_name
+                .get(format!("{declaring_module}::{declared_name}").as_str())
+                && (!require_callable || context.callable_symbol_ids.contains(symbol_id))
+            {
+                candidates.insert((*symbol_id).clone());
+            }
+        }
+
         // LIT-37: same-source imports come from the prebuilt index (relation
         // order preserved) rather than a full scan of every graph relation.
         let source_imports = context
@@ -447,13 +520,28 @@ impl Resolver for TypeScriptImportBindingResolver {
                 continue;
             }
             for artifact_path in typescript_import_candidates(source_path, &reference, language) {
-                let qualified = format!("{artifact_path}::{exported}");
-                let Some(symbol_id) = context.symbols_by_qualified_name.get(qualified.as_str())
-                else {
-                    continue;
-                };
-                if !require_callable || context.callable_symbol_ids.contains(symbol_id) {
-                    candidates.insert((*symbol_id).clone());
+                // LIT-79: the imported module may be a barrel that re-exports
+                // `exported` from elsewhere (`client/index.ts` says
+                // `export { ItemsService } from './services/ItemsService'`)
+                // rather than declaring it. `barrel_targets` follows the
+                // re-export chain -- named, aliased, and star -- and returns
+                // every `(module, name)` the symbol could actually resolve to,
+                // including the barrel itself, so a file that both re-exports
+                // and declares still matches. Renames are handled by the pair's
+                // name, not the original. With an empty re-export map this
+                // yields exactly `[(artifact_path, exported)]`, i.e. the prior
+                // direct-lookup behaviour.
+                for (declaring_module, declared_name) in
+                    barrel_targets(&artifact_path, &exported, &context.re_exports)
+                {
+                    let qualified = format!("{declaring_module}::{declared_name}");
+                    let Some(symbol_id) = context.symbols_by_qualified_name.get(qualified.as_str())
+                    else {
+                        continue;
+                    };
+                    if !require_callable || context.callable_symbol_ids.contains(symbol_id) {
+                        candidates.insert((*symbol_id).clone());
+                    }
                 }
             }
         }

@@ -17,6 +17,11 @@ pub(super) struct TypedPassFacts<'a> {
     /// resolved (local name -> (package, exported member)); empty outside
     /// TypeScript/JSX, which is the only place one is built.
     pub(super) bare_package_imports: BTreeMap<String, (String, String)>,
+    /// LIT-80: names bound inside a function body in this file (block-scoped
+    /// declarators and parameters). A bare use of one is a local reference, so
+    /// the identifier pass suppresses the `Unresolved` node it would otherwise
+    /// mint. Empty outside TypeScript/JSX.
+    pub(super) local_value_bindings: BTreeSet<String>,
 }
 
 impl BuilderState {
@@ -195,6 +200,7 @@ impl BuilderState {
             definition_kinds: typed_definition_kinds,
             symbol_spans: typed_symbols,
             bare_package_imports,
+            local_value_bindings,
         } = facts;
         let registry_id = language.registry_id();
 
@@ -285,6 +291,14 @@ impl BuilderState {
         let mut seen_symbols: BTreeSet<&str> = BTreeSet::new();
         for symbol in &output.symbols {
             if !seen_symbols.insert(symbol.text.as_str()) {
+                continue;
+            }
+            // LIT-80: a name bound inside a function body in this file is a
+            // local variable/parameter; a bare use of it resolves by lexical
+            // scoping, not to a cross-file symbol. Minting `unresolved:<name>`
+            // for it is pure noise, so it is dropped rather than resolved.
+            // Empty for every non-TS/JS caller, so this is a no-op elsewhere.
+            if local_value_bindings.contains(symbol.text.as_str()) {
                 continue;
             }
             let kind = if symbol.kind == "type_identifier" {

@@ -248,7 +248,7 @@
     }
   ],
   "architecture_facts": [
-    "knowledge graph schema: 133 node(s), 159 relation(s)",
+    "knowledge graph schema: 134 node(s), 162 relation(s)",
     "container/component candidate: Configuration (Configuration)",
     "container/component candidate: assets (Directory)",
     "container/component candidate: data (Directory)",
@@ -262,13 +262,13 @@
   ],
   "hotspots": [
     "Configuration (Configuration) score 99",
-    "python_app (PythonPackage) score 59",
-    "web (Directory) score 40",
+    "python_app (PythonPackage) score 62",
+    "web (Directory) score 41",
     "Documentation (Documentation) score 37",
     "fixture-worker (RustCrate) score 37",
     "Infrastructure (Infrastructure) score 31",
+    "generated (Directory) score 14",
     "root (Directory) score 14",
-    "generated (Directory) score 11",
     "assets (Directory) score 2",
     "data (Directory) score 2"
   ],

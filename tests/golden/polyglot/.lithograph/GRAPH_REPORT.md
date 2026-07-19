@@ -2,11 +2,11 @@
 
 ## Summary and resolution
 
-- Nodes: 133
-- Relations: 159
-- Resolved relations: 139 of 159 (87.4%)
-- Unresolved relations: 20
-- Low-confidence relations: 26
+- Nodes: 134
+- Relations: 162
+- Resolved relations: 148 of 162 (91.3%)
+- Unresolved relations: 14
+- Low-confidence relations: 25
 
 ## God nodes by degree
 
@@ -14,7 +14,7 @@
 - `artifact:config/settings.yaml` — config/settings.yaml (in 1, out 22, total 23)
 - `artifact:config/schema.json` — config/schema.json (in 2, out 14, total 16)
 - `artifact:src/python_app/service.py` — src/python_app/service.py (in 1, out 14, total 15)
-- `artifact:web/src/App.tsx` — web/src/App.tsx (in 1, out 11, total 12)
+- `artifact:web/src/App.tsx` — web/src/App.tsx (in 1, out 12, total 13)
 - `symbol:src/python_app/service.py#src.python_app.service::RouteService` — src.python_app.service::RouteService (in 4, out 6, total 10)
 - `artifact:web/index.html` — web/index.html (in 1, out 8, total 9)
 - `artifact:Dockerfile` — Dockerfile (in 1, out 7, total 8)
@@ -38,11 +38,9 @@ No module dependency cycles detected.
 
 ### Unresolved hotspots
 
-- `unresolved:str` — str (4 inbound relations)
 - `unresolved:ghcr.io/example/route-api:dev` — ghcr.io/example/route-api:dev (2 inbound relations)
 - `unresolved:/usr/local/bin/worker` — /usr/local/bin/worker (1 inbound relations)
 - `unresolved:/var/cache/ridgeline` — /var/cache/ridgeline (1 inbound relations)
-- `unresolved:None` — None (1 inbound relations)
 - `unresolved:React` — React (1 inbound relations)
 - `unresolved:RouteBaker::from_env` — RouteBaker::from_env (1 inbound relations)
 - `unresolved:assets/` — assets/ (1 inbound relations)
@@ -53,7 +51,6 @@ No module dependency cycles detected.
 - `unresolved:import React from "react";` — import React from "react"; (1 inbound relations)
 - `unresolved:main` — main (1 inbound relations)
 - `unresolved:p` — p (1 inbound relations)
-- `unresolved:route` — route (1 inbound relations)
 
 ### Low-confidence relations to audit
 
@@ -70,21 +67,21 @@ No module dependency cycles detected.
 - `artifact:config/settings.yaml` → `unresolved:assets/` (References, relation `relation:39`)
 - `artifact:rust/src/bin/worker.rs` → `symbol:std::env::args` (Calls, relation `relation:73`)
 - `artifact:rust/src/lib.rs` → `unresolved:RouteBaker::from_env` (Calls, relation `relation:81`)
-- `artifact:src/python_app/service.py` → `unresolved:str` (Calls, relation `relation:111`)
+- `artifact:src/python_app/service.py` → `symbol:python::str` (Calls, relation `relation:111`)
 - `artifact:src/python_app/service.py` → `command:src/python_app/service.py#31` (RunsCommand, relation `relation:110`)
-- `artifact:web/src/App.tsx` → `unresolved:import React from "react";` (Imports, relation `relation:126`)
-- `artifact:web/src/App.tsx` → `unresolved:React` (Usages, relation `relation:127`)
-- `artifact:web/src/App.tsx` → `unresolved:h1` (Usages, relation `relation:132`)
-- `artifact:web/src/App.tsx` → `unresolved:main` (Usages, relation `relation:131`)
-- `artifact:web/src/App.tsx` → `unresolved:p` (Usages, relation `relation:133`)
+- `artifact:web/src/App.tsx` → `unresolved:import React from "react";` (Imports, relation `relation:127`)
+- `artifact:web/src/App.tsx` → `unresolved:React` (Usages, relation `relation:128`)
+- `artifact:web/src/App.tsx` → `unresolved:h1` (Usages, relation `relation:133`)
+- `artifact:web/src/App.tsx` → `unresolved:main` (Usages, relation `relation:132`)
+- `artifact:web/src/App.tsx` → `unresolved:p` (Usages, relation `relation:134`)
 
 ## Suggested audit questions
 
 - What responsibilities make `artifact:README.md` highly connected, and should any be separated?
 - What responsibilities make `artifact:config/settings.yaml` highly connected, and should any be separated?
 - What responsibilities make `artifact:config/schema.json` highly connected, and should any be separated?
-- What repository evidence can resolve `unresolved:str` (str)?
 - What repository evidence can resolve `unresolved:ghcr.io/example/route-api:dev` (ghcr.io/example/route-api:dev)?
 - What repository evidence can resolve `unresolved:/usr/local/bin/worker` (/usr/local/bin/worker)?
-- Which of the graph's 26 low-confidence relations are justified by source evidence, and which should be corrected?
+- What repository evidence can resolve `unresolved:/var/cache/ridgeline` (/var/cache/ridgeline)?
+- Which of the graph's 25 low-confidence relations are justified by source evidence, and which should be corrected?
 

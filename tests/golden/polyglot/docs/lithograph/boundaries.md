@@ -2,7 +2,7 @@
 
 <!-- lithograph mock model: task=Boundaries model=mock prompt_version=v1 input_hash=1552d8cd93e1545626f24d65d7aafdbfc1f75ffd361e1a9af241565dc0c67468 -->
 
-Deterministic mock content generated from 277 line(s) of context.
+Deterministic mock content generated from 275 line(s) of context.
 
 ## Source Evidence
 - `Dockerfile`

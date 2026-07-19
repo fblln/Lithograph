@@ -304,11 +304,51 @@ impl BuilderState {
                 .push(function_id);
         }
 
+        // LIT-81: module-level value declarations (`export const $ItemCreate`,
+        // `const LayoutRoute = ...`) become `Definition` symbols so a same-file
+        // or barrel reference resolves to them. Not added to `callable_ids`: a
+        // value binding is not callable, so a `Calls` to its name stays
+        // conservatively unresolved while its `Usages`/`TypeRefs` resolve.
+        for binding in &analysis.value_bindings {
+            let qualified = format!("{}::{}", artifact.path, binding.name);
+            let binding_id = self.insert(GraphNode::Symbol(SymbolNode {
+                id: GraphNodeId::new(format!("symbol:{}#{qualified}", artifact.path)),
+                kind: SymbolKind::Definition,
+                qualified_name: qualified,
+                doc: None,
+                evidence: binding.evidence.clone(),
+            }));
+            self.relate_with_provenance(
+                artifact_node.clone(),
+                binding_id,
+                RelationKind::Contains,
+                Confidence::High,
+                vec![binding.evidence.clone()],
+                Some(format_provenance(
+                    language_id,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
+            );
+        }
+
         self.record_typescript_type_facts(artifact, &analysis, language_id);
         let bare_imports =
             self.typescript_bare_package_imports(artifact.path.as_str(), &analysis, language_id);
+        // LIT-80: moved out of `analysis` up front so the call loop can consult
+        // it and the identifier pass below can own it.
+        let local_value_bindings = analysis.local_value_bindings;
 
         for call in &analysis.calls {
+            // LIT-80: `addItem()` where `addItem` is a function-local `const`
+            // is a local call, not a cross-file one; suppress the Unresolved
+            // node rather than mint noise. A same-file callable of that name
+            // (handled by the first arm) still resolves normally.
+            if local_value_bindings.contains(call.name.as_str())
+                && !callable_ids.contains_key(call.name.as_str())
+            {
+                continue;
+            }
             if let Some([target]) = callable_ids.get(call.name.as_str()).map(Vec::as_slice) {
                 self.relate_with_provenance(
                     artifact_node.clone(),
@@ -376,6 +416,7 @@ impl BuilderState {
                 ],
                 symbol_spans: typed_symbols,
                 bare_package_imports: bare_imports,
+                local_value_bindings,
             },
         );
     }
@@ -623,6 +664,194 @@ mod tests {
                 .iter()
                 .any(|node| matches!(node, GraphNode::Unresolved(node) if node.value == "Missing")),
             "an unimported JSX name must stay unresolved"
+        );
+        Ok(())
+    }
+
+    /// LIT-79: a name imported through a barrel (`import { ItemsService } from
+    /// './client'` where `client/index.ts` re-exports it) resolves at its use
+    /// site to the module that actually declares it, by following the
+    /// re-export chain. The barrel's own re-export specifier resolves the same
+    /// way, so no orphan `unresolved:ItemsService` node survives -- the exact
+    /// shape the openapi-typescript-codegen client uses.
+    #[test]
+    fn typescript_barrel_re_exports_resolve_through_the_chain()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::create_dir_all(temp.path().join("client/services"))?;
+        std::fs::write(
+            temp.path().join("client/services/ItemsService.ts"),
+            "export class ItemsService {}\n",
+        )?;
+        // The barrel republishes it without declaring it.
+        std::fs::write(
+            temp.path().join("client/index.ts"),
+            "export { ItemsService } from './services/ItemsService';\n",
+        )?;
+        // A consumer imports it through the barrel and uses it as a type.
+        std::fs::write(
+            temp.path().join("page.tsx"),
+            "import { ItemsService } from './client';\nconst use = (s: ItemsService) => s;\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let declaring =
+            "symbol:client/services/ItemsService.ts#client/services/ItemsService.ts::ItemsService";
+        let resolved_from = |source: &str| {
+            graph.relations.iter().any(|relation| {
+                relation.source.as_str() == source
+                    && relation.target.as_str() == declaring
+                    && relation.provenance.as_ref().is_some_and(|provenance| {
+                        provenance.resolver_strategy == "typescript-import-binding"
+                    })
+            })
+        };
+        // The barrel consumer resolves through the chain to the declaration.
+        assert!(
+            resolved_from("artifact:page.tsx"),
+            "a barrel-imported use site should resolve to the declaring module"
+        );
+        // The barrel's own re-export specifier resolves too, so its node is
+        // not left dangling as `unresolved:ItemsService`.
+        assert!(
+            resolved_from("artifact:client/index.ts"),
+            "the barrel's own re-export specifier should resolve to the declaration"
+        );
+        assert!(
+            !graph.nodes.iter().any(
+                |node| matches!(node, GraphNode::Unresolved(node) if node.value == "ItemsService")
+            ),
+            "no orphan unresolved:ItemsService node should remain"
+        );
+        Ok(())
+    }
+
+    /// LIT-80: a name bound inside a function body -- a block-scoped `const`, a
+    /// parameter, a `catch` binding -- is a local variable, so its use-site
+    /// mints no `Unresolved` node. A top-level declaration referenced in the
+    /// same file still resolves (LIT-75 is not cannibalised), and a genuinely
+    /// undeclared name still stays unresolved.
+    #[test]
+    fn typescript_function_local_bindings_produce_no_unresolved_nodes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("view.tsx"),
+            concat!(
+                "const Widget = () => null;\n",
+                "const View = () => {\n",
+                "  const addItem = () => 1;\n",
+                "  const handler = (payload) => payload;\n",
+                "  try {\n",
+                "    addItem();\n",
+                "    handler(unknownThing);\n",
+                "  } catch (mishap) {\n",
+                "    return mishap;\n",
+                "  }\n",
+                "  return <Widget />;\n",
+                "};\n",
+            ),
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let has_unresolved = |value: &str| {
+            graph
+                .nodes
+                .iter()
+                .any(|node| matches!(node, GraphNode::Unresolved(node) if node.value == value))
+        };
+        // A function-local const, a parameter, and a catch binding are all
+        // local -- none becomes an Unresolved node.
+        assert!(
+            !has_unresolved("addItem"),
+            "a local const use is suppressed"
+        );
+        assert!(!has_unresolved("payload"), "a parameter use is suppressed");
+        assert!(
+            !has_unresolved("mishap"),
+            "a catch binding use is suppressed"
+        );
+        // A name declared nowhere is still an honest gap.
+        assert!(
+            has_unresolved("unknownThing"),
+            "an undeclared name still stays unresolved"
+        );
+        // The top-level component is not function-local, so its same-file JSX
+        // use still resolves rather than being suppressed.
+        assert!(
+            graph.relations.iter().any(|relation| {
+                relation.source.as_str() == "artifact:view.tsx"
+                    && relation.target.as_str() == "symbol:view.tsx#view.tsx::Widget"
+            }),
+            "a top-level component's same-file use must still resolve"
+        );
+        Ok(())
+    }
+
+    /// LIT-81: a module-level value `const` -- an `export const` object and a
+    /// non-arrow `const` initialized from a call -- becomes a `Definition`
+    /// symbol, so a same-file reference to it resolves instead of minting an
+    /// `Unresolved` node. A function-local value `const` is still suppressed
+    /// (LIT-80), not promoted to a module symbol.
+    #[test]
+    fn typescript_module_level_value_consts_become_resolvable_symbols()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("routes.ts"),
+            concat!(
+                "export const schema = { name: \"item\" } as const;\n",
+                "const rootRoute = createRoute();\n",
+                "const childRoute = rootRoute.addChildren([schema]);\n",
+                "const build = () => {\n  const localOnly = 1;\n  return localOnly;\n};\n",
+            ),
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let is_definition = |qualified: &str| {
+            graph.nodes.iter().any(|node| {
+                matches!(
+                    node,
+                    GraphNode::Symbol(symbol)
+                        if symbol.qualified_name == qualified
+                        && symbol.kind == SymbolKind::Definition
+                )
+            })
+        };
+        // Both the exported object const and the call-initialized const are
+        // module symbols now.
+        assert!(
+            is_definition("routes.ts::schema"),
+            "an exported value const is a Definition symbol"
+        );
+        assert!(
+            is_definition("routes.ts::rootRoute"),
+            "a call-initialized value const is a Definition symbol"
+        );
+        // `rootRoute` referenced by `childRoute`'s initializer resolves to it.
+        assert!(
+            graph.relations.iter().any(|relation| {
+                relation.source.as_str() == "artifact:routes.ts"
+                    && relation.target.as_str() == "symbol:routes.ts#routes.ts::rootRoute"
+            }),
+            "a same-file reference to a value const resolves to its symbol"
+        );
+        // A function-local value const is not promoted to a module symbol.
+        assert!(
+            !is_definition("routes.ts::localOnly"),
+            "a function-local const stays local, never a module symbol"
+        );
+        assert!(
+            !graph.nodes.iter().any(
+                |node| matches!(node, GraphNode::Unresolved(node) if node.value == "localOnly")
+            ),
+            "and it mints no Unresolved node either (LIT-80)"
         );
         Ok(())
     }

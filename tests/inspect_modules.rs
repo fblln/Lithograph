@@ -9,13 +9,13 @@ kind            name            members  input_hash                             
 Configuration   Configuration        46  3ff68e804254ecdf6acd55f7e90933d940df4ef0e9f453d6a1f4f755c11c8b9a     295
 Directory       assets                1  3029d94afd11745b29441c5ecd57daf06d7140c928d35bc44a3911eb472f769d      64
 Directory       data                  1  6b99ef6840a59c785d9f18965146b65ed88f2f225487b77007c2ef5e5cbb0227       9
-Directory       generated             4  af7c6864a5f8b357a9d86e0806a7739ea426ccbcceebf15fd1f4a462e06a3c40      37
+Directory       generated             5  af7c6864a5f8b357a9d86e0806a7739ea426ccbcceebf15fd1f4a462e06a3c40      37
 Directory       root                  6  d9b071b9e6f27ac2909415dc4c2590b2ba32e0fcab686075d2b79db574615771      78
 Directory       vendor                1  031399bb81b35a133503a3e11bf0af08d46a4064e5f34c019380e97d73812819      18
 Directory       web                  19  684e2e68e5213a8ace17ed654a9a177835e7045586aebf6808961cbcddf9379c     151
 Documentation   Documentation        10  072a11ff87434dd925fa9e1516a3e2271ed75b8cca6b7049bc82f65ac1584f09    1081
 Infrastructure  Infrastructure       12  8d883e4a0f20ba2bbe9de21524865f7fb1ae372fbdbd9c6b985cf6b2cd177650     253
-PythonPackage   python_app           20  27d76545f41a0cd2f9ff1d93205035bbeb138a484c95c82441a3471bb044c3aa     370
+PythonPackage   python_app           21  27d76545f41a0cd2f9ff1d93205035bbeb138a484c95c82441a3471bb044c3aa     370
 RustCrate       fixture-worker       16  3326ff9d7b5b8c213d8e5329e3931e01e5fb4ad896fad50c7ca87ece04d4c69b     365
 ";
 
