@@ -44,6 +44,7 @@ pub(crate) enum ArchitectureAspect {
 /// All [`ArchitectureAspect`] variants, in the order `architecture()`
 /// computes them when no filter is given. Passing `Some` of this set
 /// explicitly is equivalent to passing `None`.
+#[cfg(test)]
 pub(crate) const ALL_ARCHITECTURE_ASPECTS: &[ArchitectureAspect] = &[
     ArchitectureAspect::Languages,
     ArchitectureAspect::Packages,
@@ -149,8 +150,8 @@ pub(crate) struct ArchitectureClusterLink {
 impl<'a> KnowledgeIndex<'a> {
     /// Returns an architecture summary over the graph. `aspects` selects
     /// which optional sections to compute and populate (LIT-22.4.6 AC2);
-    /// `None` computes every aspect (equivalent to passing
-    /// [`ALL_ARCHITECTURE_ASPECTS`]). Unrequested aspects are skipped
+    /// `None` computes every aspect (equivalent to passing every
+    /// `ArchitectureAspect`). Unrequested aspects are skipped
     /// entirely, not just filtered from the output, so a caller that only
     /// needs e.g. `Packages` avoids paying for clustering or layer
     /// detection. `schema` and `hotspots` are always computed; every

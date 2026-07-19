@@ -22,13 +22,6 @@ pub(crate) enum DocumentSectionKind {
     Drift,
     OpenQuestion,
 }
-/// Freshness state relative to the graph snapshot used to render a section.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[allow(missing_docs)]
-pub(crate) enum DocumentFreshness {
-    Current,
-    Stale { current_graph_snapshot_id: String },
-}
 /// One stable, evidence-backed architecture/ops section.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(missing_docs)]
@@ -127,27 +120,6 @@ impl GraphDocument {
         self.sections.sort_by(|a, b| a.id.cmp(&b.id));
         id
     }
-    /// Reports whether the document is current for the supplied graph snapshot.
-    pub(crate) fn freshness(&self, graph_snapshot_id: &str) -> DocumentFreshness {
-        if self.graph_snapshot_id == graph_snapshot_id {
-            DocumentFreshness::Current
-        } else {
-            DocumentFreshness::Stale {
-                current_graph_snapshot_id: graph_snapshot_id.into(),
-            }
-        }
-    }
-    /// Returns all document sections linked to a graph node, edge, cluster, or tension id.
-    pub(crate) fn related_sections(&self, entity_id: &str) -> Vec<&GraphDocumentSection> {
-        self.sections
-            .iter()
-            .filter(|s| {
-                s.affected_nodes.iter().any(|id| id.as_str() == entity_id)
-                    || s.affected_edges.iter().any(|id| id == entity_id)
-                    || s.source_query_ids.iter().any(|id| id == entity_id)
-            })
-            .collect()
-    }
     /// Returns sections keyed by stable id for reverse graph-link resolution.
     pub(crate) fn section_index(&self) -> BTreeMap<String, &GraphDocumentSection> {
         self.sections
@@ -171,14 +143,7 @@ mod tests {
             vec!["edge:a-b".into()],
             Confidence::High,
         );
-        assert_eq!(doc.freshness("g1"), DocumentFreshness::Current);
-        assert!(matches!(
-            doc.freshness("g2"),
-            DocumentFreshness::Stale { .. }
-        ));
-        assert_eq!(doc.related_sections("symbol:a")[0].id, id);
-        assert_eq!(doc.related_sections("symbol:a")[0].tags[0].value, "system");
-        assert!(doc.related_sections("missing").is_empty());
+        assert_eq!(doc.section_index()[&id].tags[0].value, "system");
         assert_eq!(
             serde_json::from_str::<GraphDocument>(&serde_json::to_string(&doc)?)?,
             doc

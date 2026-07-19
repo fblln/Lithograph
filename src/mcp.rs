@@ -2,9 +2,7 @@
 
 use crate::ask::WikiSearch;
 use crate::docs_model::{GraphDocument, GraphDocumentSection};
-use crate::graph::analytics::{
-    BetweennessPolicy, MetricScope, betweenness, degree_metrics, page_rank,
-};
+use crate::graph::analytics::{BetweennessPolicy, betweenness, degree_metrics, page_rank};
 use crate::graph::index::{node_label, node_name};
 use crate::graph::{
     ArchitectureAspect, Graph, GraphNode, GraphNodeId, GraphStore, KnowledgeIndex, LayoutRequest,
@@ -600,12 +598,11 @@ impl WikiMcpServer {
             }
             "get_graph_analytics" => {
                 let graph = self.load_graph()?;
-                let scope = MetricScope::Combined;
-                let degrees = degree_metrics(&graph, &scope);
-                let pagerank = page_rank(&graph, &scope, 20)
+                let degrees = degree_metrics(&graph);
+                let pagerank = page_rank(&graph, 20)
                     .into_iter()
                     .collect::<std::collections::BTreeMap<_, _>>();
-                let between = betweenness(&graph, &scope, BetweennessPolicy::default())
+                let between = betweenness(&graph, BetweennessPolicy::default())
                     .into_iter()
                     .collect::<std::collections::BTreeMap<_, _>>();
                 let nodes = degrees

@@ -140,9 +140,9 @@ fn valid_project_id(id: &str) -> bool {
 
 /// Binds the server's listening socket without accepting connections yet,
 /// returning the bound address (the real port when `port` is `0`) and the
-/// configured router. Split from [`run`] so tests and callers that need
-/// the bound address up front don't have to go through the
-/// graceful-shutdown-on-ctrl-c blocking loop `run` uses for the CLI.
+/// configured router. Test-only harness over the single-project [`router`];
+/// production serves through [`bind_projects`]/[`run_projects`].
+#[cfg(test)]
 pub(crate) async fn bind(
     repo_root: &Path,
     assets_dir: &Path,
@@ -153,7 +153,7 @@ pub(crate) async fn bind(
     Ok((listener, addr, router(repo_root, assets_dir)))
 }
 
-/// Multi-project variant of [`bind`], restricted to explicitly named roots.
+/// Multi-project bind, restricted to explicitly named roots.
 pub(crate) async fn bind_projects(
     primary_root: &Path,
     projects: Vec<NamedProjectRoot>,
@@ -164,21 +164,6 @@ pub(crate) async fn bind_projects(
     let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, port)).await?;
     let addr = listener.local_addr()?;
     Ok((listener, addr, router_with_registry(registry, assets_dir)))
-}
-
-/// Binds and serves until the process receives `Ctrl-C`, writing the bound
-/// address to `writer` first so the caller knows where to browse.
-pub(crate) async fn run(
-    repo_root: &Path,
-    assets_dir: &Path,
-    port: u16,
-    writer: &mut impl Write,
-) -> std::io::Result<()> {
-    let (listener, addr, app) = bind(repo_root, assets_dir, port).await?;
-    writeln!(writer, "Lithograph graph explorer serving on http://{addr}")?;
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
 }
 
 /// Serves a primary repository plus explicitly named additional roots.
@@ -200,10 +185,12 @@ async fn shutdown_signal() {
     let _ = tokio::signal::ctrl_c().await;
 }
 
-/// Builds the server's router: `POST /rpc` for the graph API, everything
-/// else falls back to static files under `assets_dir`. `assets_dir` need
-/// not exist -- missing files simply 404 rather than the server refusing
+/// Builds the server's single-project router: `POST /rpc` for the graph API,
+/// everything else falls back to static files under `assets_dir`. `assets_dir`
+/// need not exist -- missing files simply 404 rather than the server refusing
 /// to start, so the graph API stays usable before a UI bundle is built.
+/// Test-only; production routes through `router_with_registry`.
+#[cfg(test)]
 fn router(repo_root: &Path, assets_dir: &Path) -> Router {
     // The compatibility single-project path has no user-supplied ID to
     // validate, so construct its fixed registry directly without a fallible

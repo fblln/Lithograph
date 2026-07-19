@@ -31,23 +31,22 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 pub(crate) use aliases::TsAliasMap;
 pub(crate) use barrels::{ReExport, ReExportKind, ReExportMap, barrel_targets};
 pub(crate) use environment::{
-    ConfigFact, ENVIRONMENT_FACT_VERSION, EnvFact, EnvironmentCandidate,
-    EnvironmentCandidateFeatures, EnvironmentCodeUser, EnvironmentExplanation,
-    EnvironmentResolveReport, EnvironmentResolvedLink, EnvironmentVariableExplanation, FactRole,
-    FactSourceKind, NameAlias, NameAliasKind, NameNormalizationError, NormalizedName,
-    SafeFactValue, explain_environment, is_secret_like, resolve_environment_links,
+    ConfigFact, EnvFact, EnvironmentExplanation, FactRole, FactSourceKind, explain_environment,
+    resolve_environment_links,
 };
 pub(crate) use imports::{LanguageImportResolver, extract_import_reference};
 pub(crate) use imports::{
     extract_typescript_default_import_binding, extract_typescript_import_bindings,
     import_candidates, typescript_dependency_root,
 };
+#[cfg(test)]
+pub(crate) use propagate::PROPAGATE_STRATEGY;
 pub(crate) use propagate::re_export_map;
 pub(crate) use propagate::{
-    BaseClassFact, BindingFact, FileTypeFacts, ImportBindingFact, MemberCallFact,
-    PROPAGATE_STRATEGY, PropagateReport, Receiver, TypeFacts, propagate_types,
+    BaseClassFact, BindingFact, FileTypeFacts, ImportBindingFact, MemberCallFact, Receiver,
+    TypeFacts, propagate_types,
 };
-pub(crate) use symbols::{ImportLookup, ImportMap, ProjectSymbol, ProjectSymbolRegistry};
+pub(crate) use symbols::{ImportLookup, ImportMap, ProjectSymbolRegistry};
 
 /// Typed indexes over one graph snapshot, built once per pipeline run and
 /// shared by every resolver (AC1: typed syntax/package/module/symbol
@@ -55,10 +54,6 @@ pub(crate) use symbols::{ImportLookup, ImportMap, ProjectSymbol, ProjectSymbolRe
 /// syntax fact -- a dotted/`::` module path, a package name, or a fully
 /// qualified symbol name -- so a resolver's lookup is a single map access.
 pub(crate) struct ResolverContext<'a> {
-    /// The graph being resolved.
-    pub graph: &'a Graph,
-    /// Module node ids by module path.
-    pub modules_by_path: BTreeMap<&'a str, &'a GraphNodeId>,
     /// Package node ids by package name.
     pub packages_by_name: BTreeMap<&'a str, &'a GraphNodeId>,
     /// Names of packages built in-repo (`is_external == false`), a subset
@@ -101,15 +96,11 @@ pub(crate) struct ResolverContext<'a> {
 
 impl<'a> ResolverContext<'a> {
     /// Builds every index in one pass over `graph.nodes`, with no tsconfig
-    /// aliases.
+    /// aliases. Test-only convenience over
+    /// [`Self::build_with_aliases_and_re_exports`].
+    #[cfg(test)]
     pub(crate) fn build(graph: &'a Graph) -> Self {
         Self::build_with_aliases_and_re_exports(graph, TsAliasMap::default(), ReExportMap::new())
-    }
-
-    /// Builds every index with tsconfig aliases but no barrel re-export map
-    /// (LIT-45.2); barrel-unaware callers keep resolution unchanged.
-    pub(crate) fn build_with_aliases(graph: &'a Graph, ts_aliases: TsAliasMap) -> Self {
-        Self::build_with_aliases_and_re_exports(graph, ts_aliases, ReExportMap::new())
     }
 
     /// Builds every index in one pass over `graph.nodes`, with tsconfig aliases
@@ -119,7 +110,6 @@ impl<'a> ResolverContext<'a> {
         ts_aliases: TsAliasMap,
         re_exports: ReExportMap,
     ) -> Self {
-        let mut modules_by_path = BTreeMap::new();
         let mut packages_by_name = BTreeMap::new();
         let mut local_package_names = BTreeSet::new();
         let mut symbols_by_qualified_name = BTreeMap::new();
@@ -131,9 +121,6 @@ impl<'a> ResolverContext<'a> {
         for node in &graph.nodes {
             node_kinds.insert(node.id(), node_kind_tag(node));
             match node {
-                GraphNode::Module(module) => {
-                    modules_by_path.insert(module.path.as_str(), node.id());
-                }
                 GraphNode::Package(package) => {
                     packages_by_name.insert(package.name.as_str(), node.id());
                     if !package.is_external {
@@ -155,7 +142,8 @@ impl<'a> ResolverContext<'a> {
                 GraphNode::Unresolved(unresolved) => {
                     unresolved_values_by_id.insert(node.id(), unresolved.value.as_str());
                 }
-                GraphNode::Config(_)
+                GraphNode::Module(_)
+                | GraphNode::Config(_)
                 | GraphNode::Documentation(_)
                 | GraphNode::Container(_)
                 | GraphNode::Command(_)
@@ -177,8 +165,6 @@ impl<'a> ResolverContext<'a> {
         }
 
         Self {
-            graph,
-            modules_by_path,
             packages_by_name,
             local_package_names,
             symbols_by_qualified_name,
@@ -269,13 +255,17 @@ impl HybridResolverPipeline {
     }
 
     /// Runs every resolver against every eligible relation in `graph`,
-    /// mutating resolved relations in place.
+    /// mutating resolved relations in place. Test-only convenience over
+    /// [`Self::resolve_with_aliases_and_re_exports`].
+    #[cfg(test)]
     pub(crate) fn resolve(&self, graph: &mut Graph) -> ResolveReport {
         self.resolve_with_aliases(graph, TsAliasMap::default())
     }
 
     /// Resolves with tsconfig path aliases available to the resolvers
-    /// (LIT-45.2).
+    /// (LIT-45.2). Test-only convenience over
+    /// [`Self::resolve_with_aliases_and_re_exports`].
+    #[cfg(test)]
     pub(crate) fn resolve_with_aliases(
         &self,
         graph: &mut Graph,

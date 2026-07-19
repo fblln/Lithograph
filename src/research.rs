@@ -6,14 +6,15 @@ use crate::domain::{Artifact, ArtifactCategory, SupportTier};
 use crate::graph::{ConfigNodeKind, Graph, GraphNode, RelationKind};
 use crate::inventory::language::{RegistryIndexTier, by_name as registry_language};
 use crate::knowledge_agent::{
-    AgentContext, DataSourceKey, DataSourceResolution, DataSourceSpec, DataSourceValue,
-    KnowledgeAgent,
+    AgentContext, DataSourceKey, DataSourceSpec, DataSourceValue, KnowledgeAgent,
 };
 use crate::plan::DocumentationModule;
 use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(test)]
+use std::path::PathBuf;
 
 /// Language indexing support tier exposed to research and architecture docs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -310,6 +311,7 @@ impl AgentMemoryIndex {
     /// True when this index was written by the current schema version
     /// (AC3). A caller that finds `false` should treat the memory as
     /// stale rather than trust its shape.
+    #[cfg(test)]
     pub(crate) fn is_current_schema(&self) -> bool {
         self.schema_version == AGENT_MEMORY_SCHEMA_VERSION
     }
@@ -449,7 +451,6 @@ fn artifacts_graph_modules_required() -> DataSourceSpec {
             DataSourceKey::Graph,
             DataSourceKey::Modules,
         ],
-        optional: &[],
     }
 }
 
@@ -485,11 +486,7 @@ impl KnowledgeAgent for SystemContextResearcher {
         artifacts_graph_modules_required()
     }
 
-    fn compute(
-        &self,
-        context: &AgentContext<'_>,
-        _resolution: &DataSourceResolution,
-    ) -> Self::Output {
+    fn compute(&self, context: &AgentContext<'_>) -> Self::Output {
         let artifacts = required_artifacts(context);
         let graph = required_graph(context);
         let modules = required_modules(context);
@@ -538,11 +535,7 @@ impl KnowledgeAgent for DomainModulesDetector {
         artifacts_graph_modules_required()
     }
 
-    fn compute(
-        &self,
-        context: &AgentContext<'_>,
-        _resolution: &DataSourceResolution,
-    ) -> Self::Output {
+    fn compute(&self, context: &AgentContext<'_>) -> Self::Output {
         let artifacts = required_artifacts(context);
         let graph = required_graph(context);
         let modules = required_modules(context);
@@ -612,11 +605,7 @@ impl KnowledgeAgent for ArchitectureResearcher {
         artifacts_graph_modules_required()
     }
 
-    fn compute(
-        &self,
-        context: &AgentContext<'_>,
-        _resolution: &DataSourceResolution,
-    ) -> Self::Output {
+    fn compute(&self, context: &AgentContext<'_>) -> Self::Output {
         let artifacts = required_artifacts(context);
         let graph = required_graph(context);
         let modules = required_modules(context);
@@ -671,11 +660,7 @@ impl KnowledgeAgent for WorkflowResearcher {
         artifacts_graph_modules_required()
     }
 
-    fn compute(
-        &self,
-        context: &AgentContext<'_>,
-        _resolution: &DataSourceResolution,
-    ) -> Self::Output {
+    fn compute(&self, context: &AgentContext<'_>) -> Self::Output {
         let graph = required_graph(context);
         Self::Output {
             workflows: workflows(graph),
@@ -699,11 +684,7 @@ impl KnowledgeAgent for BoundaryAnalyzer {
         artifacts_graph_modules_required()
     }
 
-    fn compute(
-        &self,
-        context: &AgentContext<'_>,
-        _resolution: &DataSourceResolution,
-    ) -> Self::Output {
+    fn compute(&self, context: &AgentContext<'_>) -> Self::Output {
         let graph = required_graph(context);
         Self::Output {
             boundaries: boundaries(graph),
@@ -727,11 +708,7 @@ impl KnowledgeAgent for KeyModulesInsight {
         artifacts_graph_modules_required()
     }
 
-    fn compute(
-        &self,
-        context: &AgentContext<'_>,
-        _resolution: &DataSourceResolution,
-    ) -> Self::Output {
+    fn compute(&self, context: &AgentContext<'_>) -> Self::Output {
         let artifacts = required_artifacts(context);
         let graph = required_graph(context);
         let modules = required_modules(context);
@@ -757,11 +734,7 @@ impl KnowledgeAgent for DatabaseOverviewAnalyzer {
         artifacts_graph_modules_required()
     }
 
-    fn compute(
-        &self,
-        context: &AgentContext<'_>,
-        _resolution: &DataSourceResolution,
-    ) -> Self::Output {
+    fn compute(&self, context: &AgentContext<'_>) -> Self::Output {
         let artifacts = required_artifacts(context);
         let database_facts = artifacts
             .iter()
@@ -797,15 +770,10 @@ impl KnowledgeAgent for CrossServiceResearcher {
     fn data_sources(&self) -> DataSourceSpec {
         DataSourceSpec {
             required: &[DataSourceKey::Graph],
-            optional: &[],
         }
     }
 
-    fn compute(
-        &self,
-        context: &AgentContext<'_>,
-        _resolution: &DataSourceResolution,
-    ) -> Self::Output {
+    fn compute(&self, context: &AgentContext<'_>) -> Self::Output {
         let graph = required_graph(context);
         let routes: Vec<String> = graph
             .nodes
@@ -857,11 +825,7 @@ impl KnowledgeAgent for DeploymentResearcher {
         artifacts_graph_modules_required()
     }
 
-    fn compute(
-        &self,
-        context: &AgentContext<'_>,
-        _resolution: &DataSourceResolution,
-    ) -> Self::Output {
+    fn compute(&self, context: &AgentContext<'_>) -> Self::Output {
         let artifacts = required_artifacts(context);
         let graph = required_graph(context);
         let mut deployment_facts: Vec<String> = artifacts
@@ -1227,6 +1191,7 @@ fn node_labels(graph: &Graph) -> BTreeMap<&str, String> {
 }
 
 /// Path to the combined agent-memory file under a repository root.
+#[cfg(test)]
 pub(crate) fn agent_memory_path(repo_root: &Path) -> PathBuf {
     repo_root.join(".lithograph/research/agent-memory.json")
 }

@@ -19,63 +19,37 @@ pub(crate) mod tsconfig;
 pub(crate) mod typescript;
 
 pub(crate) use cache::{ANALYSIS_CACHE_VERSION, AnalysisCache, AnalyzerKind, AnalyzerOutput};
-pub(crate) use dockerfile::{
-    DockerCommand, DockerCommandKind, DockerCopy, DockerEnv, DockerInstruction,
-    DockerInstructionKind, DockerPort, DockerSingleValue, DockerStage, DockerfileAnalysis,
-    DockerfileAnalyzer,
-};
-pub(crate) use environment::{EnvironmentFacts, UnresolvedEnvironmentFact};
+pub(crate) use dockerfile::{DockerCommandKind, DockerfileAnalysis, DockerfileAnalyzer};
+pub(crate) use environment::EnvironmentFacts;
 pub(crate) use external_symbols::{
     is_javascript_builtin, is_python_builtin, is_python_stdlib_module,
     normalize_python_package_name, rust_std_crate,
 };
-pub(crate) use generic_text::{
-    FindingConfidence, GenericTextExtractor, TextFinding, TextFindingKind,
-};
-pub(crate) use markdown::{
-    CodeFence, DriftKind, LinkKind, MarkdownAnalysis, MarkdownAnalyzer, MarkdownCommand,
-    MarkdownDrift, MarkdownHeading, MarkdownLink, MarkdownPathReference,
-};
-pub(crate) use packages::{
-    ComposerAnalyzer, CsprojAnalyzer, GoModAnalyzer, GradleAnalyzer, MavenPomAnalyzer,
-    NpmPackageAnalyzer, PackageDependency, PackageManifestAnalysis, PackageManifestFormat,
-};
+#[cfg(test)]
+pub(crate) use generic_text::FindingConfidence;
+pub(crate) use generic_text::{GenericTextExtractor, TextFinding, TextFindingKind};
+pub(crate) use markdown::{DriftKind, LinkKind, MarkdownAnalysis, MarkdownAnalyzer, MarkdownDrift};
+pub(crate) use packages::{PackageManifestAnalysis, PackageManifestFormat};
 pub(crate) use profiles::{
-    ActionsJob, ActionsProfile, ActionsProfileAnalyzer, ActionsStep, ActionsStepHint,
-    CargoDependency, CargoDependencyKind, CargoFeature, CargoPackage, CargoProfile,
-    CargoProfileAnalyzer, CargoTarget, CargoTargetKind, CargoWorkspaceMember, ComposePort,
-    ComposeProfile, ComposeProfileAnalyzer, ComposeService, EnvVarFact, PyProjectAnalyzer,
-    PyProjectProfile, PythonDependency, PythonProject, PythonRequirement, RequirementsAnalyzer,
-    RequirementsProfile,
+    ActionsProfile, ActionsProfileAnalyzer, ActionsStepHint, CargoProfile, CargoProfileAnalyzer,
+    ComposeProfile, ComposeProfileAnalyzer, PyProjectAnalyzer, PyProjectProfile,
+    RequirementsAnalyzer, RequirementsProfile,
 };
-pub(crate) use protocols::{GraphQlAnalyzer, ProtoAnalyzer, ProtocolFormat, ProtocolRoute};
+pub(crate) use protocols::{ProtocolFormat, ProtocolRoute};
 pub(crate) use python::{
-    PythonAnalysis, PythonAnalyzer, PythonBinding, PythonClass, PythonFunction, PythonImport,
-    PythonImportKind, PythonImportName, PythonMemberCall, PythonReference, PythonReferenceKind,
+    PythonAnalysis, PythonAnalyzer, PythonFunction, PythonImport, PythonImportKind,
+    PythonReference, PythonReferenceKind,
 };
-pub(crate) use rationale::{
-    Rationale, RationaleKind, classify as classify_rationale, is_generated_source,
-};
-pub(crate) use rust_metadata::{
-    RustDependency, RustDependencyKind, RustFeature, RustPackage, RustTarget,
-    RustWorkspaceAnalysis, RustWorkspaceAnalyzer,
-};
-pub(crate) use rust_source::{
-    RustAnalysis, RustAnalyzer, RustFunction, RustImpl, RustItem, RustMacroInvocation,
-    RustModDeclaration, RustReference, RustReferenceKind, RustTrait, RustUse,
-};
+pub(crate) use rationale::{RationaleKind, classify as classify_rationale, is_generated_source};
+pub(crate) use rust_metadata::{RustWorkspaceAnalysis, RustWorkspaceAnalyzer};
+pub(crate) use rust_source::{RustAnalysis, RustAnalyzer, RustReference, RustReferenceKind};
 pub(crate) use structured::{
-    ConfigEntity, ConfigReference, ConfigReferenceKind, StructuredAnalysis, StructuredAnalyzer,
-    StructuredFormat,
+    ConfigReferenceKind, StructuredAnalysis, StructuredAnalyzer, StructuredFormat,
 };
 pub(crate) use tree_sitter_adapter::{
-    SyntaxIndexedLanguage, TreeSitterAdapterOutput, TreeSitterComment, TreeSitterParseStatus,
-    TreeSitterParserAdapter, TreeSitterSyntaxError, TreeSitterSyntaxFact,
-    parse_with_optional_adapter,
+    SyntaxIndexedLanguage, TreeSitterAdapterOutput, TreeSitterComment,
 };
 pub(crate) use tsconfig::{TsConfigProfile, parse_tsconfig};
 pub(crate) use typescript::{
-    TypeScriptAnalysis, TypeScriptAnalyzer, TypeScriptBinding, TypeScriptCall, TypeScriptClass,
-    TypeScriptEnvRead, TypeScriptFunction, TypeScriptLanguage, TypeScriptMemberCall,
-    TypeScriptReExport, TypeScriptReExportKind,
+    TypeScriptAnalysis, TypeScriptAnalyzer, TypeScriptLanguage, TypeScriptReExportKind,
 };

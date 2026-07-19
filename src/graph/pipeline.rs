@@ -73,7 +73,9 @@ pub struct GraphDecisionTrace {
     pub reason: String,
 }
 
-/// Stable execution order for every graph build.
+/// Stable execution order for every graph build. Test-only: asserts the
+/// build trace covers every pass; production drives passes directly.
+#[cfg(test)]
 pub(crate) const GRAPH_BUILD_PASS_ORDER: &[GraphBuildPass] = &[
     GraphBuildPass::Structure,
     GraphBuildPass::DefinitionsAndImports,

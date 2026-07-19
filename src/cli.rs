@@ -664,6 +664,7 @@ impl Cli {
     ///
     /// Tests use this path to verify the CLI definition without spawning a
     /// process. User-facing process behavior is covered by integration tests.
+    #[cfg(test)]
     pub(crate) fn parse_from_args<I, T>(args: I) -> Self
     where
         I: IntoIterator<Item = T>,

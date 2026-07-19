@@ -92,12 +92,6 @@ impl TagIndex {
             .collect();
         values.into_iter().collect()
     }
-    pub(crate) fn namespace(&self, namespace: &str) -> Vec<&GraphTag> {
-        self.tags
-            .iter()
-            .filter(|tag| tag.namespace == namespace)
-            .collect()
-    }
     /// Returns all tags in stable id order.
     pub(crate) fn all(&self) -> &[GraphTag] {
         &self.tags
@@ -221,21 +215,6 @@ fn layer_value(layer: LayerKind) -> &'static str {
         LayerKind::Unknown => "unknown",
     }
 }
-/// Inherits a cluster or subsystem tag while retaining its exact provenance.
-pub(crate) fn inherit_tag(parent: &GraphTag, entity_id: impl Into<String>) -> GraphTag {
-    let mut tag = GraphTag::new(
-        entity_id,
-        parent.namespace.clone(),
-        parent.value.clone(),
-        parent.source,
-        parent.graph_snapshot_id.clone(),
-    );
-    tag.inherited_from = Some(parent.id.clone());
-    tag.confidence = parent.confidence;
-    tag.evidence = parent.evidence.clone();
-    tag
-}
-
 /// Builds display-only tags for a relation without adding them to the
 /// node-scope tag index.
 pub(crate) fn relation_display_tags(relation: &Relation, snapshot: &str) -> Vec<GraphTag> {
@@ -377,25 +356,6 @@ mod tests {
             GraphTag::new("symbol:a", "layer", "api", TagSource::Path, "g1").id
         );
         assert_eq!(index.query(&[("layer", "api")], &[]), vec!["symbol:a"]);
-        assert!(index.namespace("risk").len() == 1);
-    }
-    #[test]
-    fn inherited_tags_preserve_provenance_and_serialize() -> Result<(), Box<dyn std::error::Error>>
-    {
-        let parent = GraphTag::new(
-            "cluster:payments",
-            "owner",
-            "payments",
-            TagSource::User,
-            "g1",
-        );
-        let child = inherit_tag(&parent, "symbol:charge");
-        assert_eq!(child.inherited_from.as_deref(), Some(parent.id.as_str()));
-        assert_eq!(
-            serde_json::from_str::<GraphTag>(&serde_json::to_string(&child)?)?,
-            child
-        );
-        Ok(())
     }
     #[test]
     fn display_tags_keep_entity_provenance_and_real_snapshot()

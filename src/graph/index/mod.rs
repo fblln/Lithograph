@@ -11,21 +11,17 @@ mod schema;
 mod search;
 mod trace;
 
-pub(crate) use architecture::{
-    ALL_ARCHITECTURE_ASPECTS, ArchitectureAspect, ArchitectureClusterLink,
-    ArchitectureClusterLinkKind, ArchitectureClusterRelation, ArchitectureSummary, FileTreeNode,
-    LanguageSummary,
-};
+pub(crate) use architecture::{ArchitectureAspect, ArchitectureSummary};
 pub(crate) use clusters::ArchitectureCluster;
 pub(crate) use common::{node_file_path, node_label, node_name};
 pub(crate) use dependency_matrix::DependencyMatrix;
-pub(crate) use explain::{Neighbor, NodeExplanation};
-pub(crate) use package::PackageSummary;
-pub(crate) use schema::{GraphSchema, LabelCount, TypeCount};
-pub(crate) use search::{SearchParams, SearchResult};
-pub(crate) use trace::{
-    NodeHop, PathHop, PathResult, TraceDirection, TraceParams, TraceRelation, TraceResult,
-};
+pub(crate) use explain::NodeExplanation;
+pub(crate) use schema::GraphSchema;
+pub(crate) use search::SearchParams;
+pub(crate) use trace::{PathResult, TraceDirection, TraceParams, TraceResult};
+// Referenced only from another module's tests.
+#[cfg(test)]
+pub(crate) use architecture::ALL_ARCHITECTURE_ASPECTS;
 
 use crate::graph::{Graph, GraphNode, GraphNodeId};
 use common::node_search_text;

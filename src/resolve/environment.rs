@@ -13,9 +13,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
 
-/// Version of the normalized environment/configuration fact contract.
-pub(crate) const ENVIRONMENT_FACT_VERSION: u32 = 1;
-
 /// Error returned when an identifier contains no usable alphanumeric token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct NameNormalizationError;

@@ -42,6 +42,7 @@ impl SubsystemDocumentStore {
         Ok(true)
     }
     /// Loads a saved document only when it matches the requested graph snapshot.
+    #[cfg(test)]
     pub(crate) fn load_current(
         &self,
         subsystem: &str,

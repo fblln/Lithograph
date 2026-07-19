@@ -1,7 +1,7 @@
 //! Deterministic, offline graph report derivation and Markdown rendering.
 
 use crate::domain::Confidence;
-use crate::graph::analytics::{BetweennessPolicy, MetricScope, betweenness, degree_metrics};
+use crate::graph::analytics::{BetweennessPolicy, betweenness, degree_metrics};
 use crate::graph::index::node_name;
 use crate::graph::{Graph, GraphNode, GraphNodeId, KnowledgeIndex, RelationKind};
 use std::collections::{BTreeMap, BTreeSet};
@@ -132,7 +132,7 @@ impl GraphReport {
             low_confidence_relation_count,
         };
 
-        let mut degrees = degree_metrics(graph, &MetricScope::Combined);
+        let mut degrees = degree_metrics(graph);
         degrees.sort_by(|left, right| {
             (right.1 + right.2)
                 .cmp(&(left.1 + left.2))
@@ -185,8 +185,7 @@ impl GraphReport {
                 boundary_nodes.insert(relation.target.clone());
             }
         }
-        let mut bridge_scores =
-            betweenness(graph, &MetricScope::Combined, BetweennessPolicy::default());
+        let mut bridge_scores = betweenness(graph, BetweennessPolicy::default());
         bridge_scores.retain(|(id, score)| boundary_nodes.contains(id) && *score > 0.0);
         bridge_scores.sort_by(|left, right| {
             right
