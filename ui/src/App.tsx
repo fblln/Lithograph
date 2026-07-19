@@ -79,6 +79,8 @@ function ExplorerApp({ projects, projectId, onProjectChange }: { projects: Proje
   const [edgeView, setEdgeView] = useState<EdgeView>('nodes')
   const [edgeKinds, setEdgeKinds] = useState<Set<string>>(new Set())
   const [showUnprovenEdges, setShowUnprovenEdges] = useState(initialUrlState.showUnprovenEdges ?? true)
+  // LIT-84: off by default, so the honest Unresolved gaps stay visible until hidden.
+  const [hideUnresolved, setHideUnresolved] = useState(initialUrlState.hideUnresolved ?? false)
   const [zoom, setZoom] = useState(1)
   const [queryState, setQueryState] = useState<InvestigationQueryState>({ query: 'MATCH (a:Artifact)-[:Contains]->(b:Symbol) RETURN a, b', rows: [] })
   const [healthFindings, setHealthFindings] = useState<HealthFinding[]>([])
@@ -163,7 +165,7 @@ function ExplorerApp({ projects, projectId, onProjectChange }: { projects: Proje
     // the newest graph slice rather than briefly snapping back to old data.
     const controller = new AbortController()
     setStatus('loading')
-    getGraphLayout({ center_node: centerNode, node_labels: [...activeLabels], node_ids: effectiveScopeNodeIds, max_nodes: maxNodes, max_edges: maxEdges }, controller.signal)
+    getGraphLayout({ center_node: centerNode, node_labels: [...activeLabels], node_ids: effectiveScopeNodeIds, max_nodes: maxNodes, max_edges: maxEdges, hide_unresolved: hideUnresolved }, controller.signal)
       .then((result) => {
         if (controller.signal.aborted) return
         setLayout(result)
@@ -176,7 +178,7 @@ function ExplorerApp({ projects, projectId, onProjectChange }: { projects: Proje
         setError(cause instanceof RpcError ? cause.message : String(cause))
       })
     return () => controller.abort()
-  }, [centerNode, activeLabels, effectiveScopeNodeIds, maxEdges, maxNodes])
+  }, [centerNode, activeLabels, effectiveScopeNodeIds, maxEdges, maxNodes, hideUnresolved])
 
   useEffect(() => {
     if (!initialUrlState.tagExpression) return
@@ -189,9 +191,9 @@ function ExplorerApp({ projects, projectId, onProjectChange }: { projects: Proje
   // budget field), so it isn't worth spamming browser history on top of
   // that.
   useEffect(() => {
-    const query = serializeUrlState({ projectId, centerNode, viewMode, maxNodes, maxEdges, nodeLabels: [...activeLabels], selectedNode: selected?.id, tensionId: requestedTensionId, tagExpression, workspaceMode, docSectionId, showUnprovenEdges })
+    const query = serializeUrlState({ projectId, centerNode, viewMode, maxNodes, maxEdges, nodeLabels: [...activeLabels], selectedNode: selected?.id, tensionId: requestedTensionId, tagExpression, workspaceMode, docSectionId, showUnprovenEdges, hideUnresolved })
     window.history.replaceState(null, '', `${window.location.pathname}${query}`)
-  }, [projectId, centerNode, viewMode, maxEdges, maxNodes, activeLabels, selected, requestedTensionId, tagExpression, workspaceMode, docSectionId, showUnprovenEdges])
+  }, [projectId, centerNode, viewMode, maxEdges, maxNodes, activeLabels, selected, requestedTensionId, tagExpression, workspaceMode, docSectionId, showUnprovenEdges, hideUnresolved])
 
   useEffect(() => {
     if (!layout || !pendingSelectedId) return
@@ -451,7 +453,7 @@ function ExplorerApp({ projects, projectId, onProjectChange }: { projects: Proje
           /> : undefined}
     >
           <div data-testid="view-mode-control" className="contents top-3">
-            <GraphToolbar viewMode={viewMode} overlayMode={overlayMode} edgeView={edgeView} zoom={zoom} layoutCustomized={layout?.nodes.some((node) => dragPositions.hasOverride(node.id)) ?? false} truncated={Boolean(layout?.budget.nodes_truncated || layout?.budget.edges_truncated)} edgeCountsTruncated={layout?.budget.edges_truncated ?? false} omittedNodes={layout ? Math.max(0, layout.budget.nodes_available - layout.budget.nodes_returned) : 0} omittedEdges={layout ? Math.max(0, layout.budget.edges_available - layout.budget.edges_returned) : 0} availableEdgeKinds={availableEdgeKinds} edgeKindCounts={sliceFacetCounts.edgeKinds} activeEdgeKinds={edgeKinds} showUnprovenEdges={showUnprovenEdges} onViewMode={setViewMode} onOverlayMode={setOverlayMode} onEdgeView={setEdgeView} onToggleEdgeKind={toggleEdgeKind} onShowUnprovenEdges={setShowUnprovenEdges} onResetLayout={dragPositions.clearAll} onZoom={setZoom} onRaiseBudget={() => { if (!layout) return; setMaxNodes(Math.min(layout.budget.nodes_available, Math.max(layout.budget.nodes_returned * 2, 300))); setMaxEdges(Math.min(layout.budget.edges_available, Math.max(layout.budget.edges_returned * 2, 800))) }} />
+            <GraphToolbar viewMode={viewMode} overlayMode={overlayMode} edgeView={edgeView} zoom={zoom} layoutCustomized={layout?.nodes.some((node) => dragPositions.hasOverride(node.id)) ?? false} truncated={Boolean(layout?.budget.nodes_truncated || layout?.budget.edges_truncated)} edgeCountsTruncated={layout?.budget.edges_truncated ?? false} omittedNodes={layout ? Math.max(0, layout.budget.nodes_available - layout.budget.nodes_returned) : 0} omittedEdges={layout ? Math.max(0, layout.budget.edges_available - layout.budget.edges_returned) : 0} availableEdgeKinds={availableEdgeKinds} edgeKindCounts={sliceFacetCounts.edgeKinds} activeEdgeKinds={edgeKinds} showUnprovenEdges={showUnprovenEdges} hideUnresolved={hideUnresolved} onViewMode={setViewMode} onOverlayMode={setOverlayMode} onEdgeView={setEdgeView} onToggleEdgeKind={toggleEdgeKind} onShowUnprovenEdges={setShowUnprovenEdges} onHideUnresolved={setHideUnresolved} onResetLayout={dragPositions.clearAll} onZoom={setZoom} onRaiseBudget={() => { if (!layout) return; setMaxNodes(Math.min(layout.budget.nodes_available, Math.max(layout.budget.nodes_returned * 2, 300))); setMaxEdges(Math.min(layout.budget.edges_available, Math.max(layout.budget.edges_returned * 2, 800))) }} />
           </div>
           {status === 'error' && (
             <div data-testid="graph-error" className="absolute inset-x-0 top-14 mx-auto w-fit"><StatusBanner>{error}</StatusBanner></div>

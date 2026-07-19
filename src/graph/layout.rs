@@ -74,6 +74,12 @@ pub struct LayoutRequest {
     /// returned. Empty means no filter.
     #[serde(default)]
     pub edge_types: BTreeSet<RelationKind>,
+    /// LIT-84: when true, `Unresolved` nodes -- references the resolvers could
+    /// not tie to a definition -- are excluded from the layout, and with them
+    /// every edge that pointed at one. Defaults to false, so the honest gaps
+    /// stay visible unless a viewer opts to hide them.
+    #[serde(default)]
+    pub hide_unresolved: bool,
 }
 
 /// One positioned node in a layout result.
@@ -319,6 +325,18 @@ pub fn compute_layout(graph: &Graph, request: &LayoutRequest) -> Result<LayoutRe
     let mut candidates: Vec<&GraphNodeId> = hops
         .keys()
         .filter(|id| {
+            // LIT-84: an opt-in view that drops `Unresolved` nodes; every edge
+            // to one drops with it, since only selected nodes keep their edges
+            // below. The center node is never dropped -- a viewer who focused
+            // one still sees it -- matching how the label filter treats it.
+            if request.hide_unresolved
+                && origin.as_ref() != Some(*id)
+                && node_by_id
+                    .get(*id)
+                    .is_some_and(|node| matches!(node, GraphNode::Unresolved(_)))
+            {
+                return false;
+            }
             origin.as_ref() == Some(*id)
                 || (id_filter.is_none_or(|ids| ids.contains(*id))
                     && label_filter.as_ref().is_none_or(|labels| {
@@ -969,6 +987,66 @@ mod tests {
                 &snapshot.request
             )?,
             Some(snapshot)
+        );
+        Ok(())
+    }
+
+    /// LIT-84: `hide_unresolved` drops `Unresolved` nodes and every edge to
+    /// them from the overview, while leaving the resolved graph intact. Default
+    /// (false) keeps them, so the honest gap stays visible.
+    #[test]
+    fn hide_unresolved_excludes_unresolved_nodes_and_their_edges()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let graph = Graph {
+            nodes: vec![
+                artifact("a", "a.py")?,
+                symbol("b", "B", "b.py")?,
+                GraphNode::Unresolved(crate::graph::UnresolvedNode {
+                    id: GraphNodeId::new("unresolved:missing"),
+                    value: "missing".to_owned(),
+                }),
+            ],
+            relations: vec![
+                edge("ab", "a", "b", RelationKind::Contains),
+                edge("a-missing", "a", "unresolved:missing", RelationKind::Calls),
+            ],
+        };
+        let ids = |request: &LayoutRequest| -> Result<BTreeSet<String>, String> {
+            Ok(compute_layout(&graph, request)?
+                .nodes
+                .iter()
+                .map(|node| node.id.as_str().to_owned())
+                .collect())
+        };
+
+        // Default: the unresolved node is present.
+        assert!(ids(&LayoutRequest::default())?.contains("unresolved:missing"));
+
+        // Hidden: the unresolved node and its edge are gone; the rest stays.
+        let hidden = compute_layout(
+            &graph,
+            &LayoutRequest {
+                hide_unresolved: true,
+                ..Default::default()
+            },
+        )?;
+        let hidden_ids: BTreeSet<String> = hidden
+            .nodes
+            .iter()
+            .map(|n| n.id.as_str().to_owned())
+            .collect();
+        assert!(!hidden_ids.contains("unresolved:missing"));
+        assert!(hidden_ids.contains("a") && hidden_ids.contains("b"));
+        assert!(
+            !hidden
+                .edges
+                .iter()
+                .any(|edge| edge.target.as_str() == "unresolved:missing"),
+            "no edge to a hidden unresolved node may survive"
+        );
+        assert!(
+            hidden.edges.iter().any(|edge| edge.target.as_str() == "b"),
+            "the resolved edge must remain"
         );
         Ok(())
     }

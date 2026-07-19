@@ -221,11 +221,18 @@ where
         ..WalkOptions::default()
     };
     let artifacts = RepositoryWalker::new(walk_options).walk(&args.path)?;
-    let graph = GraphBuilder.build(&args.path, &artifacts);
-    let issues = GraphValidator.validate(&graph, &artifacts);
+    let built = GraphBuilder.build(&args.path, &artifacts);
+    // Validate the full graph before hiding anything, so a filtered view can
+    // never mask a structural defect the stored graph actually has.
+    let issues = GraphValidator.validate(&built, &artifacts);
     if !issues.is_empty() {
         return Err(render_graph_diagnostics(&issues).into());
     }
+    let graph = if args.hide_unresolved {
+        built.without_unresolved()
+    } else {
+        built
+    };
 
     let output = match args.format {
         OutputFormat::Table => render_graph_table(&graph),

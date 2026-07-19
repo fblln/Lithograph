@@ -330,6 +330,10 @@ pub struct GraphReportArgs {
     /// Repository path with a generated Lithograph graph store.
     #[arg(default_value = ".")]
     pub path: PathBuf,
+    /// Exclude `Unresolved` reference nodes (and their edges) from the report,
+    /// including the unresolved-gaps section. Off by default.
+    #[arg(long)]
+    pub hide_unresolved: bool,
 }
 
 /// Arguments for `path`.
@@ -597,6 +601,10 @@ pub struct InspectGraphArgs {
     /// Output format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
     pub format: OutputFormat,
+    /// Exclude `Unresolved` reference nodes (and their edges) from the output.
+    /// Off by default.
+    #[arg(long)]
+    pub hide_unresolved: bool,
 }
 
 /// Arguments for `inspect env`.
@@ -732,6 +740,28 @@ mod tests {
                 target: InspectTarget::Graph(InspectGraphArgs {
                     path: PathBuf::from("fixtures/polyglot"),
                     format: OutputFormat::Table,
+                    hide_unresolved: false,
+                }),
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_inspect_graph_hide_unresolved_flag() {
+        let cli = Cli::parse_from_args([
+            "lithograph",
+            "inspect",
+            "graph",
+            "fixtures/polyglot",
+            "--hide-unresolved",
+        ]);
+        assert_eq!(
+            cli.command,
+            Some(Command::Inspect(InspectCommand {
+                target: InspectTarget::Graph(InspectGraphArgs {
+                    path: PathBuf::from("fixtures/polyglot"),
+                    format: OutputFormat::Table,
+                    hide_unresolved: true,
                 }),
             }))
         );
@@ -990,6 +1020,7 @@ mod tests {
             Some(Command::Graph(GraphCommand {
                 target: GraphTarget::Report(GraphReportArgs {
                     path: PathBuf::from("fixtures/polyglot"),
+                    hide_unresolved: false,
                 }),
             }))
         );

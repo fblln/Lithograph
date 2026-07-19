@@ -285,6 +285,26 @@ describe('App', () => {
     expect(window.location.search).toContain('labels=Symbol')
   })
 
+  it('re-fetches with hide_unresolved and persists it to the URL when the toggle is checked', async () => {
+    mockRpcResponse(FIXTURE_LAYOUT)
+    const user = userEvent.setup()
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByText('Ready')).toBeInTheDocument())
+    // Default: the layout request does not hide unresolved nodes.
+    const firstLayoutCall = vi.mocked(fetch).mock.calls.find(([, init]) => JSON.parse((init as RequestInit).body as string).params.name === 'get_graph_layout')
+    expect(JSON.parse((firstLayoutCall![1] as RequestInit).body as string).params.arguments.hide_unresolved).toBe(false)
+
+    vi.mocked(fetch).mockClear()
+    mockRpcResponse(FIXTURE_LAYOUT)
+    await user.click(screen.getByLabelText('Hide unresolved nodes'))
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    const [, init] = vi.mocked(fetch).mock.calls[0]
+    expect(JSON.parse((init as RequestInit).body as string).params.arguments.hide_unresolved).toBe(true)
+    expect(window.location.search).toContain('unresolved=hide')
+  })
+
   it('selecting a node shows its details in the detail panel', async () => {
     mockRpcResponse(FIXTURE_LAYOUT)
     const user = userEvent.setup()

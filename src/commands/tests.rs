@@ -340,6 +340,7 @@ fn execute_graph_export_and_import_round_trips_artifact() -> Result<(), Box<dyn 
             command: Some(Command::Graph(GraphCommand {
                 target: GraphTarget::Report(GraphReportArgs {
                     path: source.path().to_path_buf(),
+                    hide_unresolved: false,
                 }),
             })),
         },
@@ -820,6 +821,7 @@ fn drift_and_inspect_commands_never_rescan_lithographs_own_output()
                 target: InspectTarget::Graph(InspectGraphArgs {
                     path: temp.path().to_path_buf(),
                     format: OutputFormat::Json,
+                    hide_unresolved: false,
                 }),
             })),
         },
@@ -1050,6 +1052,7 @@ fn execute_inspect_graph_writes_json() -> Result<(), Box<dyn std::error::Error>>
             target: InspectTarget::Graph(InspectGraphArgs {
                 path: root,
                 format: OutputFormat::Json,
+                hide_unresolved: false,
             }),
         })),
     };
@@ -1072,6 +1075,7 @@ fn execute_inspect_graph_table_lists_node_counts() -> Result<(), Box<dyn std::er
             target: InspectTarget::Graph(InspectGraphArgs {
                 path: root,
                 format: OutputFormat::Table,
+                hide_unresolved: false,
             }),
         })),
     };

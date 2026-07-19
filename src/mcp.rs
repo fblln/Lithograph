@@ -119,7 +119,7 @@ pub const MCP_TOOLS: &[McpToolInfo] = &[
     },
     McpToolInfo {
         name: "get_graph_layout",
-        description: "Returns a budgeted, positioned graph slice: overview (no center_node) or a focused neighborhood. Params: center_node?, radius?, max_nodes?, max_edges?, node_labels?, node_ids?, edge_types?.",
+        description: "Returns a budgeted, positioned graph slice: overview (no center_node) or a focused neighborhood. Params: center_node?, radius?, max_nodes?, max_edges?, node_labels?, node_ids?, edge_types?, hide_unresolved? (bool, default false: exclude Unresolved nodes and their edges).",
     },
     McpToolInfo {
         name: "get_graph_analytics",
@@ -1425,6 +1425,12 @@ fn layout_params(params: &Value) -> Result<LayoutRequest, Box<dyn std::error::Er
             })
             .collect::<Result<BTreeSet<RelationKind>, Box<dyn std::error::Error>>>()?,
     };
+    let hide_unresolved = match params.get("hide_unresolved") {
+        None | Some(Value::Null) => false,
+        Some(value) => value
+            .as_bool()
+            .ok_or("params.hide_unresolved must be a boolean")?,
+    };
     Ok(LayoutRequest {
         center_node,
         radius,
@@ -1433,6 +1439,7 @@ fn layout_params(params: &Value) -> Result<LayoutRequest, Box<dyn std::error::Er
         node_labels,
         node_ids,
         edge_types,
+        hide_unresolved,
     })
 }
 
@@ -1648,6 +1655,15 @@ mod tests {
             params: json!({}),
         });
         assert_eq!(read.result, reflected.result);
+        Ok(())
+    }
+
+    #[test]
+    fn layout_params_parses_hide_unresolved_flag() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(!super::layout_params(&json!({}))?.hide_unresolved);
+        assert!(!super::layout_params(&json!({ "hide_unresolved": false }))?.hide_unresolved);
+        assert!(super::layout_params(&json!({ "hide_unresolved": true }))?.hide_unresolved);
+        assert!(super::layout_params(&json!({ "hide_unresolved": "yes" })).is_err());
         Ok(())
     }
 

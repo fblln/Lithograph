@@ -3,6 +3,7 @@
 use crate::analysis::RationaleKind;
 use crate::domain::{ArtifactCategory, Confidence, EvidenceRef};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
 
 /// Stable, kind-prefixed graph node identifier (e.g. `artifact:src/lib.rs`,
@@ -441,12 +442,95 @@ impl Graph {
         json.push('\n');
         Ok(json)
     }
+
+    /// LIT-84: a copy of this graph with every `Unresolved` node removed, along
+    /// with every relation incident to one. Node and relation order is
+    /// otherwise preserved, so the result stays deterministic. Used by the
+    /// opt-in hide-unresolved view in reports and CLI output; the persisted
+    /// graph is never mutated, so the honest gaps remain in the stored data.
+    #[must_use]
+    pub fn without_unresolved(&self) -> Graph {
+        let unresolved: BTreeSet<&GraphNodeId> = self
+            .nodes
+            .iter()
+            .filter_map(|node| match node {
+                GraphNode::Unresolved(node) => Some(&node.id),
+                _ => None,
+            })
+            .collect();
+        Graph {
+            nodes: self
+                .nodes
+                .iter()
+                .filter(|node| !matches!(node, GraphNode::Unresolved(_)))
+                .cloned()
+                .collect(),
+            relations: self
+                .relations
+                .iter()
+                .filter(|relation| {
+                    !unresolved.contains(&relation.source) && !unresolved.contains(&relation.target)
+                })
+                .cloned()
+                .collect(),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{CommandNode, CommandProvenance, GraphNodeId};
-    use crate::domain::{ArtifactId, EvidenceRef, RepoPath};
+    use super::{
+        ArtifactNode, CommandNode, CommandProvenance, Graph, GraphNode, GraphNodeId, Relation,
+        RelationKind, UnresolvedNode,
+    };
+    use crate::domain::{ArtifactCategory, ArtifactId, Confidence, EvidenceRef, RepoPath};
+
+    /// LIT-84: `without_unresolved` drops `Unresolved` nodes and every relation
+    /// incident to one, keeping the rest of the graph byte-for-byte, and never
+    /// mutates the original.
+    #[test]
+    fn without_unresolved_drops_unresolved_nodes_and_incident_edges()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let path = RepoPath::new("a.py")?;
+        let evidence = EvidenceRef::file(ArtifactId::from_path(&path), path);
+        let relation = |id: &str, source: &str, target: &str| Relation {
+            id: id.to_owned(),
+            source: GraphNodeId::new(source),
+            target: GraphNodeId::new(target),
+            kind: RelationKind::Calls,
+            confidence: Confidence::Low,
+            evidence: vec![],
+            provenance: None,
+        };
+        let graph = Graph {
+            nodes: vec![
+                GraphNode::Artifact(ArtifactNode {
+                    id: GraphNodeId::new("artifact:a.py"),
+                    path: "a.py".to_owned(),
+                    category: ArtifactCategory::SourceCode,
+                    evidence: evidence.clone(),
+                }),
+                GraphNode::Unresolved(UnresolvedNode {
+                    id: GraphNodeId::new("unresolved:x"),
+                    value: "x".to_owned(),
+                }),
+            ],
+            relations: vec![
+                relation("keep", "artifact:a.py", "artifact:a.py"),
+                relation("drop", "artifact:a.py", "unresolved:x"),
+            ],
+        };
+
+        let filtered = graph.without_unresolved();
+        assert_eq!(filtered.nodes.len(), 1);
+        assert!(matches!(&filtered.nodes[0], GraphNode::Artifact(_)));
+        assert_eq!(filtered.relations.len(), 1);
+        assert_eq!(filtered.relations[0].id, "keep");
+        // The original graph is untouched.
+        assert_eq!(graph.nodes.len(), 2);
+        assert_eq!(graph.relations.len(), 2);
+        Ok(())
+    }
 
     #[test]
     fn command_provenance_is_backward_compatible_and_documentation_is_explicit()
