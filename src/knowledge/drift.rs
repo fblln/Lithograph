@@ -7,7 +7,7 @@
 //! resolved into a matching graph fact.
 
 use crate::analysis::{DriftKind as MarkdownDriftKind, MarkdownAnalyzer, MarkdownDrift};
-use crate::documentation_claims::{
+use crate::docs::documentation_claims::{
     DocumentSectionClaims, extract_section_claims, is_human_authored_markdown,
 };
 use crate::domain::{Artifact, EvidenceRef, SourceSpan};

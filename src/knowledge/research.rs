@@ -1,13 +1,13 @@
 //! Agent-style repository research artifacts used as the intermediate
 //! memory layer between graph indexing and documentation composition.
 
-use crate::architecture::{ArchitectureLayer, LayerDetector};
+use crate::agent::knowledge_agent::{
+    AgentContext, DataSourceKey, DataSourceSpec, DataSourceValue, KnowledgeAgent,
+};
+use crate::docs::architecture::{ArchitectureLayer, LayerDetector};
 use crate::domain::{Artifact, ArtifactCategory, SupportTier};
 use crate::graph::{ConfigNodeKind, Graph, GraphNode, RelationKind};
 use crate::inventory::language::{RegistryIndexTier, by_name as registry_language};
-use crate::knowledge_agent::{
-    AgentContext, DataSourceKey, DataSourceSpec, DataSourceValue, KnowledgeAgent,
-};
 use crate::plan::DocumentationModule;
 use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};

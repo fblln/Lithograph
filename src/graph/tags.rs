@@ -1,5 +1,5 @@
 //! Typed deterministic tags and taxonomy queries over graph entities.
-use crate::architecture::{LayerDetector, LayerKind};
+use crate::docs::architecture::{LayerDetector, LayerKind};
 use crate::domain::Confidence;
 use crate::graph::{ArchitectureCluster, Graph, GraphNode, Relation, RepositoryTension};
 use serde::{Deserialize, Serialize};

@@ -4,8 +4,8 @@
 //! structural importance (LIT-22.4.4).
 
 use crate::domain::EvidenceRef;
-use crate::fts::tokenize;
 use crate::graph::{Graph, GraphNode, GraphNodeId, RelationKind};
+use crate::retrieval::fts::tokenize;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};

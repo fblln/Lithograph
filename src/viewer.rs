@@ -1,7 +1,7 @@
 //! Static generated-wiki viewer output.
 
-use crate::architecture::LayerKind;
-use crate::ask::{WikiPage, WikiSearch};
+use crate::agent::ask::{WikiPage, WikiSearch};
+use crate::docs::architecture::LayerKind;
 use crate::graph::{ArchitectureSummary, GraphSchema, GraphStore, KnowledgeIndex};
 use serde_json::json;
 use std::collections::BTreeMap;

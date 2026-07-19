@@ -1,6 +1,6 @@
 //! Deterministic quality inspection for generated Lithograph docs.
 
-use crate::ask::WikiSearch;
+use crate::agent::ask::WikiSearch;
 use crate::manifest::PageManifest;
 use crate::run::RepositorySnapshot;
 use crate::storage::JsonStore;

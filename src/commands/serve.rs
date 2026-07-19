@@ -1,8 +1,8 @@
 //! `mcp-server`, `viewer`, and `serve`: expose generated Lithograph
 //! knowledge over stdio MCP, a static viewer, and the local graph explorer.
 
+use crate::agent::mcp::WikiMcpServer;
 use crate::cli::{McpServerArgs, ServeArgs, ViewerArgs};
-use crate::mcp::WikiMcpServer;
 use crate::viewer::{generate as generate_viewer, render_report as render_viewer_report};
 use std::io::Write;
 

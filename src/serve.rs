@@ -5,7 +5,7 @@
 //! `tools/call` envelope the vendored graph explorer frontend expects
 //! (`{jsonrpc, id, method: "tools/call", params: {name, arguments}}`,
 //! response unwrapped from `result.content[].text`), translating to and
-//! from the existing [`crate::mcp::WikiMcpServer`] request/response shapes
+//! from the existing [`crate::agent::mcp::WikiMcpServer`] request/response shapes
 //! so no other graph code needs to change. Every other path falls back to
 //! serving static files from a configured assets directory.
 //!
@@ -18,7 +18,7 @@
 //! request to a fixed time budget so a stuck handler cannot hang the
 //! server indefinitely.
 
-use crate::mcp::{McpRequest, WikiMcpServer};
+use crate::agent::mcp::{McpRequest, WikiMcpServer};
 use axum::Router;
 use axum::error_handling::HandleErrorLayer;
 use axum::extract::rejection::JsonRejection;
@@ -373,7 +373,7 @@ fn json_rpc_error(id: Value, code: i32, message: String) -> Response {
 }
 
 /// Translates one JSON-RPC `tools/call` request into a
-/// [`crate::mcp::WikiMcpServer`] tool call and back. The actual tool
+/// [`crate::agent::mcp::WikiMcpServer`] tool call and back. The actual tool
 /// handler is synchronous, in-memory graph computation (already
 /// node/edge-budgeted by the tools themselves, e.g. `get_graph_layout` --
 /// see LIT-24.16), so it runs on a blocking-pool thread rather than the

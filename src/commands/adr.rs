@@ -1,11 +1,11 @@
 //! `adr`: create, read, update, delete, and list architecture decision
 //! records.
 
-use crate::adr::{AdrRecord, AdrStore, AdrSummary};
 use crate::cli::{
     AdrCommand, AdrCreateArgs, AdrDeleteArgs, AdrGetArgs, AdrListArgs, AdrTarget, AdrUpdateArgs,
     OutputFormat,
 };
+use crate::docs::adr::{AdrRecord, AdrStore, AdrSummary};
 use std::io::Write;
 
 pub(crate) fn execute_adr<W>(

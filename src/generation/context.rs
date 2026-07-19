@@ -1,15 +1,15 @@
 //! Bounded, evidence-backed model context and prompt construction for
 //! module and repository-wide wiki pages.
 
-use crate::adr::AdrSummary;
+use crate::docs::adr::AdrSummary;
 use crate::domain::{Artifact, ModelExposurePolicy, TextStatus};
-use crate::drift::DriftReport;
 use crate::generation::llm::ModelRequest;
 use crate::graph::{Graph, GraphNode, GraphNodeId};
 use crate::inventory::SafetyPolicy;
+use crate::knowledge::drift::DriftReport;
+use crate::knowledge::research::ResearchBrief;
 use crate::manifest::TaskKind;
 use crate::plan::DocumentationModule;
-use crate::research::ResearchBrief;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -528,7 +528,7 @@ fn append_adr_and_drift_sections(
 /// architecture docs/ADRs used to validate implementation intent (AC3).
 fn append_c4_architecture_sections(
     sections: &mut Vec<String>,
-    memory: &crate::research::AgentMemory,
+    memory: &crate::knowledge::research::AgentMemory,
     architecture_context: Option<&ArchitectureViewContext>,
 ) {
     let language_lines: Vec<String> = memory
@@ -1553,9 +1553,9 @@ mod tests {
     #[test]
     fn architecture_context_is_c4_oriented_with_validated_mermaid_and_adr_drift_evidence()
     -> Result<(), Box<dyn std::error::Error>> {
-        use crate::adr::{AdrStatus, AdrStore};
-        use crate::drift::{DriftDetector, DriftFinding, DriftKind, DriftReport};
-        use crate::research::ResearchBuilder;
+        use crate::docs::adr::{AdrStatus, AdrStore};
+        use crate::knowledge::drift::{DriftDetector, DriftFinding, DriftKind, DriftReport};
+        use crate::knowledge::research::ResearchBuilder;
 
         let root = fixture_root();
         let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
@@ -1638,7 +1638,7 @@ mod tests {
             diagram_dir.path().join("architecture.md"),
             format!("# Architecture\n\n```mermaid{diagram}```\n"),
         )?;
-        let report = crate::mermaid::validate(diagram_dir.path(), None)?;
+        let report = crate::docs::mermaid::validate(diagram_dir.path(), None)?;
         assert!(
             report.is_clean(),
             "seed diagram failed Mermaid validation: {:?}",
@@ -1656,9 +1656,9 @@ mod tests {
     #[test]
     fn database_key_modules_and_adr_drift_contexts_are_evidence_grounded()
     -> Result<(), Box<dyn std::error::Error>> {
-        use crate::adr::{AdrStatus, AdrStore};
-        use crate::drift::DriftReport;
-        use crate::research::ResearchBuilder;
+        use crate::docs::adr::{AdrStatus, AdrStore};
+        use crate::knowledge::drift::DriftReport;
+        use crate::knowledge::research::ResearchBuilder;
 
         let root = fixture_root();
         let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;

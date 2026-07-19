@@ -2,11 +2,11 @@
 //! knowledge into external agent tooling (`AGENTS.md`/`CLAUDE.md`, and
 //! per-agent MCP server configuration).
 
-use crate::agents::{AgentFileOutcome, IntegrateAgentsReport, integrate_agents};
-use crate::cli::{IntegrateAgentsArgs, IntegrateMcpArgs, OutputFormat};
-use crate::mcp_targets::{
+use crate::agent::agents::{AgentFileOutcome, IntegrateAgentsReport, integrate_agents};
+use crate::agent::mcp_targets::{
     AgentTarget, IntegrationOutcome, TargetDetection, apply, detect, preview,
 };
+use crate::cli::{IntegrateAgentsArgs, IntegrateMcpArgs, OutputFormat};
 use std::io::Write;
 
 pub(crate) fn execute_integrate_agents<W>(

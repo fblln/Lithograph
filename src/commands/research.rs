@@ -1,6 +1,8 @@
 use crate::cli::{ResearchCommand, ResearchTarget};
 use crate::graph::GraphStore;
-use crate::research_feedback::{AnswerResultInput, ResearchFeedbackStore, unix_timestamp_now};
+use crate::knowledge::research_feedback::{
+    AnswerResultInput, ResearchFeedbackStore, unix_timestamp_now,
+};
 use std::io::Write;
 
 pub(super) fn execute_research<W>(

@@ -134,7 +134,7 @@ pub(crate) enum ResearchOutcomeArg {
     Corrected,
 }
 
-impl From<ResearchOutcomeArg> for crate::research_feedback::AnswerOutcome {
+impl From<ResearchOutcomeArg> for crate::knowledge::research_feedback::AnswerOutcome {
     fn from(value: ResearchOutcomeArg) -> Self {
         match value {
             ResearchOutcomeArg::Useful => Self::Useful,
@@ -280,7 +280,7 @@ pub(crate) struct AdrListArgs {
     pub format: OutputFormat,
 }
 
-/// CLI-facing mirror of [`crate::adr::AdrStatus`] (clap's `ValueEnum` derive
+/// CLI-facing mirror of [`crate::docs::adr::AdrStatus`] (clap's `ValueEnum` derive
 /// needs a local type in most configurations here).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum AdrStatusArg {
@@ -294,7 +294,7 @@ pub enum AdrStatusArg {
     Superseded,
 }
 
-impl From<AdrStatusArg> for crate::adr::AdrStatus {
+impl From<AdrStatusArg> for crate::docs::adr::AdrStatus {
     fn from(value: AdrStatusArg) -> Self {
         match value {
             AdrStatusArg::Proposed => Self::Proposed,

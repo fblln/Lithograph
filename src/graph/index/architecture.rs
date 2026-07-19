@@ -103,7 +103,7 @@ pub(crate) struct ArchitectureSummary {
     /// `Route` or `Service`.
     pub service_links: Vec<SearchResult>,
     /// Per-artifact architecture layer classification (LIT-22.5.2 AC2).
-    pub layers: Vec<crate::architecture::ArchitectureLayer>,
+    pub layers: Vec<crate::docs::architecture::ArchitectureLayer>,
     /// Functional architecture communities (LIT-22.5.1).
     pub clusters: Vec<ArchitectureCluster>,
     /// Directed whole-graph relationships between functional communities.
@@ -277,7 +277,7 @@ impl<'a> KnowledgeIndex<'a> {
             architecture_docs,
             service_links,
             layers: if wants(ArchitectureAspect::Layers) {
-                crate::architecture::LayerDetector.detect(self.graph)
+                crate::docs::architecture::LayerDetector.detect(self.graph)
             } else {
                 Vec::new()
             },

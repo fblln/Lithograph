@@ -120,7 +120,7 @@ impl WikiSearch {
             .collect();
         let answer = question.map(|question| answer_from_pages(question, &contents));
         Ok(McpExport {
-            tools: crate::mcp::MCP_TOOLS
+            tools: crate::agent::mcp::MCP_TOOLS
                 .iter()
                 .map(|tool| tool.name.to_owned())
                 .collect(),

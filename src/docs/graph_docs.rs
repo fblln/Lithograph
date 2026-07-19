@@ -1,6 +1,6 @@
 //! Deterministic architecture and operations Markdown derived from graph facts.
 
-use crate::docs_model::{DocumentSectionKind, GraphDocument};
+use crate::docs::docs_model::{DocumentSectionKind, GraphDocument};
 use crate::graph::{Graph, RepositoryTension};
 
 /// Generates an evidence-linked architecture/operations document with safe no-data fallbacks.
