@@ -607,6 +607,12 @@
       "text": "web/src/App.tsx::App "
     },
     {
+      "id": "symbol:web/src/App.tsx#web/src/App.tsx::route",
+      "kind": "Symbol",
+      "reference": "web/src/App.tsx::route",
+      "text": "web/src/App.tsx::route "
+    },
+    {
       "id": "symbol:web/src/App.tsx::RouteSummary",
       "kind": "Symbol",
       "reference": "web/src/App.tsx::RouteSummary",

@@ -1,6 +1,6 @@
 {
   "system_context": [
-    "Repository contains 22 artifact(s), 133 graph node(s), 159 graph relation(s), and 11 documentation module(s).",
+    "Repository contains 22 artifact(s), 133 graph node(s), 160 graph relation(s), and 11 documentation module(s).",
     "Configuration (Configuration) owns 46 graph member(s)",
     "assets (Directory) owns 1 graph member(s)",
     "data (Directory) owns 1 graph member(s)",
@@ -83,7 +83,6 @@
     "unresolved reference: import React from \"react\";",
     "unresolved reference: main",
     "unresolved reference: p",
-    "unresolved reference: route",
     "unresolved reference: str",
     "Dockerfile crosses boundary via ReadsEnv to RIDGELINE_WORKER",
     "Makefile crosses boundary via References to rust/Cargo.toml",
@@ -93,7 +92,8 @@
     "README.md crosses boundary via References to Makefile",
     "README.md crosses boundary via References to README.md",
     "README.md crosses boundary via References to assets/logo.svg",
-    "README.md crosses boundary via References to config/schema.json"
+    "README.md crosses boundary via References to config/schema.json",
+    "README.md crosses boundary via References to config/settings.yaml"
   ],
   "configuration": [
     "ContainerDefinition: Dockerfile",
@@ -150,7 +150,7 @@
   "key_modules": [
     "Configuration (Configuration) score 99",
     "python_app (PythonPackage) score 59",
-    "web (Directory) score 40",
+    "web (Directory) score 41",
     "Documentation (Documentation) score 37",
     "fixture-worker (RustCrate) score 37",
     "Infrastructure (Infrastructure) score 31",
@@ -161,7 +161,7 @@
   ],
   "agent_memory": {
     "system_context": {
-      "project_summary": "Repository contains 22 artifact(s), 133 graph node(s), 159 graph relation(s), and 11 documentation module(s).",
+      "project_summary": "Repository contains 22 artifact(s), 133 graph node(s), 160 graph relation(s), and 11 documentation module(s).",
       "included_components": [
         "Configuration (Configuration)",
         "assets (Directory)",
@@ -660,7 +660,7 @@
         }
       ],
       "architecture_facts": [
-        "knowledge graph schema: 133 node(s), 159 relation(s)",
+        "knowledge graph schema: 133 node(s), 160 relation(s)",
         "container/component candidate: Configuration (Configuration)",
         "container/component candidate: assets (Directory)",
         "container/component candidate: data (Directory)",
@@ -675,7 +675,7 @@
       "hotspots": [
         "Configuration (Configuration) score 99",
         "python_app (PythonPackage) score 59",
-        "web (Directory) score 40",
+        "web (Directory) score 41",
         "Documentation (Documentation) score 37",
         "fixture-worker (RustCrate) score 37",
         "Infrastructure (Infrastructure) score 31",
@@ -762,7 +762,7 @@
           "reference": "relation:3"
         },
         {
-          "reference": "relation:135"
+          "reference": "relation:136"
         },
         {
           "reference": "relation:6"
@@ -828,7 +828,6 @@
         "unresolved reference: import React from \"react\";",
         "unresolved reference: main",
         "unresolved reference: p",
-        "unresolved reference: route",
         "unresolved reference: str",
         "Dockerfile crosses boundary via ReadsEnv to RIDGELINE_WORKER",
         "Makefile crosses boundary via References to rust/Cargo.toml",
@@ -838,14 +837,15 @@
         "README.md crosses boundary via References to Makefile",
         "README.md crosses boundary via References to README.md",
         "README.md crosses boundary via References to assets/logo.svg",
-        "README.md crosses boundary via References to config/schema.json"
+        "README.md crosses boundary via References to config/schema.json",
+        "README.md crosses boundary via References to config/settings.yaml"
       ],
       "evidence": [
         {
           "reference": "relation:3"
         },
         {
-          "reference": "relation:135"
+          "reference": "relation:136"
         },
         {
           "reference": "relation:6"
@@ -884,7 +884,7 @@
       "modules": [
         "Configuration (Configuration) score 99",
         "python_app (PythonPackage) score 59",
-        "web (Directory) score 40",
+        "web (Directory) score 41",
         "Documentation (Documentation) score 37",
         "fixture-worker (RustCrate) score 37",
         "Infrastructure (Infrastructure) score 31",
@@ -978,5 +978,5 @@
       "confidence": 85
     }
   },
-  "input_hash": "507bb673a55f2e0b2683898fafea4791688dfce00ff060038a059b27aedf492e"
+  "input_hash": "965fd5350ad1c0d09f7d0ce03c186349a4b100fb4880e74d3d35c88cb12eba30"
 }

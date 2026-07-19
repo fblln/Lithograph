@@ -29,7 +29,6 @@
     "unresolved reference: import React from \"react\";",
     "unresolved reference: main",
     "unresolved reference: p",
-    "unresolved reference: route",
     "unresolved reference: str",
     "Dockerfile crosses boundary via ReadsEnv to RIDGELINE_WORKER",
     "Makefile crosses boundary via References to rust/Cargo.toml",
@@ -39,14 +38,15 @@
     "README.md crosses boundary via References to Makefile",
     "README.md crosses boundary via References to README.md",
     "README.md crosses boundary via References to assets/logo.svg",
-    "README.md crosses boundary via References to config/schema.json"
+    "README.md crosses boundary via References to config/schema.json",
+    "README.md crosses boundary via References to config/settings.yaml"
   ],
   "evidence": [
     {
       "reference": "relation:3"
     },
     {
-      "reference": "relation:135"
+      "reference": "relation:136"
     },
     {
       "reference": "relation:6"

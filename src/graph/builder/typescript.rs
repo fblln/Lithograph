@@ -304,6 +304,34 @@ impl BuilderState {
                 .push(function_id);
         }
 
+        // LIT-81: module-level value declarations (`export const $ItemCreate`,
+        // `const LayoutRoute = ...`) become `Definition` symbols so a same-file
+        // or barrel reference resolves to them. Not added to `callable_ids`: a
+        // value binding is not callable, so a `Calls` to its name stays
+        // conservatively unresolved while its `Usages`/`TypeRefs` resolve.
+        for binding in &analysis.value_bindings {
+            let qualified = format!("{}::{}", artifact.path, binding.name);
+            let binding_id = self.insert(GraphNode::Symbol(SymbolNode {
+                id: GraphNodeId::new(format!("symbol:{}#{qualified}", artifact.path)),
+                kind: SymbolKind::Definition,
+                qualified_name: qualified,
+                doc: None,
+                evidence: binding.evidence.clone(),
+            }));
+            self.relate_with_provenance(
+                artifact_node.clone(),
+                binding_id,
+                RelationKind::Contains,
+                Confidence::High,
+                vec![binding.evidence.clone()],
+                Some(format_provenance(
+                    language_id,
+                    RelationResolution::SyntaxOnly,
+                    Confidence::High,
+                )),
+            );
+        }
+
         self.record_typescript_type_facts(artifact, &analysis, language_id);
         let bare_imports =
             self.typescript_bare_package_imports(artifact.path.as_str(), &analysis, language_id);
@@ -760,6 +788,70 @@ mod tests {
                     && relation.target.as_str() == "symbol:view.tsx#view.tsx::Widget"
             }),
             "a top-level component's same-file use must still resolve"
+        );
+        Ok(())
+    }
+
+    /// LIT-81: a module-level value `const` -- an `export const` object and a
+    /// non-arrow `const` initialized from a call -- becomes a `Definition`
+    /// symbol, so a same-file reference to it resolves instead of minting an
+    /// `Unresolved` node. A function-local value `const` is still suppressed
+    /// (LIT-80), not promoted to a module symbol.
+    #[test]
+    fn typescript_module_level_value_consts_become_resolvable_symbols()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::TempDir::new()?;
+        std::fs::write(
+            temp.path().join("routes.ts"),
+            concat!(
+                "export const schema = { name: \"item\" } as const;\n",
+                "const rootRoute = createRoute();\n",
+                "const childRoute = rootRoute.addChildren([schema]);\n",
+                "const build = () => {\n  const localOnly = 1;\n  return localOnly;\n};\n",
+            ),
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(temp.path())?;
+        let graph = GraphBuilder.build(temp.path(), &artifacts);
+
+        let is_definition = |qualified: &str| {
+            graph.nodes.iter().any(|node| {
+                matches!(
+                    node,
+                    GraphNode::Symbol(symbol)
+                        if symbol.qualified_name == qualified
+                        && symbol.kind == SymbolKind::Definition
+                )
+            })
+        };
+        // Both the exported object const and the call-initialized const are
+        // module symbols now.
+        assert!(
+            is_definition("routes.ts::schema"),
+            "an exported value const is a Definition symbol"
+        );
+        assert!(
+            is_definition("routes.ts::rootRoute"),
+            "a call-initialized value const is a Definition symbol"
+        );
+        // `rootRoute` referenced by `childRoute`'s initializer resolves to it.
+        assert!(
+            graph.relations.iter().any(|relation| {
+                relation.source.as_str() == "artifact:routes.ts"
+                    && relation.target.as_str() == "symbol:routes.ts#routes.ts::rootRoute"
+            }),
+            "a same-file reference to a value const resolves to its symbol"
+        );
+        // A function-local value const is not promoted to a module symbol.
+        assert!(
+            !is_definition("routes.ts::localOnly"),
+            "a function-local const stays local, never a module symbol"
+        );
+        assert!(
+            !graph.nodes.iter().any(
+                |node| matches!(node, GraphNode::Unresolved(node) if node.value == "localOnly")
+            ),
+            "and it mints no Unresolved node either (LIT-80)"
         );
         Ok(())
     }

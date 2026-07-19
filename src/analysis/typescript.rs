@@ -26,6 +26,12 @@ pub struct TypeScriptAnalysis {
     pub classes: Vec<TypeScriptClass>,
     /// Named top-level functions and arrow-function bindings.
     pub functions: Vec<TypeScriptFunction>,
+    /// LIT-81: module-level *value* `const`/`let`/`var` declarations that are
+    /// not arrow functions -- `export const $ItemCreate = {...}`, a TanStack
+    /// `const LayoutRoute = createRoute(...)`. They are real module exports the
+    /// analyzer previously dropped (only arrow-const bindings became symbols),
+    /// so a same-file or barrel reference to one had nothing to resolve to.
+    pub value_bindings: Vec<TypeScriptFunction>,
     /// Call sites whose callee is statically named. Resolution is deferred to
     /// graph construction, where local symbols and imported artifacts exist.
     pub calls: Vec<TypeScriptCall>,
@@ -58,6 +64,7 @@ impl Default for TypeScriptAnalysis {
             syntax: TreeSitterAdapterOutput::fallback("typescript", "analysis not run"),
             classes: Vec::new(),
             functions: Vec::new(),
+            value_bindings: Vec::new(),
             calls: Vec::new(),
             env_reads: Vec::new(),
             member_calls: Vec::new(),
@@ -551,9 +558,11 @@ impl TypeScriptAnalyzer {
 
         let mut classes = Vec::new();
         let mut functions = Vec::new();
+        let mut value_bindings = Vec::new();
         let mut cursor = tree.root_node().walk();
         for child in tree.root_node().children(&mut cursor) {
             collect_top_level(child, artifact, text, &mut classes, &mut functions);
+            collect_top_level_value_bindings(child, artifact, text, &mut value_bindings);
         }
         let mut calls = Vec::new();
         collect_calls(tree.root_node(), artifact, text, &mut calls);
@@ -580,6 +589,7 @@ impl TypeScriptAnalyzer {
             syntax,
             classes,
             functions,
+            value_bindings,
             calls,
             env_reads,
             member_calls,
@@ -772,6 +782,51 @@ fn collect_class_methods(
         }
     }
     methods
+}
+
+/// LIT-81: collects module-level *value* bindings -- a top-level `const`/`let`/
+/// `var` declarator with an identifier name whose initializer is not an arrow
+/// function (those are already collected as callable `functions`). Mirrors
+/// `collect_top_level`'s unwrapping of `export`/`ambient` wrappers so an
+/// `export const $X = {...}` is reached, and stays at module scope (never
+/// descends into function bodies, whose locals are handled by LIT-80).
+fn collect_top_level_value_bindings(
+    node: Node<'_>,
+    artifact: &Artifact,
+    source: &str,
+    value_bindings: &mut Vec<TypeScriptFunction>,
+) {
+    match node.kind() {
+        "lexical_declaration" | "variable_declaration" => {
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                if child.kind() != "variable_declarator" {
+                    continue;
+                }
+                let is_arrow = child
+                    .child_by_field_name("value")
+                    .is_some_and(|value| value.kind() == "arrow_function");
+                if is_arrow {
+                    continue;
+                }
+                if let Some(name) = child.child_by_field_name("name")
+                    && name.kind() == "identifier"
+                {
+                    value_bindings.push(TypeScriptFunction {
+                        name: node_text(name, source).to_owned(),
+                        evidence: evidence(artifact, child),
+                    });
+                }
+            }
+        }
+        "export_statement" | "ambient_declaration" => {
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                collect_top_level_value_bindings(child, artifact, source, value_bindings);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn collect_arrow_bindings(
