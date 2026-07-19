@@ -48,5 +48,6 @@
   "package: std (external)",
   "package: subprocess (external)",
   "package: typescript (external)",
-  "package: vite (external)"
+  "package: vite (external)",
+  "package: python (external)"
 ]

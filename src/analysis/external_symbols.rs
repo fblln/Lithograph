@@ -209,6 +209,171 @@ pub fn is_python_stdlib_module(dotted_name: &str) -> bool {
     PYTHON_STDLIB_MODULES.contains(&top_level)
 }
 
+/// Python `builtins`-module names a source file uses without importing them --
+/// the Python counterpart of [`is_javascript_builtin`] (LIT-77) and
+/// [`is_python_stdlib_module`] (LIT-6). A curated list of the builtin types,
+/// functions, exceptions, and constants only: a bare `str(x)`, `isinstance(...)`,
+/// `ValueError(...)`, or `x: bool` names a builtin, not a missing project
+/// symbol, so classifying it stops it diluting the genuine-gap Unresolved
+/// bucket. Deliberately excludes dunder attributes and `typing` members
+/// (`Self`, `Optional`) -- those come from imports and are resolved through
+/// them, not guessed here.
+const PYTHON_BUILTINS: &[&str] = &[
+    // Types and constructors.
+    "bool",
+    "bytearray",
+    "bytes",
+    "complex",
+    "dict",
+    "float",
+    "frozenset",
+    "int",
+    "list",
+    "memoryview",
+    "object",
+    "range",
+    "set",
+    "slice",
+    "str",
+    "tuple",
+    "type",
+    // Functions.
+    "abs",
+    "aiter",
+    "all",
+    "anext",
+    "any",
+    "ascii",
+    "bin",
+    "breakpoint",
+    "callable",
+    "chr",
+    "classmethod",
+    "compile",
+    "delattr",
+    "dir",
+    "divmod",
+    "enumerate",
+    "eval",
+    "exec",
+    "filter",
+    "format",
+    "getattr",
+    "globals",
+    "hasattr",
+    "hash",
+    "help",
+    "hex",
+    "id",
+    "input",
+    "isinstance",
+    "issubclass",
+    "iter",
+    "len",
+    "locals",
+    "map",
+    "max",
+    "min",
+    "next",
+    "oct",
+    "open",
+    "ord",
+    "pow",
+    "print",
+    "property",
+    "repr",
+    "reversed",
+    "round",
+    "setattr",
+    "sorted",
+    "staticmethod",
+    "sum",
+    "super",
+    "vars",
+    "zip",
+    // Exceptions and warnings.
+    "ArithmeticError",
+    "AssertionError",
+    "AttributeError",
+    "BaseException",
+    "BaseExceptionGroup",
+    "BlockingIOError",
+    "BrokenPipeError",
+    "BufferError",
+    "ChildProcessError",
+    "ConnectionAbortedError",
+    "ConnectionError",
+    "ConnectionRefusedError",
+    "ConnectionResetError",
+    "DeprecationWarning",
+    "EOFError",
+    "Exception",
+    "ExceptionGroup",
+    "FileExistsError",
+    "FileNotFoundError",
+    "FloatingPointError",
+    "FutureWarning",
+    "GeneratorExit",
+    "ImportError",
+    "ImportWarning",
+    "IndentationError",
+    "IndexError",
+    "InterruptedError",
+    "IsADirectoryError",
+    "KeyError",
+    "KeyboardInterrupt",
+    "LookupError",
+    "MemoryError",
+    "ModuleNotFoundError",
+    "NameError",
+    "NotADirectoryError",
+    "NotImplementedError",
+    "OSError",
+    "OverflowError",
+    "PendingDeprecationWarning",
+    "PermissionError",
+    "ProcessLookupError",
+    "RecursionError",
+    "ReferenceError",
+    "ResourceWarning",
+    "RuntimeError",
+    "RuntimeWarning",
+    "StopAsyncIteration",
+    "StopIteration",
+    "SyntaxError",
+    "SyntaxWarning",
+    "SystemError",
+    "SystemExit",
+    "TabError",
+    "TimeoutError",
+    "TypeError",
+    "UnboundLocalError",
+    "UnicodeDecodeError",
+    "UnicodeEncodeError",
+    "UnicodeError",
+    "UnicodeTranslateError",
+    "UnicodeWarning",
+    "UserWarning",
+    "ValueError",
+    "Warning",
+    "ZeroDivisionError",
+    // Constants.
+    "Ellipsis",
+    "False",
+    "None",
+    "NotImplemented",
+    "True",
+];
+
+/// True when `name` is a bare Python builtin (type, function, exception, or
+/// constant) usable without an import. Exact-match only: a dotted or member
+/// name is not a bare global, and a user symbol that merely shares the spelling
+/// is not shadowed here -- shadowing is judged by the caller against local
+/// definitions, exactly as [`is_javascript_builtin`] is used.
+pub fn is_python_builtin(name: &str) -> bool {
+    PYTHON_BUILTINS.contains(&name)
+}
+
 /// Normalizes a Python package name for comparing a manifest-declared
 /// dependency name (e.g. `python-dateutil`, PEP 503 style) against a source
 /// file's import module name (`dateutil`) or vice versa: lowercased, with
@@ -456,7 +621,7 @@ pub fn is_javascript_builtin(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_javascript_builtin, is_python_stdlib_module, is_rust_prelude_type,
+        is_javascript_builtin, is_python_builtin, is_python_stdlib_module, is_rust_prelude_type,
         normalize_python_package_name, rust_std_crate,
     };
 
@@ -474,6 +639,20 @@ mod tests {
         // not globals): a bare `filter` could be a local or an import.
         assert!(!is_javascript_builtin("filter"));
         assert!(!is_javascript_builtin("forEach"));
+    }
+
+    #[test]
+    fn recognizes_python_builtins_by_exact_bare_name() {
+        assert!(is_python_builtin("str"));
+        assert!(is_python_builtin("bool"));
+        assert!(is_python_builtin("isinstance"));
+        assert!(is_python_builtin("ValueError"));
+        assert!(is_python_builtin("None"));
+        // A user model shares no spelling with a builtin here, and a dotted or
+        // typing name is not a bare builtin.
+        assert!(!is_python_builtin("Message"));
+        assert!(!is_python_builtin("Self"));
+        assert!(!is_python_builtin("str.join"));
     }
 
     #[test]

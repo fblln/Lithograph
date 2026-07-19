@@ -254,6 +254,25 @@ impl<'a> ImportMap<'a> {
             _ => ImportLookup::Ambiguous { candidates: names },
         }
     }
+
+    /// LIT-82: the single symbol of `language` bearing this simple name, when it
+    /// is unique *within that language*. A reference in a `.py` file can never
+    /// bind to a TypeScript definition, so a Python `Message` model and a
+    /// TypeScript `Message` type must not count each other as rivals -- doing so
+    /// (as the plain [`lookup`] does, which pools all languages) left every such
+    /// name `Ambiguous` and thus unresolved. Returns `None` when zero or several
+    /// same-language symbols share the name, so ambiguity stays visible within
+    /// the language rather than being guessed.
+    ///
+    /// [`lookup`]: ImportMap::lookup
+    pub fn unique_in_language(&self, name: &str, language: &str) -> Option<GraphNodeId> {
+        let simple = name.rsplit('.').next().unwrap_or(name);
+        let by_name = self.registry.by_simple_name.get(simple)?;
+        let of_language = self.registry.by_language.get(language)?;
+        let mut matches = by_name.iter().filter(|id| of_language.contains(*id));
+        let target = matches.next()?.clone();
+        matches.next().is_none().then_some(target)
+    }
 }
 
 fn language(value: ModuleLanguage) -> String {
@@ -373,5 +392,70 @@ mod tests {
         assert!(
             matches!(ImportMap::new(&registry).lookup(None, None, "run"), ImportLookup::Ambiguous { candidates } if candidates.len() == 2)
         );
+    }
+
+    /// LIT-82: a name shared across languages (a Python `Message` model and a
+    /// TypeScript `Message` type) is `Ambiguous` to the whole-project lookup,
+    /// but `unique_in_language` still resolves it per language, because a
+    /// reference can only bind within its own language. Two same-language
+    /// rivals stay unresolved.
+    #[test]
+    fn unique_in_language_disambiguates_cross_language_homonyms() {
+        let mut registry = ProjectSymbolRegistry::default();
+        for (id, qualified, language) in [
+            ("symbol:py", "app.models::Message", "python"),
+            (
+                "symbol:ts",
+                "client/models/Message.ts::Message",
+                "typescript",
+            ),
+            ("symbol:py2a", "app.a::Widget", "python"),
+            ("symbol:py2b", "app.b::Widget", "python"),
+        ] {
+            let symbol = ProjectSymbol {
+                id: GraphNodeId::new(id),
+                simple_name: qualified
+                    .rsplit("::")
+                    .next()
+                    .unwrap_or(qualified)
+                    .to_owned(),
+                qualified_name: qualified.to_owned(),
+                file: String::new(),
+                module: None,
+                language: language.to_owned(),
+                kind: SymbolKind::Class,
+            };
+            registry
+                .by_simple_name
+                .entry(symbol.simple_name.clone())
+                .or_default()
+                .insert(symbol.id.clone());
+            registry
+                .by_language
+                .entry(language.to_owned())
+                .or_default()
+                .insert(symbol.id.clone());
+            registry.by_id.insert(symbol.id.clone(), symbol);
+        }
+        let map = ImportMap::new(&registry);
+
+        // Whole-project lookup sees two `Message` symbols and stays ambiguous.
+        assert!(matches!(
+            map.lookup(None, None, "Message"),
+            ImportLookup::Ambiguous { .. }
+        ));
+        // Language-scoped resolution picks the one Python `Message`.
+        assert_eq!(
+            map.unique_in_language("Message", "python"),
+            Some(GraphNodeId::new("symbol:py"))
+        );
+        assert_eq!(
+            map.unique_in_language("Message", "typescript"),
+            Some(GraphNodeId::new("symbol:ts"))
+        );
+        // Two Python `Widget`s are genuinely ambiguous even within the language.
+        assert_eq!(map.unique_in_language("Widget", "python"), None);
+        // A name absent from a language does not resolve.
+        assert_eq!(map.unique_in_language("Message", "rust"), None);
     }
 }

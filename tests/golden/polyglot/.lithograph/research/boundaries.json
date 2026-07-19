@@ -17,7 +17,6 @@
     "external package: vite",
     "unresolved reference: /usr/local/bin/worker",
     "unresolved reference: /var/cache/ridgeline",
-    "unresolved reference: None",
     "unresolved reference: React",
     "unresolved reference: RouteBaker::from_env",
     "unresolved reference: assets/",
@@ -29,7 +28,7 @@
     "unresolved reference: import React from \"react\";",
     "unresolved reference: main",
     "unresolved reference: p",
-    "unresolved reference: str",
+    "external package: python",
     "Dockerfile crosses boundary via ReadsEnv to RIDGELINE_WORKER",
     "Makefile crosses boundary via References to rust/Cargo.toml",
     "Makefile crosses boundary via References to ghcr.io/example/route-api:dev",
@@ -39,7 +38,8 @@
     "README.md crosses boundary via References to README.md",
     "README.md crosses boundary via References to assets/logo.svg",
     "README.md crosses boundary via References to config/schema.json",
-    "README.md crosses boundary via References to config/settings.yaml"
+    "README.md crosses boundary via References to config/settings.yaml",
+    "README.md crosses boundary via References to data/sample.bin"
   ],
   "evidence": [
     {

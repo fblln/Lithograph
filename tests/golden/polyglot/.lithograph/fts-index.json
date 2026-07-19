@@ -469,6 +469,12 @@
       "text": "pytest"
     },
     {
+      "id": "package:python",
+      "kind": "Fact",
+      "reference": "python",
+      "text": "python"
+    },
+    {
       "id": "package:std",
       "kind": "Fact",
       "reference": "std",
@@ -497,6 +503,18 @@
       "kind": "Symbol",
       "reference": "generated.client::call_route_api",
       "text": "generated.client::call_route_api "
+    },
+    {
+      "id": "symbol:python::None",
+      "kind": "Symbol",
+      "reference": "python::None",
+      "text": "python::None "
+    },
+    {
+      "id": "symbol:python::str",
+      "kind": "Symbol",
+      "reference": "python::str",
+      "text": "python::str "
     },
     {
       "id": "symbol:rust/src/bin/worker.rs#worker::main",

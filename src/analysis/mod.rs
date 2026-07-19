@@ -27,7 +27,7 @@ pub use dockerfile::{
 };
 pub use environment::{EnvironmentFacts, UnresolvedEnvironmentFact};
 pub use external_symbols::{
-    is_javascript_builtin, is_python_stdlib_module, is_rust_prelude_type,
+    is_javascript_builtin, is_python_builtin, is_python_stdlib_module, is_rust_prelude_type,
     normalize_python_package_name, rust_std_crate,
 };
 pub use generic_text::{FindingConfidence, GenericTextExtractor, TextFinding, TextFindingKind};

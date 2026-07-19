@@ -30,12 +30,12 @@
     {
       "name": "generated",
       "kind": "Directory",
-      "member_count": 4,
+      "member_count": 5,
       "evidence": [
         "artifact:generated/client.py",
         "module:generated.client",
-        "symbol:generated/client.py#generated.client::call_route_api",
-        "unresolved:str"
+        "package:python",
+        "symbol:generated/client.py#generated.client::call_route_api"
       ]
     },
     {
@@ -93,7 +93,7 @@
     {
       "name": "python_app",
       "kind": "PythonPackage",
-      "member_count": 20,
+      "member_count": 21,
       "evidence": [
         "artifact:src/python_app/__init__.py",
         "artifact:src/python_app/service.py",

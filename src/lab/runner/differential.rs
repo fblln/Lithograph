@@ -5,7 +5,7 @@
 //! is unavailable so the suite stays hermetic and offline.
 
 use super::LabError;
-use crate::graph::{Graph, GraphNode, RelationKind};
+use crate::graph::{Graph, GraphNode, RelationKind, SymbolKind};
 use crate::lab::model::{AssertionResult, DifferentialResult, DifferentialStatus};
 use serde_json::Value;
 use std::path::Path;
@@ -52,11 +52,20 @@ print(count)
         .trim()
         .parse::<usize>()
         .map_err(|error| LabError::Invalid(format!("invalid Python AST count: {error}")))?;
+    // The AST oracle counts only local definitions (`ClassDef`/`FunctionDef`),
+    // so the graph side must exclude `External` symbols. Those are references
+    // classified to something defined outside the repo -- a stdlib/third-party
+    // import (LIT-56) or a bare builtin like `str`/`None` (LIT-82) -- and carry
+    // their *use-site* `.py` evidence, not a definition. Counting them inflated
+    // `observed` past the AST definition count once builtin classification
+    // began interning them.
     let observed = graph
         .nodes
         .iter()
         .filter(|node| {
-            matches!(node, GraphNode::Symbol(symbol) if symbol.evidence.path.as_str().ends_with(".py"))
+            matches!(node, GraphNode::Symbol(symbol)
+                if symbol.kind != SymbolKind::External
+                    && symbol.evidence.path.as_str().ends_with(".py"))
         })
         .count();
     Ok(AssertionResult {

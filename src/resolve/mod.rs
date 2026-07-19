@@ -361,19 +361,38 @@ impl Resolver for SymbolNameResolver {
         relation: &Relation,
         unresolved_value: &str,
     ) -> Option<ResolvedTarget> {
-        if relation.kind != crate::graph::RelationKind::Calls {
-            return None;
-        }
-        match ImportMap::new(&context.symbols).lookup(None, None, unresolved_value) {
-            ImportLookup::Suffix { target, confidence }
-            | ImportLookup::UniqueName { target, confidence } => {
-                Some(ResolvedTarget { target, confidence })
+        use crate::graph::RelationKind;
+        let map = ImportMap::new(&context.symbols);
+        // The original whole-project unique-name/suffix match, for calls only.
+        if relation.kind == RelationKind::Calls {
+            match map.lookup(None, None, unresolved_value) {
+                ImportLookup::Suffix { target, confidence }
+                | ImportLookup::UniqueName { target, confidence } => {
+                    return Some(ResolvedTarget { target, confidence });
+                }
+                ImportLookup::SameModule { .. }
+                | ImportLookup::ExplicitImport { .. }
+                | ImportLookup::Ambiguous { .. }
+                | ImportLookup::Unresolved => {}
             }
-            ImportLookup::SameModule { .. }
-            | ImportLookup::ExplicitImport { .. }
-            | ImportLookup::Ambiguous { .. }
-            | ImportLookup::Unresolved => None,
         }
+        // LIT-82: a call or type reference whose name is unique among symbols of
+        // its own language resolves there even when a same-named symbol in
+        // another language makes the whole-project lookup `Ambiguous` -- e.g.
+        // `from app.models import Message; Message(...)` in a `.py` route, where
+        // an unrelated TypeScript `Message` model shares the name. A reference
+        // can only bind within its language, so this is a disambiguation, not a
+        // new guess: two same-language rivals still stay unresolved.
+        if matches!(relation.kind, RelationKind::Calls | RelationKind::UsesType) {
+            let language = relation.provenance.as_ref()?.language.as_deref()?;
+            if let Some(target) = map.unique_in_language(unresolved_value, language) {
+                return Some(ResolvedTarget {
+                    target,
+                    confidence: Confidence::Low,
+                });
+            }
+        }
+        None
     }
 }
 

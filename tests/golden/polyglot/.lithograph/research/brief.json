@@ -1,16 +1,16 @@
 {
   "system_context": [
-    "Repository contains 22 artifact(s), 133 graph node(s), 160 graph relation(s), and 11 documentation module(s).",
+    "Repository contains 22 artifact(s), 134 graph node(s), 162 graph relation(s), and 11 documentation module(s).",
     "Configuration (Configuration) owns 46 graph member(s)",
     "assets (Directory) owns 1 graph member(s)",
     "data (Directory) owns 1 graph member(s)",
-    "generated (Directory) owns 4 graph member(s)",
+    "generated (Directory) owns 5 graph member(s)",
     "root (Directory) owns 6 graph member(s)",
     "vendor (Directory) owns 1 graph member(s)",
     "web (Directory) owns 19 graph member(s)",
     "Documentation (Documentation) owns 10 graph member(s)",
     "Infrastructure (Infrastructure) owns 12 graph member(s)",
-    "python_app (PythonPackage) owns 20 graph member(s)",
+    "python_app (PythonPackage) owns 21 graph member(s)",
     "fixture-worker (RustCrate) owns 16 graph member(s)",
     "language support: bin current Detected, target Detected via inventory-fallback (1 artifact(s))",
     "language support: docker-compose current SyntaxIndexed, target SyntaxIndexed via structured-syntax (1 artifact(s))",
@@ -71,7 +71,6 @@
     "external package: vite",
     "unresolved reference: /usr/local/bin/worker",
     "unresolved reference: /var/cache/ridgeline",
-    "unresolved reference: None",
     "unresolved reference: React",
     "unresolved reference: RouteBaker::from_env",
     "unresolved reference: assets/",
@@ -83,7 +82,7 @@
     "unresolved reference: import React from \"react\";",
     "unresolved reference: main",
     "unresolved reference: p",
-    "unresolved reference: str",
+    "external package: python",
     "Dockerfile crosses boundary via ReadsEnv to RIDGELINE_WORKER",
     "Makefile crosses boundary via References to rust/Cargo.toml",
     "Makefile crosses boundary via References to ghcr.io/example/route-api:dev",
@@ -93,7 +92,8 @@
     "README.md crosses boundary via References to README.md",
     "README.md crosses boundary via References to assets/logo.svg",
     "README.md crosses boundary via References to config/schema.json",
-    "README.md crosses boundary via References to config/settings.yaml"
+    "README.md crosses boundary via References to config/settings.yaml",
+    "README.md crosses boundary via References to data/sample.bin"
   ],
   "configuration": [
     "ContainerDefinition: Dockerfile",
@@ -145,23 +145,24 @@
     "package: std (external)",
     "package: subprocess (external)",
     "package: typescript (external)",
-    "package: vite (external)"
+    "package: vite (external)",
+    "package: python (external)"
   ],
   "key_modules": [
     "Configuration (Configuration) score 99",
-    "python_app (PythonPackage) score 59",
+    "python_app (PythonPackage) score 62",
     "web (Directory) score 41",
     "Documentation (Documentation) score 37",
     "fixture-worker (RustCrate) score 37",
     "Infrastructure (Infrastructure) score 31",
+    "generated (Directory) score 14",
     "root (Directory) score 14",
-    "generated (Directory) score 11",
     "assets (Directory) score 2",
     "data (Directory) score 2"
   ],
   "agent_memory": {
     "system_context": {
-      "project_summary": "Repository contains 22 artifact(s), 133 graph node(s), 160 graph relation(s), and 11 documentation module(s).",
+      "project_summary": "Repository contains 22 artifact(s), 134 graph node(s), 162 graph relation(s), and 11 documentation module(s).",
       "included_components": [
         "Configuration (Configuration)",
         "assets (Directory)",
@@ -190,12 +191,12 @@
         "vite",
         "/usr/local/bin/worker",
         "/var/cache/ridgeline",
-        "None",
         "React",
         "RouteBaker::from_env",
         "assets/",
         "dict[str, object]",
-        "fixture_worker::bake_route"
+        "fixture_worker::bake_route",
+        "ghcr.io/example/route-api:dev"
       ],
       "evidence": [
         {
@@ -257,12 +258,12 @@
         {
           "name": "generated",
           "kind": "Directory",
-          "member_count": 4,
+          "member_count": 5,
           "evidence": [
             "artifact:generated/client.py",
             "module:generated.client",
-            "symbol:generated/client.py#generated.client::call_route_api",
-            "unresolved:str"
+            "package:python",
+            "symbol:generated/client.py#generated.client::call_route_api"
           ]
         },
         {
@@ -320,7 +321,7 @@
         {
           "name": "python_app",
           "kind": "PythonPackage",
-          "member_count": 20,
+          "member_count": 21,
           "evidence": [
             "artifact:src/python_app/__init__.py",
             "artifact:src/python_app/service.py",
@@ -660,7 +661,7 @@
         }
       ],
       "architecture_facts": [
-        "knowledge graph schema: 133 node(s), 160 relation(s)",
+        "knowledge graph schema: 134 node(s), 162 relation(s)",
         "container/component candidate: Configuration (Configuration)",
         "container/component candidate: assets (Directory)",
         "container/component candidate: data (Directory)",
@@ -674,13 +675,13 @@
       ],
       "hotspots": [
         "Configuration (Configuration) score 99",
-        "python_app (PythonPackage) score 59",
+        "python_app (PythonPackage) score 62",
         "web (Directory) score 41",
         "Documentation (Documentation) score 37",
         "fixture-worker (RustCrate) score 37",
         "Infrastructure (Infrastructure) score 31",
+        "generated (Directory) score 14",
         "root (Directory) score 14",
-        "generated (Directory) score 11",
         "assets (Directory) score 2",
         "data (Directory) score 2"
       ],
@@ -816,7 +817,6 @@
         "external package: vite",
         "unresolved reference: /usr/local/bin/worker",
         "unresolved reference: /var/cache/ridgeline",
-        "unresolved reference: None",
         "unresolved reference: React",
         "unresolved reference: RouteBaker::from_env",
         "unresolved reference: assets/",
@@ -828,7 +828,7 @@
         "unresolved reference: import React from \"react\";",
         "unresolved reference: main",
         "unresolved reference: p",
-        "unresolved reference: str",
+        "external package: python",
         "Dockerfile crosses boundary via ReadsEnv to RIDGELINE_WORKER",
         "Makefile crosses boundary via References to rust/Cargo.toml",
         "Makefile crosses boundary via References to ghcr.io/example/route-api:dev",
@@ -838,7 +838,8 @@
         "README.md crosses boundary via References to README.md",
         "README.md crosses boundary via References to assets/logo.svg",
         "README.md crosses boundary via References to config/schema.json",
-        "README.md crosses boundary via References to config/settings.yaml"
+        "README.md crosses boundary via References to config/settings.yaml",
+        "README.md crosses boundary via References to data/sample.bin"
       ],
       "evidence": [
         {
@@ -883,13 +884,13 @@
     "key_modules": {
       "modules": [
         "Configuration (Configuration) score 99",
-        "python_app (PythonPackage) score 59",
+        "python_app (PythonPackage) score 62",
         "web (Directory) score 41",
         "Documentation (Documentation) score 37",
         "fixture-worker (RustCrate) score 37",
         "Infrastructure (Infrastructure) score 31",
+        "generated (Directory) score 14",
         "root (Directory) score 14",
-        "generated (Directory) score 11",
         "assets (Directory) score 2",
         "data (Directory) score 2"
       ],
@@ -978,5 +979,5 @@
       "confidence": 85
     }
   },
-  "input_hash": "965fd5350ad1c0d09f7d0ce03c186349a4b100fb4880e74d3d35c88cb12eba30"
+  "input_hash": "a83776ecac0ad4b4e71ee0584ad4899690f62c627e774a7b8b73a3cee04ddac2"
 }

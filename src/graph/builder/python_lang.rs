@@ -1455,4 +1455,77 @@ mod tests {
 
         Ok(())
     }
+
+    /// LIT-82: a Python reference to a name that also names a TypeScript symbol
+    /// resolves to the *Python* definition (language-scoped disambiguation),
+    /// and a bare Python builtin is classified as an external `python::` symbol
+    /// rather than left Unresolved. A reference can only bind within its
+    /// language, so the cross-language homonym is not a rival.
+    #[test]
+    fn python_builtins_classify_and_cross_language_models_resolve_by_language()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let repo = tempfile::TempDir::new()?;
+        // A Python model, a TypeScript model of the same name, and a route that
+        // uses the Python one plus a builtin.
+        std::fs::write(repo.path().join("models.py"), "class Message:\n    pass\n")?;
+        std::fs::write(repo.path().join("message.ts"), "export class Message {}\n")?;
+        std::fs::write(
+            repo.path().join("route.py"),
+            "from models import Message\n\n\ndef send(name: str) -> Message:\n    label = str(name)\n    return Message()\n",
+        )?;
+
+        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(repo.path())?;
+        let graph = GraphBuilder.build(repo.path(), &artifacts);
+        let target = |kind: RelationKind, value: &str| {
+            graph
+                .relations
+                .iter()
+                .filter(|relation| relation.kind == kind)
+                .map(|relation| relation.target.as_str().to_owned())
+                .filter(|target| target.contains(value))
+                .collect::<Vec<_>>()
+        };
+
+        // `Message()` resolves to the Python model, never the TypeScript one.
+        assert!(
+            target(RelationKind::Calls, "Message")
+                .iter()
+                .any(|target| target == "symbol:models.py#models::Message"),
+            "Message() should resolve to the Python model"
+        );
+        assert!(
+            !graph.relations.iter().any(|relation| relation
+                .target
+                .as_str()
+                .contains("message.ts::Message")
+                && relation.source.as_str().ends_with("route.py")),
+            "a Python reference must never bind to the TypeScript Message"
+        );
+        // `str`, used as both a parameter type and a call, is classified as a
+        // python builtin external symbol.
+        assert!(
+            graph.nodes.iter().any(|node| matches!(node,
+                GraphNode::Symbol(symbol)
+                    if symbol.qualified_name == "python::str"
+                    && symbol.kind == SymbolKind::External)),
+            "str should be an external python builtin symbol"
+        );
+        // No Unresolved node survives for a classified builtin or resolved model.
+        for value in ["str", "Message"] {
+            assert!(
+                !graph.nodes.iter().any(|node| matches!(node,
+                    GraphNode::Unresolved(node) if node.value == value)),
+                "unresolved:{value} should have been resolved or classified"
+            );
+        }
+
+        let invalid: Vec<_> = crate::graph::GraphValidator
+            .validate(&graph, &artifacts)
+            .into_iter()
+            .filter(|issue| issue.kind == crate::graph::GraphIssueKind::InvalidRelationTarget)
+            .collect();
+        assert!(invalid.is_empty(), "invalid targets: {invalid:?}");
+
+        Ok(())
+    }
 }

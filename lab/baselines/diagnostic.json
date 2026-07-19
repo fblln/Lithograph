@@ -2,14 +2,14 @@
   "schema_version": 2,
   "case_id": "diagnostic",
   "source_revision": "fixture:3401be7e1e362f986e9d48820149a34d3f041eab76bea674f1ce48502476fb17",
-  "graph_hash": "63261121346e9be6e64b093e3127f8e225d83496baa7d50bc1f6f6338cf237be",
+  "graph_hash": "1f1d5e4d015c77e42f217c2694cedd6c496e7ced3886e1801f71d6557e270665",
   "stage_hashes": {
-    "analytics": "7bd256e85baec7fbc8f998fe0d94f1c25e7fc442f707f078b7ccf6a57811e1af",
+    "analytics": "a804a593f839eb1c0cc6eb84daf6b1b899668ade94d2c56fc79be52b0ccb9df4",
     "definitions_and_imports": "42d3a5112210159fde25680f19a2084d130bbabb5c18bfa60fba2eb709a35733",
     "enrichment": "7bd256e85baec7fbc8f998fe0d94f1c25e7fc442f707f078b7ccf6a57811e1af",
-    "finalize": "7bd256e85baec7fbc8f998fe0d94f1c25e7fc442f707f078b7ccf6a57811e1af",
-    "persistence": "7bd256e85baec7fbc8f998fe0d94f1c25e7fc442f707f078b7ccf6a57811e1af",
-    "resolution": "7bd256e85baec7fbc8f998fe0d94f1c25e7fc442f707f078b7ccf6a57811e1af",
+    "finalize": "a804a593f839eb1c0cc6eb84daf6b1b899668ade94d2c56fc79be52b0ccb9df4",
+    "persistence": "a804a593f839eb1c0cc6eb84daf6b1b899668ade94d2c56fc79be52b0ccb9df4",
+    "resolution": "a804a593f839eb1c0cc6eb84daf6b1b899668ade94d2c56fc79be52b0ccb9df4",
     "structure": "a9d51d8c06ed3c485dfb66df3e4dcb4cffb78a13b0a206b7258ed9e26de16b5c"
   },
   "assertions": {
@@ -64,7 +64,7 @@
     "service-method-community": true,
     "service-repository-boundary": true
   },
-  "reason": "Default test exclusion removes test-only graph facts while architecture scope preserves production communities",
-  "previous_graph_hash": "0da44dfb2f16594ff0a8788681706729752fa6e2246db7cbef05f10bb4709b74",
-  "previous_reason": "Canonicalized diagnostic fixture EOF whitespace; reviewed semantic graph remains unchanged"
+  "reason": "LIT-82: classify Python builtins (str/int/None...) as external python:: symbols; diagnostic fixture gains python::int/python::str + package:python and reaches 0 unresolved. All assertions pass (differential-python-definitions now correctly excludes External-kind symbols); only stored stage/graph hashes changed. Reviewed: 0 fabricated edges, change is builtin classification only.",
+  "previous_graph_hash": "63261121346e9be6e64b093e3127f8e225d83496baa7d50bc1f6f6338cf237be",
+  "previous_reason": "Default test exclusion removes test-only graph facts while architecture scope preserves production communities"
 }

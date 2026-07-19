@@ -2,10 +2,10 @@
 
 ## Summary and resolution
 
-- Nodes: 133
-- Relations: 160
-- Resolved relations: 141 of 160 (88.1%)
-- Unresolved relations: 19
+- Nodes: 134
+- Relations: 162
+- Resolved relations: 148 of 162 (91.3%)
+- Unresolved relations: 14
 - Low-confidence relations: 25
 
 ## God nodes by degree
@@ -38,11 +38,9 @@ No module dependency cycles detected.
 
 ### Unresolved hotspots
 
-- `unresolved:str` — str (4 inbound relations)
 - `unresolved:ghcr.io/example/route-api:dev` — ghcr.io/example/route-api:dev (2 inbound relations)
 - `unresolved:/usr/local/bin/worker` — /usr/local/bin/worker (1 inbound relations)
 - `unresolved:/var/cache/ridgeline` — /var/cache/ridgeline (1 inbound relations)
-- `unresolved:None` — None (1 inbound relations)
 - `unresolved:React` — React (1 inbound relations)
 - `unresolved:RouteBaker::from_env` — RouteBaker::from_env (1 inbound relations)
 - `unresolved:assets/` — assets/ (1 inbound relations)
@@ -69,7 +67,7 @@ No module dependency cycles detected.
 - `artifact:config/settings.yaml` → `unresolved:assets/` (References, relation `relation:39`)
 - `artifact:rust/src/bin/worker.rs` → `symbol:std::env::args` (Calls, relation `relation:73`)
 - `artifact:rust/src/lib.rs` → `unresolved:RouteBaker::from_env` (Calls, relation `relation:81`)
-- `artifact:src/python_app/service.py` → `unresolved:str` (Calls, relation `relation:111`)
+- `artifact:src/python_app/service.py` → `symbol:python::str` (Calls, relation `relation:111`)
 - `artifact:src/python_app/service.py` → `command:src/python_app/service.py#31` (RunsCommand, relation `relation:110`)
 - `artifact:web/src/App.tsx` → `unresolved:import React from "react";` (Imports, relation `relation:127`)
 - `artifact:web/src/App.tsx` → `unresolved:React` (Usages, relation `relation:128`)
@@ -82,8 +80,8 @@ No module dependency cycles detected.
 - What responsibilities make `artifact:README.md` highly connected, and should any be separated?
 - What responsibilities make `artifact:config/settings.yaml` highly connected, and should any be separated?
 - What responsibilities make `artifact:config/schema.json` highly connected, and should any be separated?
-- What repository evidence can resolve `unresolved:str` (str)?
 - What repository evidence can resolve `unresolved:ghcr.io/example/route-api:dev` (ghcr.io/example/route-api:dev)?
 - What repository evidence can resolve `unresolved:/usr/local/bin/worker` (/usr/local/bin/worker)?
+- What repository evidence can resolve `unresolved:/var/cache/ridgeline` (/var/cache/ridgeline)?
 - Which of the graph's 25 low-confidence relations are justified by source evidence, and which should be corrected?
 

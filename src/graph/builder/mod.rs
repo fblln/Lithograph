@@ -404,6 +404,7 @@ impl GraphBuilder {
             .resolve_with_aliases_and_re_exports(&mut graph, ts_aliases, re_exports);
         crate::resolve::resolve_environment_links(&mut graph);
         classify_javascript_builtins(&mut graph);
+        classify_python_builtins(&mut graph);
         prune_orphaned_unresolved_nodes(&mut graph);
         let resolution_decisions = trace_decisions_for_relations(
             &graph,
@@ -556,6 +557,41 @@ fn trace_decisions_for_relations(
 /// classification rather than a guess. Only TS/JS-language Calls, Usages, and
 /// type references are eligible -- an import statement never names a global.
 fn classify_javascript_builtins(graph: &mut Graph) {
+    classify_language_builtins(
+        graph,
+        "javascript",
+        &|language| matches!(language, "typescript" | "tsx" | "javascript"),
+        &crate::analysis::is_javascript_builtin,
+    );
+}
+
+/// LIT-82: the Python counterpart of [`classify_javascript_builtins`]. A bare
+/// `str(...)`, `isinstance(...)`, `ValueError(...)`, or `x: bool` still
+/// unresolved after resolution names a Python builtin, not a missing project
+/// symbol, so it is interned under a shared external `python` package. Runs
+/// after resolution, so a name a local class or an import already claimed never
+/// reaches here.
+fn classify_python_builtins(graph: &mut Graph) {
+    classify_language_builtins(
+        graph,
+        "python",
+        &|language| language == "python",
+        &crate::analysis::is_python_builtin,
+    );
+}
+
+/// Retargets references whose still-`Unresolved` name is a language builtin onto
+/// a shared external `Symbol` under a per-language external `Package`, the same
+/// shape `python_external_symbol` produces for stdlib members. Only Calls,
+/// Usages, and type references in a matching-language relation are eligible --
+/// an import statement never names a bare global. Deterministic: the interned
+/// symbol takes evidence from the first eligible reference in relation order.
+fn classify_language_builtins(
+    graph: &mut Graph,
+    package: &str,
+    is_language: &dyn Fn(&str) -> bool,
+    is_builtin: &dyn Fn(&str) -> bool,
+) {
     let unresolved_names: BTreeMap<&GraphNodeId, &str> = graph
         .nodes
         .iter()
@@ -564,8 +600,6 @@ fn classify_javascript_builtins(graph: &mut Graph) {
             _ => None,
         })
         .collect();
-    // Builtin name -> evidence to attach to its interned symbol (from the
-    // first eligible reference, in relation order, so it is deterministic).
     let mut builtins: BTreeMap<String, EvidenceRef> = BTreeMap::new();
     let mut retargets: Vec<(usize, String)> = Vec::new();
     for (index, relation) in graph.relations.iter().enumerate() {
@@ -578,22 +612,20 @@ fn classify_javascript_builtins(graph: &mut Graph) {
         ) {
             continue;
         }
-        let is_js = relation
+        let matches_language = relation
             .provenance
             .as_ref()
             .and_then(|provenance| provenance.language.as_deref())
-            .is_some_and(|language| matches!(language, "typescript" | "tsx" | "javascript"));
-        if !is_js {
+            .is_some_and(is_language);
+        if !matches_language {
             continue;
         }
         let Some(name) = unresolved_names.get(&relation.target) else {
             continue;
         };
-        if !crate::analysis::is_javascript_builtin(name) {
+        if !is_builtin(name) {
             continue;
         }
-        // Every such reference carries its call/use-site evidence; without it
-        // there is nothing to attach to the interned symbol, so leave it be.
         let Some(evidence) = relation.evidence.first() else {
             continue;
         };
@@ -605,23 +637,20 @@ fn classify_javascript_builtins(graph: &mut Graph) {
     if retargets.is_empty() {
         return;
     }
-    // Intern one external `Symbol` per builtin (`javascript::Array`) plus its
-    // `BelongsToPackage` edge to a shared external `javascript` package, the
-    // same shape `python_external_symbol` produces for stdlib members.
-    let package_id = GraphNodeId::new("package:javascript");
+    let package_id = GraphNodeId::new(format!("package:{package}"));
     if !graph.nodes.iter().any(|node| node.id() == &package_id) {
         graph.nodes.push(GraphNode::Package(PackageNode {
             id: package_id.clone(),
-            name: "javascript".to_owned(),
+            name: package.to_owned(),
             is_external: true,
         }));
     }
     for (name, evidence) in &builtins {
-        let symbol_id = GraphNodeId::new(format!("symbol:javascript::{name}"));
+        let symbol_id = GraphNodeId::new(format!("symbol:{package}::{name}"));
         graph.nodes.push(GraphNode::Symbol(SymbolNode {
             id: symbol_id.clone(),
             kind: SymbolKind::External,
-            qualified_name: format!("javascript::{name}"),
+            qualified_name: format!("{package}::{name}"),
             doc: None,
             evidence: evidence.clone(),
         }));
@@ -640,7 +669,7 @@ fn classify_javascript_builtins(graph: &mut Graph) {
         });
     }
     for (index, name) in retargets {
-        graph.relations[index].target = GraphNodeId::new(format!("symbol:javascript::{name}"));
+        graph.relations[index].target = GraphNodeId::new(format!("symbol:{package}::{name}"));
     }
 }
 
