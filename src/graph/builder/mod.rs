@@ -395,8 +395,13 @@ impl GraphBuilder {
         // pipeline below never revisits, so the two cannot contend for the
         // same call.
         crate::resolve::propagate_types(&mut graph, &type_facts);
+        // LIT-79: the barrel re-export map lets the import-binding resolver
+        // chase a use site imported through a barrel (`from '../client'`) to
+        // the module that actually declares it. Built from the same per-file
+        // facts `propagate_types` uses; empty for repositories with no barrels.
+        let re_exports = crate::resolve::re_export_map(&type_facts);
         crate::resolve::HybridResolverPipeline::default_pipeline()
-            .resolve_with_aliases(&mut graph, ts_aliases);
+            .resolve_with_aliases_and_re_exports(&mut graph, ts_aliases, re_exports);
         crate::resolve::resolve_environment_links(&mut graph);
         classify_javascript_builtins(&mut graph);
         prune_orphaned_unresolved_nodes(&mut graph);

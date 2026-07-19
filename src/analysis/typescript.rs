@@ -10,6 +10,7 @@ use crate::domain::{
     Artifact, ArtifactId, Confidence, EvidenceRef, ModelExposurePolicy, SourceSpan, TextStatus,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use tree_sitter::Node;
 
 /// Deep analysis output for one TypeScript or TSX artifact.
@@ -40,6 +41,14 @@ pub struct TypeScriptAnalysis {
     /// LIT-45.3: `export ... from './x'` re-exports, which let a symbol
     /// imported from a barrel be traced to the file that declares it.
     pub re_exports: Vec<TypeScriptReExport>,
+    /// LIT-80: names bound *inside a function body* -- block-scoped `const`/
+    /// `let`/`var` declarators (including destructuring) and parameters. These
+    /// are the file's function-local variables; a bare use of one is a local
+    /// reference resolved by lexical scoping, not a cross-file symbol, so the
+    /// graph builder suppresses the `Unresolved` use-site node it would
+    /// otherwise mint. Deliberately excludes module-top-level bindings, which
+    /// may be exported and are left to normal resolution (LIT-75).
+    pub local_value_bindings: BTreeSet<String>,
 }
 
 impl Default for TypeScriptAnalysis {
@@ -54,6 +63,7 @@ impl Default for TypeScriptAnalysis {
             member_calls: Vec::new(),
             bindings: Vec::new(),
             re_exports: Vec::new(),
+            local_value_bindings: BTreeSet::new(),
         }
     }
 }
@@ -270,6 +280,87 @@ fn has_child_of_kind(node: Node<'_>, kind: &str) -> bool {
     node.children(&mut cursor).any(|child| child.kind() == kind)
 }
 
+/// LIT-80: collects names bound *inside a function body* -- `const`/`let`/`var`
+/// declarators and parameters, following destructuring. `in_function` starts
+/// false at module scope and latches true under the first function/arrow/method
+/// node, so a module-level `const config = ...` is never collected (it may be
+/// exported and is left to normal resolution) while a block-local
+/// `const addItem = ...` is. Type annotations are `type_identifier` nodes and a
+/// default value lives on the `right` of an assignment pattern, so neither is
+/// mistaken for a binding.
+fn collect_local_value_bindings(
+    node: Node<'_>,
+    source: &str,
+    in_function: bool,
+    out: &mut BTreeSet<String>,
+) {
+    let in_function = in_function
+        || matches!(
+            node.kind(),
+            "function_declaration"
+                | "generator_function_declaration"
+                | "function_expression"
+                | "arrow_function"
+                | "method_definition"
+        );
+    if in_function {
+        match node.kind() {
+            "variable_declarator" => {
+                if let Some(name) = node.child_by_field_name("name") {
+                    collect_binding_identifiers(name, source, out);
+                }
+            }
+            "required_parameter" | "optional_parameter" => {
+                if let Some(pattern) = node.child_by_field_name("pattern") {
+                    collect_binding_identifiers(pattern, source, out);
+                }
+            }
+            // A single-parameter arrow (`item => ...`) names the parameter
+            // directly rather than through a `formal_parameters` list.
+            "arrow_function" => {
+                if let Some(parameter) = node.child_by_field_name("parameter") {
+                    collect_binding_identifiers(parameter, source, out);
+                }
+            }
+            // `catch (e)` binds a function-local exception name.
+            "catch_clause" => {
+                if let Some(parameter) = node.child_by_field_name("parameter") {
+                    collect_binding_identifiers(parameter, source, out);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_local_value_bindings(child, source, in_function, out);
+    }
+}
+
+/// Collects the identifiers a binding pattern introduces, descending through
+/// object/array destructuring. For `{ a = fallback }` only the binding side is
+/// taken, never the `fallback` default expression, so a reference used as a
+/// default is not misread as a local binding.
+fn collect_binding_identifiers(node: Node<'_>, source: &str, out: &mut BTreeSet<String>) {
+    match node.kind() {
+        "identifier" | "shorthand_property_identifier_pattern" => {
+            out.insert(node_text(node, source).to_owned());
+        }
+        // `left = default` in a pattern: only the left is a binding.
+        "assignment_pattern" | "object_assignment_pattern" => {
+            if let Some(left) = node.child_by_field_name("left") {
+                collect_binding_identifiers(left, source, out);
+            }
+        }
+        _ => {
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                collect_binding_identifiers(child, source, out);
+            }
+        }
+    }
+}
+
 /// Text inside a string node, without its quotes.
 fn string_literal_text(node: Node<'_>, source: &str) -> Option<String> {
     let mut cursor = node.walk();
@@ -481,6 +572,8 @@ impl TypeScriptAnalyzer {
         );
         let mut re_exports = Vec::new();
         collect_re_exports(tree.root_node(), artifact, text, &mut re_exports);
+        let mut local_value_bindings = BTreeSet::new();
+        collect_local_value_bindings(tree.root_node(), text, false, &mut local_value_bindings);
 
         TypeScriptAnalysis {
             language: self.language,
@@ -492,6 +585,7 @@ impl TypeScriptAnalyzer {
             member_calls,
             bindings,
             re_exports,
+            local_value_bindings,
         }
     }
 

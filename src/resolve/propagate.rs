@@ -113,8 +113,10 @@ pub struct FileTypeFacts {
 pub type TypeFacts = BTreeMap<String, FileTypeFacts>;
 
 /// LIT-45.3: re-export statements by containing artifact, built from
-/// [`FileTypeFacts::re_exports`] once per run.
-fn re_export_map(facts: &TypeFacts) -> crate::resolve::ReExportMap {
+/// [`FileTypeFacts::re_exports`] once per run. Shared with the resolver
+/// pipeline (LIT-79), which chases barrel-imported use sites through the
+/// same map.
+pub(crate) fn re_export_map(facts: &TypeFacts) -> crate::resolve::ReExportMap {
     facts
         .iter()
         .filter(|(_, file)| !file.re_exports.is_empty())
