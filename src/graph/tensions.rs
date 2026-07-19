@@ -71,7 +71,10 @@ impl TensionSnapshotStore {
         JsonStore.write(&path, &payload)?;
         Ok(true)
     }
-    pub(crate) fn load(&self, snapshot: &TensionSnapshot) -> std::io::Result<Option<TensionSnapshot>> {
+    pub(crate) fn load(
+        &self,
+        snapshot: &TensionSnapshot,
+    ) -> std::io::Result<Option<TensionSnapshot>> {
         let Some(payload): Option<String> = JsonStore.read(&self.path(snapshot))? else {
             return Ok(None);
         };

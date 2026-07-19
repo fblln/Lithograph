@@ -121,7 +121,10 @@ impl TagIndex {
     }
 }
 /// Resolves a compact `namespace:value` expression with comma-union and `!` exclusions.
-pub(crate) fn resolve_expression(index: &TagIndex, expression: &str) -> Result<Vec<String>, String> {
+pub(crate) fn resolve_expression(
+    index: &TagIndex,
+    expression: &str,
+) -> Result<Vec<String>, String> {
     let mut union = BTreeSet::new();
     for branch in expression.split(';') {
         let mut include = Vec::new();

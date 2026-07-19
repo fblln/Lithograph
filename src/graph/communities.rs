@@ -152,7 +152,10 @@ impl CommunitySnapshotStore {
     }
 
     /// Loads the exact persisted snapshot when present.
-    pub(crate) fn load(&self, snapshot: &CommunitySnapshot) -> std::io::Result<Option<CommunitySnapshot>> {
+    pub(crate) fn load(
+        &self,
+        snapshot: &CommunitySnapshot,
+    ) -> std::io::Result<Option<CommunitySnapshot>> {
         self.load_exact(&snapshot.graph_snapshot_id, &snapshot.scope)
     }
 

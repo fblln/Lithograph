@@ -25,7 +25,9 @@ pub(crate) use communities::{
     architecture_aware_scope, environment_aware_scope, label_topic_snapshot, leiden_communities,
     leiden_communities_with_diagnostics,
 };
-pub(crate) use health::{HealthFinding, HealthRule, HealthSeverity, HealthThresholds, detect_health};
+pub(crate) use health::{
+    HealthFinding, HealthRule, HealthSeverity, HealthThresholds, detect_health,
+};
 pub(crate) use index::{
     ArchitectureAspect, ArchitectureCluster, ArchitectureClusterLink, ArchitectureClusterLinkKind,
     ArchitectureClusterRelation, ArchitectureSummary, DependencyMatrix, FileTreeNode, GraphSchema,

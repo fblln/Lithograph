@@ -939,7 +939,11 @@ impl WikiMcpServer {
     }
 
     /// Runs a JSON-line request loop until EOF.
-    pub(crate) fn run<R, W>(&self, reader: R, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
+    pub(crate) fn run<R, W>(
+        &self,
+        reader: R,
+        writer: &mut W,
+    ) -> Result<(), Box<dyn std::error::Error>>
     where
         R: BufRead,
         W: Write,

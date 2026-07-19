@@ -102,7 +102,10 @@ struct ClaimLine {
 }
 
 /// Extracts stable claims from one repository-relative Markdown document.
-pub(crate) fn extract_section_claims(artifact_path: &str, markdown: &str) -> Vec<DocumentSectionClaims> {
+pub(crate) fn extract_section_claims(
+    artifact_path: &str,
+    markdown: &str,
+) -> Vec<DocumentSectionClaims> {
     let mut sections = Vec::new();
     let mut current = PendingSection {
         heading: "Preamble".to_owned(),

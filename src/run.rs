@@ -62,7 +62,11 @@ impl Default for PipelineInvalidationMetadata {
 
 impl PipelineInvalidationMetadata {
     /// Builds current metadata for a run.
-    pub(crate) fn current(prompt_version: &str, semantic_grouping: bool, include_tests: bool) -> Self {
+    pub(crate) fn current(
+        prompt_version: &str,
+        semantic_grouping: bool,
+        include_tests: bool,
+    ) -> Self {
         Self {
             prompt_version: prompt_version.to_owned(),
             semantic_grouping,
@@ -74,7 +78,10 @@ impl PipelineInvalidationMetadata {
 
 impl RepositorySnapshot {
     /// Builds a snapshot from the current artifact set.
-    pub(crate) fn from_artifacts(artifacts: &[Artifact], pipeline: PipelineInvalidationMetadata) -> Self {
+    pub(crate) fn from_artifacts(
+        artifacts: &[Artifact],
+        pipeline: PipelineInvalidationMetadata,
+    ) -> Self {
         Self {
             artifact_hashes: artifacts
                 .iter()

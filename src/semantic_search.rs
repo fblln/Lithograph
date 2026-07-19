@@ -272,7 +272,11 @@ impl EmbeddingIndex {
     }
 
     /// Returns whether this index matches the current source and model.
-    pub(crate) fn is_compatible(&self, provider: &dyn EmbeddingProvider, source_hash: &str) -> bool {
+    pub(crate) fn is_compatible(
+        &self,
+        provider: &dyn EmbeddingProvider,
+        source_hash: &str,
+    ) -> bool {
         self.version == EMBEDDING_INDEX_VERSION
             && self.model_identity == provider.model_identity()
             && self.source_hash == source_hash

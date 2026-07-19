@@ -276,7 +276,11 @@ impl HybridResolverPipeline {
 
     /// Resolves with tsconfig path aliases available to the resolvers
     /// (LIT-45.2).
-    pub(crate) fn resolve_with_aliases(&self, graph: &mut Graph, ts_aliases: TsAliasMap) -> ResolveReport {
+    pub(crate) fn resolve_with_aliases(
+        &self,
+        graph: &mut Graph,
+        ts_aliases: TsAliasMap,
+    ) -> ResolveReport {
         self.resolve_with_aliases_and_re_exports(graph, ts_aliases, ReExportMap::new())
     }
 

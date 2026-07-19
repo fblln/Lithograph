@@ -29,7 +29,9 @@ pub(crate) use external_symbols::{
     is_javascript_builtin, is_python_builtin, is_python_stdlib_module,
     normalize_python_package_name, rust_std_crate,
 };
-pub(crate) use generic_text::{FindingConfidence, GenericTextExtractor, TextFinding, TextFindingKind};
+pub(crate) use generic_text::{
+    FindingConfidence, GenericTextExtractor, TextFinding, TextFindingKind,
+};
 pub(crate) use markdown::{
     CodeFence, DriftKind, LinkKind, MarkdownAnalysis, MarkdownAnalyzer, MarkdownCommand,
     MarkdownDrift, MarkdownHeading, MarkdownLink, MarkdownPathReference,

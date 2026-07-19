@@ -72,7 +72,10 @@ fn scoped_adjacency(
 }
 
 /// Deterministic degree/fan metric baseline for a graph scope.
-pub(crate) fn degree_metrics(graph: &Graph, scope: &MetricScope) -> Vec<(GraphNodeId, usize, usize)> {
+pub(crate) fn degree_metrics(
+    graph: &Graph,
+    scope: &MetricScope,
+) -> Vec<(GraphNodeId, usize, usize)> {
     let mut values = std::collections::BTreeMap::<GraphNodeId, (usize, usize)>::new();
     for node in &graph.nodes {
         values.entry(node.id().clone()).or_default();
@@ -91,7 +94,11 @@ pub(crate) fn degree_metrics(graph: &Graph, scope: &MetricScope) -> Vec<(GraphNo
 }
 
 /// Deterministic fixed-iteration PageRank over a selected relation scope.
-pub(crate) fn page_rank(graph: &Graph, scope: &MetricScope, iterations: usize) -> Vec<(GraphNodeId, f64)> {
+pub(crate) fn page_rank(
+    graph: &Graph,
+    scope: &MetricScope,
+    iterations: usize,
+) -> Vec<(GraphNodeId, f64)> {
     let outgoing = scoped_adjacency(graph, scope);
     if outgoing.is_empty() {
         return Vec::new();
@@ -155,7 +162,10 @@ pub(crate) fn connectivity_components(graph: &Graph, scope: &MetricScope) -> Vec
 }
 
 /// Deterministic directed strongly connected components (reachability based).
-pub(crate) fn strongly_connected_components(graph: &Graph, scope: &MetricScope) -> Vec<Vec<GraphNodeId>> {
+pub(crate) fn strongly_connected_components(
+    graph: &Graph,
+    scope: &MetricScope,
+) -> Vec<Vec<GraphNodeId>> {
     let forward = scoped_adjacency(graph, scope);
     let nodes: Vec<_> = forward.keys().cloned().collect();
     let mut reverse = std::collections::BTreeMap::<GraphNodeId, Vec<GraphNodeId>>::new();
@@ -337,7 +347,11 @@ impl MetricSnapshotStore {
         Self { root: root.into() }
     }
     /// Persists a snapshot only when its versioned payload changes.
-    pub(crate) fn save(&self, snapshot: &MetricSnapshot, metrics: &[NodeMetric]) -> std::io::Result<bool> {
+    pub(crate) fn save(
+        &self,
+        snapshot: &MetricSnapshot,
+        metrics: &[NodeMetric],
+    ) -> std::io::Result<bool> {
         let payload = serde_json::to_string(&(snapshot, metrics)).map_err(std::io::Error::other)?;
         let path = self.path(snapshot);
         let current: Option<String> = JsonStore.read(&path)?;

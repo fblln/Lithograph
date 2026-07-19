@@ -262,7 +262,10 @@ pub(crate) fn compute_layout_cached(
 }
 
 /// Computes a layout without consulting or populating any cache.
-pub(crate) fn compute_layout(graph: &Graph, request: &LayoutRequest) -> Result<LayoutResult, String> {
+pub(crate) fn compute_layout(
+    graph: &Graph,
+    request: &LayoutRequest,
+) -> Result<LayoutResult, String> {
     let snapshot_id = graph_snapshot_id(graph)?;
 
     if request.center_node.is_none() && graph.nodes.is_empty() {

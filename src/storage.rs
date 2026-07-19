@@ -41,7 +41,11 @@ impl JsonStore {
     /// path, and drops the `DeserializeOwned + PartialEq` bound so borrowed,
     /// non-owning views (e.g. a graph snapshot referencing its graph) can be
     /// persisted without cloning.
-    pub(crate) fn write_if_changed<T: Serialize>(&self, path: &Path, value: &T) -> io::Result<bool> {
+    pub(crate) fn write_if_changed<T: Serialize>(
+        &self,
+        path: &Path,
+        value: &T,
+    ) -> io::Result<bool> {
         self.write_if_changed_layout(path, value, Layout::Pretty)
     }
 

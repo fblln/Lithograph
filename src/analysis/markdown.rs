@@ -140,7 +140,12 @@ impl MarkdownAnalyzer {
     }
 
     /// Extracts Markdown structure and drift signals.
-    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str, repo_root: &Path) -> MarkdownAnalysis {
+    pub(crate) fn analyze(
+        &self,
+        artifact: &Artifact,
+        text: &str,
+        repo_root: &Path,
+    ) -> MarkdownAnalysis {
         if artifact.text_status != TextStatus::Text
             || artifact.model_policy == ModelExposurePolicy::Never
         {
