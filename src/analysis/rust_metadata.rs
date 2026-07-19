@@ -12,7 +12,7 @@ use std::path::Path;
 
 /// Resolved Cargo workspace analysis for one `Cargo.toml` artifact.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct RustWorkspaceAnalysis {
+pub(crate) struct RustWorkspaceAnalysis {
     /// Packages resolved from this manifest (one, unless it is a workspace root).
     pub packages: Vec<RustPackage>,
     /// Error message when `cargo metadata` failed to resolve the manifest.
@@ -21,7 +21,7 @@ pub struct RustWorkspaceAnalysis {
 
 /// One resolved Cargo package.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RustPackage {
+pub(crate) struct RustPackage {
     /// Package name.
     pub name: String,
     /// Package version.
@@ -40,7 +40,7 @@ pub struct RustPackage {
 
 /// One Cargo build target.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RustTarget {
+pub(crate) struct RustTarget {
     /// Target name.
     pub name: String,
     /// Target kinds, e.g. `lib`, `bin`, `test`, `example`, `bench`.
@@ -51,7 +51,7 @@ pub struct RustTarget {
 
 /// One Cargo feature.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RustFeature {
+pub(crate) struct RustFeature {
     /// Feature name.
     pub name: String,
     /// Features and optional dependencies this feature enables.
@@ -60,7 +60,7 @@ pub struct RustFeature {
 
 /// Dependency table category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum RustDependencyKind {
+pub(crate) enum RustDependencyKind {
     /// `[dependencies]`.
     Normal,
     /// `[dev-dependencies]`.
@@ -71,7 +71,7 @@ pub enum RustDependencyKind {
 
 /// One resolved dependency requirement.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RustDependency {
+pub(crate) struct RustDependency {
     /// Dependency crate name.
     pub name: String,
     /// Version requirement as declared.
@@ -86,12 +86,12 @@ pub struct RustDependency {
 /// metadata` reads the manifest (and any parent workspace manifest) from
 /// disk rather than from in-memory artifact text.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct RustWorkspaceAnalyzer;
+pub(crate) struct RustWorkspaceAnalyzer;
 
 impl RustWorkspaceAnalyzer {
     /// Resolves workspace/crate/target/dependency/feature facts for a Cargo
     /// manifest artifact rooted at `repo_root`.
-    pub fn analyze(&self, artifact: &Artifact, repo_root: &Path) -> RustWorkspaceAnalysis {
+    pub(crate) fn analyze(&self, artifact: &Artifact, repo_root: &Path) -> RustWorkspaceAnalysis {
         if artifact.text_status != TextStatus::Text
             || artifact.model_policy == ModelExposurePolicy::Never
         {

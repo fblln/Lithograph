@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// A persisted analytics run over one immutable graph snapshot.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MetricSnapshot {
+pub(crate) struct MetricSnapshot {
     /// Stable analytics snapshot id.
     pub id: String,
     /// Graph snapshot id this result was computed from.
@@ -23,7 +23,7 @@ pub struct MetricSnapshot {
 
 /// One node-scoped metric value.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct NodeMetric {
+pub(crate) struct NodeMetric {
     /// Parent metric snapshot id.
     pub metric_snapshot_id: String,
     /// Measured graph node.
@@ -38,7 +38,7 @@ pub struct NodeMetric {
 
 /// Selects which relation kinds participate in a metric computation.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MetricScope {
+pub(crate) enum MetricScope {
     /// Every relation kind participates.
     Combined,
     /// Only the listed relation kinds participate.
@@ -72,7 +72,7 @@ fn scoped_adjacency(
 }
 
 /// Deterministic degree/fan metric baseline for a graph scope.
-pub fn degree_metrics(graph: &Graph, scope: &MetricScope) -> Vec<(GraphNodeId, usize, usize)> {
+pub(crate) fn degree_metrics(graph: &Graph, scope: &MetricScope) -> Vec<(GraphNodeId, usize, usize)> {
     let mut values = std::collections::BTreeMap::<GraphNodeId, (usize, usize)>::new();
     for node in &graph.nodes {
         values.entry(node.id().clone()).or_default();
@@ -91,7 +91,7 @@ pub fn degree_metrics(graph: &Graph, scope: &MetricScope) -> Vec<(GraphNodeId, u
 }
 
 /// Deterministic fixed-iteration PageRank over a selected relation scope.
-pub fn page_rank(graph: &Graph, scope: &MetricScope, iterations: usize) -> Vec<(GraphNodeId, f64)> {
+pub(crate) fn page_rank(graph: &Graph, scope: &MetricScope, iterations: usize) -> Vec<(GraphNodeId, f64)> {
     let outgoing = scoped_adjacency(graph, scope);
     if outgoing.is_empty() {
         return Vec::new();
@@ -119,7 +119,7 @@ pub fn page_rank(graph: &Graph, scope: &MetricScope, iterations: usize) -> Vec<(
 }
 
 /// Deterministic weak connectivity components for the selected graph scope.
-pub fn connectivity_components(graph: &Graph, scope: &MetricScope) -> Vec<Vec<GraphNodeId>> {
+pub(crate) fn connectivity_components(graph: &Graph, scope: &MetricScope) -> Vec<Vec<GraphNodeId>> {
     let mut adjacency = std::collections::BTreeMap::<GraphNodeId, Vec<GraphNodeId>>::new();
     for (source, targets) in scoped_adjacency(graph, scope) {
         adjacency.entry(source.clone()).or_default();
@@ -155,7 +155,7 @@ pub fn connectivity_components(graph: &Graph, scope: &MetricScope) -> Vec<Vec<Gr
 }
 
 /// Deterministic directed strongly connected components (reachability based).
-pub fn strongly_connected_components(graph: &Graph, scope: &MetricScope) -> Vec<Vec<GraphNodeId>> {
+pub(crate) fn strongly_connected_components(graph: &Graph, scope: &MetricScope) -> Vec<Vec<GraphNodeId>> {
     let forward = scoped_adjacency(graph, scope);
     let nodes: Vec<_> = forward.keys().cloned().collect();
     let mut reverse = std::collections::BTreeMap::<GraphNodeId, Vec<GraphNodeId>>::new();
@@ -198,7 +198,7 @@ pub fn strongly_connected_components(graph: &Graph, scope: &MetricScope) -> Vec<
 }
 
 /// Deterministic directed closeness centrality for the selected relation scope.
-pub fn closeness(graph: &Graph, scope: &MetricScope) -> Vec<(GraphNodeId, f64)> {
+pub(crate) fn closeness(graph: &Graph, scope: &MetricScope) -> Vec<(GraphNodeId, f64)> {
     let edges = scoped_adjacency(graph, scope);
     let nodes: Vec<_> = edges.keys().cloned().collect();
     nodes
@@ -228,7 +228,7 @@ pub fn closeness(graph: &Graph, scope: &MetricScope) -> Vec<(GraphNodeId, f64)> 
 
 /// Deterministic betweenness execution policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BetweennessPolicy {
+pub(crate) struct BetweennessPolicy {
     /// Maximum scoped node count for exact computation.
     pub exact_node_threshold: usize,
     /// Stable number of sampled sources above the exact threshold.
@@ -244,7 +244,7 @@ impl Default for BetweennessPolicy {
 }
 
 /// Returns whether a graph uses exact or deterministic sampled betweenness.
-pub fn betweenness_mode(node_count: usize, policy: BetweennessPolicy) -> &'static str {
+pub(crate) fn betweenness_mode(node_count: usize, policy: BetweennessPolicy) -> &'static str {
     if node_count <= policy.exact_node_threshold {
         "exact"
     } else {
@@ -256,7 +256,7 @@ pub fn betweenness_mode(node_count: usize, policy: BetweennessPolicy) -> &'stati
 ///
 /// Exact mode traverses from every node. Above the policy threshold, it samples
 /// evenly-spaced nodes from sorted identifiers so repeated runs rank identically.
-pub fn betweenness(
+pub(crate) fn betweenness(
     graph: &Graph,
     scope: &MetricScope,
     policy: BetweennessPolicy,
@@ -328,16 +328,16 @@ pub fn betweenness(
 
 /// Versioned on-disk analytics snapshot store, separate from core graph data.
 #[derive(Debug, Clone)]
-pub struct MetricSnapshotStore {
+pub(crate) struct MetricSnapshotStore {
     root: std::path::PathBuf,
 }
 impl MetricSnapshotStore {
     /// Creates a store rooted at `.lithograph/analytics` or an equivalent path.
-    pub fn new(root: impl Into<std::path::PathBuf>) -> Self {
+    pub(crate) fn new(root: impl Into<std::path::PathBuf>) -> Self {
         Self { root: root.into() }
     }
     /// Persists a snapshot only when its versioned payload changes.
-    pub fn save(&self, snapshot: &MetricSnapshot, metrics: &[NodeMetric]) -> std::io::Result<bool> {
+    pub(crate) fn save(&self, snapshot: &MetricSnapshot, metrics: &[NodeMetric]) -> std::io::Result<bool> {
         let payload = serde_json::to_string(&(snapshot, metrics)).map_err(std::io::Error::other)?;
         let path = self.path(snapshot);
         let current: Option<String> = JsonStore.read(&path)?;
@@ -348,7 +348,7 @@ impl MetricSnapshotStore {
         Ok(true)
     }
     /// Loads the exact versioned snapshot and its node metrics.
-    pub fn load(
+    pub(crate) fn load(
         &self,
         snapshot: &MetricSnapshot,
     ) -> std::io::Result<Option<(MetricSnapshot, Vec<NodeMetric>)>> {
@@ -369,7 +369,7 @@ impl MetricSnapshotStore {
 
 impl MetricSnapshot {
     /// Deterministic invalidation key: recompute when any component changes.
-    pub fn invalidation_key(&self) -> String {
+    pub(crate) fn invalidation_key(&self) -> String {
         format!(
             "{}:{}:{}:{}",
             self.graph_snapshot_id, self.algorithm, self.algorithm_version, self.filter_scope

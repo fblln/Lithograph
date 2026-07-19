@@ -6,10 +6,10 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 /// Bump when graph-pass ordering or semantics change.
-pub const GRAPH_BUILD_PIPELINE_VERSION: u32 = 2;
+pub(crate) const GRAPH_BUILD_PIPELINE_VERSION: u32 = 2;
 
 /// Version of the machine-readable diagnostic trace contract.
-pub const GRAPH_BUILD_TRACE_VERSION: u32 = 1;
+pub(crate) const GRAPH_BUILD_TRACE_VERSION: u32 = 1;
 
 /// A deterministic phase in graph construction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -74,7 +74,7 @@ pub struct GraphDecisionTrace {
 }
 
 /// Stable execution order for every graph build.
-pub const GRAPH_BUILD_PASS_ORDER: &[GraphBuildPass] = &[
+pub(crate) const GRAPH_BUILD_PASS_ORDER: &[GraphBuildPass] = &[
     GraphBuildPass::Structure,
     GraphBuildPass::DefinitionsAndImports,
     GraphBuildPass::Enrichment,
@@ -86,7 +86,7 @@ pub const GRAPH_BUILD_PASS_ORDER: &[GraphBuildPass] = &[
 
 /// Observable output of one completed graph-build pass.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GraphBuildPassResult {
+pub(crate) struct GraphBuildPassResult {
     /// Completed pass.
     pub pass: GraphBuildPass,
     /// Node count after the pass.
@@ -97,7 +97,7 @@ pub struct GraphBuildPassResult {
 
 /// Controls how much graph state an opt-in diagnostic build retains.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub enum GraphBuildTraceDetail {
+pub(crate) enum GraphBuildTraceDetail {
     /// Retain deterministic counts and hashes only.
     #[default]
     Summary,
@@ -107,7 +107,7 @@ pub enum GraphBuildTraceDetail {
 
 /// Configuration for an opt-in graph-build trace.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct GraphBuildTraceConfig {
+pub(crate) struct GraphBuildTraceConfig {
     /// Amount of graph state retained for each pass.
     pub detail: GraphBuildTraceDetail,
     /// Optional stable node/path fragments used by diagnostic consumers.
@@ -147,7 +147,7 @@ pub struct GraphBuildStageTrace {
 
 /// Complete deterministic graph-build trace.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GraphBuildTrace {
+pub(crate) struct GraphBuildTrace {
     /// Trace schema version.
     pub trace_version: u32,
     /// Graph-pipeline semantics version.
@@ -197,7 +197,7 @@ impl GraphBuildTrace {
 
 /// Complete typed output of graph construction.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GraphBuildOutput {
+pub(crate) struct GraphBuildOutput {
     /// Final normalized graph.
     pub graph: Graph,
     /// Pipeline semantics version used to create it.

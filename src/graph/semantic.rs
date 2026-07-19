@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// A deterministic, inspectable profile for one class-like symbol.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SemanticClassProfile {
+pub(crate) struct SemanticClassProfile {
     /// Profiled class, struct, or trait node.
     pub node_id: GraphNodeId,
     /// Qualified declaration name.
@@ -34,7 +34,7 @@ pub struct SemanticClassProfile {
 /// Explainable score components. `vector` remains zero unless an optional
 /// offline embedding implementation is supplied by a later caller.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SemanticScore {
+pub(crate) struct SemanticScore {
     /// Exact and token-based local text matches.
     pub lexical: f64,
     /// Domain-role vocabulary matches.
@@ -49,14 +49,14 @@ pub struct SemanticScore {
 
 impl SemanticScore {
     /// Returns the complete explainable score.
-    pub fn total(&self) -> f64 {
+    pub(crate) fn total(&self) -> f64 {
         self.lexical + self.taxonomy + self.vector + self.graph_proximity + self.structural
     }
 }
 
 /// One locally ranked semantic-filter result.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SemanticClassMatch {
+pub(crate) struct SemanticClassMatch {
     /// Matched local profile.
     pub profile: SemanticClassProfile,
     /// Evidence breakdown for this match.
@@ -64,7 +64,7 @@ pub struct SemanticClassMatch {
 }
 
 /// Builds profiles only from local typed graph facts.
-pub fn class_profiles(graph: &Graph) -> Vec<SemanticClassProfile> {
+pub(crate) fn class_profiles(graph: &Graph) -> Vec<SemanticClassProfile> {
     let names: BTreeMap<_, _> = graph
         .nodes
         .iter()
@@ -137,7 +137,7 @@ pub fn class_profiles(graph: &Graph) -> Vec<SemanticClassProfile> {
 }
 
 /// Ranks class profiles with lexical, taxonomy, local graph, and structural evidence.
-pub fn filter_classes(graph: &Graph, query: &str) -> Vec<SemanticClassMatch> {
+pub(crate) fn filter_classes(graph: &Graph, query: &str) -> Vec<SemanticClassMatch> {
     let tokens: BTreeSet<_> = query
         .to_ascii_lowercase()
         .split_whitespace()

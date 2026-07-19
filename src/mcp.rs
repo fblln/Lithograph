@@ -37,7 +37,7 @@ use std::path::{Component, Path, PathBuf};
 /// AC1/AC2): deterministic and schema-like enough for a caller to
 /// discover what's available without guessing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub struct McpToolInfo {
+pub(crate) struct McpToolInfo {
     /// Stable tool name, passed as `McpRequest.tool`.
     pub name: &'static str,
     /// What the tool does and, where not obvious, its required params.
@@ -48,7 +48,7 @@ pub struct McpToolInfo {
 /// source of truth for both the `list_tools` response and the wiki
 /// export's tool listing (AC4), so the two can never silently drift
 /// apart as new tools are added.
-pub const MCP_TOOLS: &[McpToolInfo] = &[
+pub(crate) const MCP_TOOLS: &[McpToolInfo] = &[
     McpToolInfo {
         name: "list_tools",
         description: "Lists every tool this server implements.",
@@ -225,7 +225,7 @@ pub const MCP_TOOLS: &[McpToolInfo] = &[
 
 /// One request accepted by the local server.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct McpRequest {
+pub(crate) struct McpRequest {
     /// Client-provided request id.
     pub id: Value,
     /// Tool name: read_wiki_structure, read_wiki_contents, graph tools, or ask_question.
@@ -237,7 +237,7 @@ pub struct McpRequest {
 
 /// One response emitted by the local server.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct McpResponse {
+pub(crate) struct McpResponse {
     /// Echoed request id.
     pub id: Value,
     /// Response payload on success.
@@ -308,20 +308,20 @@ struct RelatedRelation {
 
 /// Deterministic wiki MCP handler.
 #[derive(Debug, Clone)]
-pub struct WikiMcpServer {
+pub(crate) struct WikiMcpServer {
     repo_root: PathBuf,
 }
 
 impl WikiMcpServer {
     /// Creates a server bound to one generated repository.
-    pub fn new(repo_root: &Path) -> Self {
+    pub(crate) fn new(repo_root: &Path) -> Self {
         Self {
             repo_root: repo_root.to_path_buf(),
         }
     }
 
     /// Handles one request without live model or network calls.
-    pub fn handle(&self, request: McpRequest) -> McpResponse {
+    pub(crate) fn handle(&self, request: McpRequest) -> McpResponse {
         match self.handle_result(&request) {
             Ok(result) => McpResponse {
                 id: request.id,
@@ -939,7 +939,7 @@ impl WikiMcpServer {
     }
 
     /// Runs a JSON-line request loop until EOF.
-    pub fn run<R, W>(&self, reader: R, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
+    pub(crate) fn run<R, W>(&self, reader: R, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
     where
         R: BufRead,
         W: Write,

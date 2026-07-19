@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 
 /// One node, its evidence, and its neighbors.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NodeExplanation {
+pub(crate) struct NodeExplanation {
     /// The explained node.
     pub node: SearchResult,
     /// Source spans backing the node's existence.
@@ -28,7 +28,7 @@ pub struct NodeExplanation {
 
 /// One neighbor reached by a relation of a given kind.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Neighbor {
+pub(crate) struct Neighbor {
     /// The neighbor node.
     pub node: SearchResult,
     /// How the connecting relation was resolved, when it records
@@ -43,7 +43,7 @@ impl<'a> KnowledgeIndex<'a> {
     /// Neighbors are grouped by relation kind because the nodes worth asking
     /// about are the well-connected ones: an ungrouped dump of a hub's edges
     /// is the question restated, not an answer.
-    pub fn explain(&self, query: &str) -> Option<NodeExplanation> {
+    pub(crate) fn explain(&self, query: &str) -> Option<NodeExplanation> {
         let node = self.find_root(query)?;
         let degree = self.degree_index();
         let mut outbound: BTreeMap<String, Vec<Neighbor>> = BTreeMap::new();

@@ -14,11 +14,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
 
 /// Version of the normalized environment/configuration fact contract.
-pub const ENVIRONMENT_FACT_VERSION: u32 = 1;
+pub(crate) const ENVIRONMENT_FACT_VERSION: u32 = 1;
 
 /// Error returned when an identifier contains no usable alphanumeric token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NameNormalizationError;
+pub(crate) struct NameNormalizationError;
 
 impl Display for NameNormalizationError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
@@ -30,7 +30,7 @@ impl std::error::Error for NameNormalizationError {}
 
 /// A source identifier with its original spelling and canonical tokens.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct NormalizedName {
+pub(crate) struct NormalizedName {
     /// Original spelling retained for evidence and display.
     pub original: String,
     /// Lowercase tokens split at separators, case transitions, acronym edges,
@@ -42,7 +42,7 @@ pub struct NormalizedName {
 
 impl NormalizedName {
     /// Normalizes an identifier without discarding its original spelling.
-    pub fn new(value: impl Into<String>) -> Result<Self, NameNormalizationError> {
+    pub(crate) fn new(value: impl Into<String>) -> Result<Self, NameNormalizationError> {
         let original = value.into();
         let tokens = split_identifier(&original);
         if tokens.is_empty() {
@@ -57,13 +57,13 @@ impl NormalizedName {
     }
 
     /// Original spelling as written by the source or configuration file.
-    pub fn original(&self) -> &str {
+    pub(crate) fn original(&self) -> &str {
         &self.original
     }
 
     /// Generates deterministic spelling aliases used by exact/framework
     /// resolution. The original spelling is always retained as an alias.
-    pub fn aliases(&self) -> Vec<NameAlias> {
+    pub(crate) fn aliases(&self) -> Vec<NameAlias> {
         let mut aliases = BTreeMap::<String, NameAliasKind>::new();
         add_alias(&mut aliases, &self.original, NameAliasKind::Original);
         add_alias(&mut aliases, &self.canonical, NameAliasKind::CanonicalDot);
@@ -97,7 +97,7 @@ impl NormalizedName {
 
 /// How a normalized alias was generated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum NameAliasKind {
+pub(crate) enum NameAliasKind {
     /// The exact original spelling.
     Original,
     /// Lowercase dot-separated canonical form.
@@ -114,7 +114,7 @@ pub enum NameAliasKind {
 
 /// One deterministic spelling alias and its provenance.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct NameAlias {
+pub(crate) struct NameAlias {
     /// Alias text.
     pub value: String,
     /// Alias generation strategy.
@@ -123,7 +123,7 @@ pub struct NameAlias {
 
 /// Role played by an environment/configuration fact.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum FactRole {
+pub(crate) enum FactRole {
     /// A source symbol or artifact reads an environment variable.
     Read,
     /// A deployment/configuration source defines or supplies an environment variable.
@@ -134,7 +134,7 @@ pub enum FactRole {
 
 /// Source family responsible for a fact.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum FactSourceKind {
+pub(crate) enum FactSourceKind {
     /// Python, Rust, TypeScript, or another source-language analyzer.
     SourceCode,
     /// `.env` assignment.
@@ -159,7 +159,7 @@ pub enum FactSourceKind {
 
 /// A literal value that is safe to retain in analysis output.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SafeFactValue {
+pub(crate) struct SafeFactValue {
     /// Non-secret value, omitted when redaction is required.
     pub value: Option<String>,
     /// True when a value was intentionally withheld.
@@ -168,7 +168,7 @@ pub struct SafeFactValue {
 
 impl SafeFactValue {
     /// Retains non-sensitive values and redacts likely secrets by key/value.
-    pub fn from_named_value(name: &NormalizedName, value: impl Into<String>) -> Self {
+    pub(crate) fn from_named_value(name: &NormalizedName, value: impl Into<String>) -> Self {
         let value = value.into();
         let redacted = is_secret_like(name) || contains_private_material(&value);
         Self {
@@ -180,7 +180,7 @@ impl SafeFactValue {
 
 /// One environment variable observation or definition.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EnvFact {
+pub(crate) struct EnvFact {
     /// Environment variable name and normalized aliases.
     pub name: NormalizedName,
     /// Whether this is a read or a definition.
@@ -199,7 +199,7 @@ pub struct EnvFact {
 
 impl EnvFact {
     /// Creates a validated environment fact.
-    pub fn new(
+    pub(crate) fn new(
         name: impl Into<String>,
         role: FactRole,
         source: FactSourceKind,
@@ -224,7 +224,7 @@ impl EnvFact {
 
 /// One configuration-key observation or definition.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ConfigFact {
+pub(crate) struct ConfigFact {
     /// Configuration key and normalized aliases.
     pub key: NormalizedName,
     /// Whether this is a definition or a source reference.
@@ -243,7 +243,7 @@ pub struct ConfigFact {
 
 impl ConfigFact {
     /// Creates a validated configuration fact.
-    pub fn new(
+    pub(crate) fn new(
         key: impl Into<String>,
         role: FactRole,
         source: FactSourceKind,
@@ -267,7 +267,7 @@ impl ConfigFact {
 }
 
 /// Returns true for conservative key names whose values should not be stored.
-pub fn is_secret_like(name: &NormalizedName) -> bool {
+pub(crate) fn is_secret_like(name: &NormalizedName) -> bool {
     const SECRET_TOKENS: &[&str] = &[
         "access_token",
         "credential",
@@ -291,7 +291,7 @@ pub fn is_secret_like(name: &NormalizedName) -> bool {
 
 /// Summary of deterministic environment-to-config linking.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct EnvironmentResolveReport {
+pub(crate) struct EnvironmentResolveReport {
     /// Authoritative links added to the graph.
     pub linked: usize,
     /// Environment variables with multiple distinct config candidates.
@@ -300,14 +300,14 @@ pub struct EnvironmentResolveReport {
 
 /// Deterministic, evidence-backed explanation of environment graph facts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EnvironmentExplanation {
+pub(crate) struct EnvironmentExplanation {
     /// Variables included after applying the optional name filter.
     pub variables: Vec<EnvironmentVariableExplanation>,
 }
 
 /// Explanation for one environment variable node.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EnvironmentVariableExplanation {
+pub(crate) struct EnvironmentVariableExplanation {
     /// Stable environment node identifier.
     pub id: GraphNodeId,
     /// Original environment variable spelling.
@@ -328,7 +328,7 @@ pub struct EnvironmentVariableExplanation {
 
 /// One authoritative environment-to-config relation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EnvironmentResolvedLink {
+pub(crate) struct EnvironmentResolvedLink {
     /// Relation identifier.
     pub relation_id: String,
     /// Canonical config key node identifier.
@@ -343,7 +343,7 @@ pub struct EnvironmentResolvedLink {
 
 /// One environment read or definition source.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EnvironmentCodeUser {
+pub(crate) struct EnvironmentCodeUser {
     /// Source graph node identifier.
     pub source: GraphNodeId,
     /// Relation confidence.
@@ -354,7 +354,7 @@ pub struct EnvironmentCodeUser {
 
 /// A config key considered by deterministic alias matching.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EnvironmentCandidate {
+pub(crate) struct EnvironmentCandidate {
     /// Candidate config key node identifier.
     pub config_key_id: GraphNodeId,
     /// Candidate config key name.
@@ -369,7 +369,7 @@ pub struct EnvironmentCandidate {
 
 /// Deterministic local similarity feature contributions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub struct EnvironmentCandidateFeatures {
+pub(crate) struct EnvironmentCandidateFeatures {
     /// Shared normalized-token contribution.
     pub token_overlap: u32,
     /// Character trigram overlap contribution.
@@ -396,7 +396,7 @@ impl EnvironmentCandidateFeatures {
 }
 
 /// Explains environment variables and their graph-backed config links.
-pub fn explain_environment(graph: &Graph, filter: Option<&str>) -> EnvironmentExplanation {
+pub(crate) fn explain_environment(graph: &Graph, filter: Option<&str>) -> EnvironmentExplanation {
     let config_keys: Vec<(&GraphNodeId, &str, &EvidenceRef)> = graph
         .nodes
         .iter()
@@ -665,7 +665,7 @@ fn graph_proximity(graph: &Graph, env_id: &GraphNodeId, config_id: &GraphNodeId)
 
 /// Adds high-confidence environment-to-config links when aliases identify one
 /// canonical config key. Ambiguous aliases are deliberately left untouched.
-pub fn resolve_environment_links(graph: &mut Graph) -> EnvironmentResolveReport {
+pub(crate) fn resolve_environment_links(graph: &mut Graph) -> EnvironmentResolveReport {
     let mut aliases = BTreeMap::<String, BTreeSet<GraphNodeId>>::new();
     for node in &graph.nodes {
         let GraphNode::Config(config) = node else {

@@ -14,7 +14,7 @@ const B: f64 = 0.75;
 /// Category of one indexed document, so a result can be grouped/labeled
 /// without re-deriving it from the graph (AC2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum FtsDocumentKind {
+pub(crate) enum FtsDocumentKind {
     /// A symbol's qualified name plus its doc comment/docstring.
     Symbol,
     /// A Markdown documentation heading.
@@ -28,7 +28,7 @@ pub enum FtsDocumentKind {
 /// One indexed document: the graph node it came from, plus the raw text
 /// it contributes to the index.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FtsDocument {
+pub(crate) struct FtsDocument {
     /// Source graph node id.
     pub id: String,
     /// Document category (AC2).
@@ -44,14 +44,14 @@ pub struct FtsDocument {
 /// graph, so it always reflects the graph it was built from and never
 /// drifts independently of it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FtsIndex {
+pub(crate) struct FtsIndex {
     /// Every indexed document, in a stable (graph node id) order.
     pub documents: Vec<FtsDocument>,
 }
 
 /// One BM25-ranked search result.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct FtsSearchResult {
+pub(crate) struct FtsSearchResult {
     /// Source graph node id.
     pub document_id: String,
     /// Document category.
@@ -66,7 +66,7 @@ impl FtsIndex {
     /// Builds the index from `graph` (AC1/AC2): one document per symbol
     /// (qualified name + doc), documentation heading, artifact path, and
     /// extracted fact (config entity, command, env var, package).
-    pub fn build(graph: &Graph) -> Self {
+    pub(crate) fn build(graph: &Graph) -> Self {
         let mut documents: Vec<FtsDocument> = graph
             .nodes
             .iter()
@@ -127,7 +127,7 @@ impl FtsIndex {
     /// Ranks every document against `query` with BM25, highest score
     /// first, ties broken by document id for stable ordering (AC4).
     /// Empty for an empty or entirely-unknown query.
-    pub fn search(&self, query: &str, limit: usize) -> Vec<FtsSearchResult> {
+    pub(crate) fn search(&self, query: &str, limit: usize) -> Vec<FtsSearchResult> {
         let query_terms = tokenize(query);
         if query_terms.is_empty() || self.documents.is_empty() {
             return Vec::new();

@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 
 /// Deterministic graph schema summary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GraphSchema {
+pub(crate) struct GraphSchema {
     /// Counts by graph node label.
     pub node_labels: Vec<LabelCount>,
     /// Counts by relation type.
@@ -18,7 +18,7 @@ pub struct GraphSchema {
 
 /// Count for one node label.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct LabelCount {
+pub(crate) struct LabelCount {
     /// Node label.
     pub label: String,
     /// Number of nodes with this label.
@@ -27,7 +27,7 @@ pub struct LabelCount {
 
 /// Count for one edge type.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TypeCount {
+pub(crate) struct TypeCount {
     /// Relation type.
     pub edge_type: String,
     /// Number of relations with this type.
@@ -36,7 +36,7 @@ pub struct TypeCount {
 
 impl<'a> KnowledgeIndex<'a> {
     /// Returns deterministic graph schema counts.
-    pub fn schema(&self) -> GraphSchema {
+    pub(crate) fn schema(&self) -> GraphSchema {
         let node_by_id = self.node_by_id();
         let mut node_counts: BTreeMap<String, usize> = BTreeMap::new();
         let mut edge_counts: BTreeMap<String, usize> = BTreeMap::new();

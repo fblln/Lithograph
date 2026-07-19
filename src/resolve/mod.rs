@@ -14,13 +14,12 @@
 //! Per-language import resolvers (LIT-22.3.2) plug into this framework by
 //! implementing [`Resolver`]; this module only owns the shared plumbing.
 
-pub mod aliases;
-pub mod barrels;
-pub mod environment;
-pub mod imports;
-pub mod propagate;
-pub mod symbols;
-pub mod type_aware;
+pub(crate) mod aliases;
+pub(crate) mod barrels;
+pub(crate) mod environment;
+pub(crate) mod imports;
+pub(crate) mod propagate;
+pub(crate) mod symbols;
 
 use crate::domain::Confidence;
 use crate::graph::{
@@ -29,36 +28,33 @@ use crate::graph::{
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-pub use aliases::TsAliasMap;
-pub use barrels::{ReExport, ReExportKind, ReExportMap, barrel_targets};
-pub use environment::{
+pub(crate) use aliases::TsAliasMap;
+pub(crate) use barrels::{ReExport, ReExportKind, ReExportMap, barrel_targets};
+pub(crate) use environment::{
     ConfigFact, ENVIRONMENT_FACT_VERSION, EnvFact, EnvironmentCandidate,
     EnvironmentCandidateFeatures, EnvironmentCodeUser, EnvironmentExplanation,
     EnvironmentResolveReport, EnvironmentResolvedLink, EnvironmentVariableExplanation, FactRole,
     FactSourceKind, NameAlias, NameAliasKind, NameNormalizationError, NormalizedName,
     SafeFactValue, explain_environment, is_secret_like, resolve_environment_links,
 };
-pub use imports::{LanguageImportResolver, extract_import_reference};
+pub(crate) use imports::{LanguageImportResolver, extract_import_reference};
 pub(crate) use imports::{
     extract_typescript_default_import_binding, extract_typescript_import_bindings,
     import_candidates, typescript_dependency_root,
 };
 pub(crate) use propagate::re_export_map;
-pub use propagate::{
+pub(crate) use propagate::{
     BaseClassFact, BindingFact, FileTypeFacts, ImportBindingFact, MemberCallFact,
     PROPAGATE_STRATEGY, PropagateReport, Receiver, TypeFacts, propagate_types,
 };
-pub use symbols::{ImportLookup, ImportMap, ProjectSymbol, ProjectSymbolRegistry};
-pub use type_aware::{
-    TYPE_AWARE_LANGUAGES, TypeAwareCapability, TypeAwareLanguage, resolve_type_aware,
-};
+pub(crate) use symbols::{ImportLookup, ImportMap, ProjectSymbol, ProjectSymbolRegistry};
 
 /// Typed indexes over one graph snapshot, built once per pipeline run and
 /// shared by every resolver (AC1: typed syntax/package/module/symbol
 /// inputs). Keyed by the same string a resolver would extract from a
 /// syntax fact -- a dotted/`::` module path, a package name, or a fully
 /// qualified symbol name -- so a resolver's lookup is a single map access.
-pub struct ResolverContext<'a> {
+pub(crate) struct ResolverContext<'a> {
     /// The graph being resolved.
     pub graph: &'a Graph,
     /// Module node ids by module path.
@@ -106,19 +102,19 @@ pub struct ResolverContext<'a> {
 impl<'a> ResolverContext<'a> {
     /// Builds every index in one pass over `graph.nodes`, with no tsconfig
     /// aliases.
-    pub fn build(graph: &'a Graph) -> Self {
+    pub(crate) fn build(graph: &'a Graph) -> Self {
         Self::build_with_aliases_and_re_exports(graph, TsAliasMap::default(), ReExportMap::new())
     }
 
     /// Builds every index with tsconfig aliases but no barrel re-export map
     /// (LIT-45.2); barrel-unaware callers keep resolution unchanged.
-    pub fn build_with_aliases(graph: &'a Graph, ts_aliases: TsAliasMap) -> Self {
+    pub(crate) fn build_with_aliases(graph: &'a Graph, ts_aliases: TsAliasMap) -> Self {
         Self::build_with_aliases_and_re_exports(graph, ts_aliases, ReExportMap::new())
     }
 
     /// Builds every index in one pass over `graph.nodes`, with tsconfig aliases
     /// (LIT-45.2) and barrel re-exports (LIT-79) both available to resolvers.
-    pub fn build_with_aliases_and_re_exports(
+    pub(crate) fn build_with_aliases_and_re_exports(
         graph: &'a Graph,
         ts_aliases: TsAliasMap,
         re_exports: ReExportMap,
@@ -200,7 +196,7 @@ impl<'a> ResolverContext<'a> {
 
 /// One upgraded relation target, returned by a [`Resolver`] that proved a
 /// connection.
-pub struct ResolvedTarget {
+pub(crate) struct ResolvedTarget {
     /// The node this relation should now point to, in place of its
     /// `Unresolved` target.
     pub target: GraphNodeId,
@@ -212,7 +208,7 @@ pub struct ResolvedTarget {
 /// only ever sees relations whose current target is an `Unresolved` node
 /// and whose provenance resolution is `SyntaxOnly` or `Fallback` -- the
 /// pipeline never asks a resolver to touch an already-resolved relation.
-pub trait Resolver {
+pub(crate) trait Resolver {
     /// Stable strategy label recorded in the upgraded relation's
     /// provenance (e.g. `"package-map-exact-match"`).
     fn strategy(&self) -> &'static str;
@@ -231,7 +227,7 @@ pub trait Resolver {
 
 /// Outcome of one [`HybridResolverPipeline::resolve`] run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct ResolveReport {
+pub(crate) struct ResolveReport {
     /// Relations upgraded from `SyntaxOnly`/`Fallback` to `HybridResolved`.
     pub resolved: usize,
     /// Eligible relations no resolver could upgrade.
@@ -245,14 +241,14 @@ pub struct ResolveReport {
 /// in list order and the first one to return `Some` wins -- so two
 /// resolvers can never both claim the same relation, and re-running the
 /// pipeline on the same graph always produces the same result.
-pub struct HybridResolverPipeline {
+pub(crate) struct HybridResolverPipeline {
     resolvers: Vec<Box<dyn Resolver>>,
 }
 
 impl HybridResolverPipeline {
     /// Builds a pipeline that tries `resolvers` in order for every eligible
     /// relation.
-    pub fn new(resolvers: Vec<Box<dyn Resolver>>) -> Self {
+    pub(crate) fn new(resolvers: Vec<Box<dyn Resolver>>) -> Self {
         Self { resolvers }
     }
 
@@ -262,7 +258,7 @@ impl HybridResolverPipeline {
     /// two generic exact-match resolvers (LIT-22.3.1) catch anything whose
     /// raw unresolved value already happens to equal a known package name
     /// or artifact path verbatim.
-    pub fn default_pipeline() -> Self {
+    pub(crate) fn default_pipeline() -> Self {
         Self::new(vec![
             Box::new(TypeScriptImportBindingResolver),
             Box::new(SymbolNameResolver),
@@ -274,20 +270,20 @@ impl HybridResolverPipeline {
 
     /// Runs every resolver against every eligible relation in `graph`,
     /// mutating resolved relations in place.
-    pub fn resolve(&self, graph: &mut Graph) -> ResolveReport {
+    pub(crate) fn resolve(&self, graph: &mut Graph) -> ResolveReport {
         self.resolve_with_aliases(graph, TsAliasMap::default())
     }
 
     /// Resolves with tsconfig path aliases available to the resolvers
     /// (LIT-45.2).
-    pub fn resolve_with_aliases(&self, graph: &mut Graph, ts_aliases: TsAliasMap) -> ResolveReport {
+    pub(crate) fn resolve_with_aliases(&self, graph: &mut Graph, ts_aliases: TsAliasMap) -> ResolveReport {
         self.resolve_with_aliases_and_re_exports(graph, ts_aliases, ReExportMap::new())
     }
 
     /// Resolves with tsconfig aliases (LIT-45.2) and barrel re-exports
     /// (LIT-79) both available, so a use-site reference imported through a
     /// barrel can be chased to its declaring module.
-    pub fn resolve_with_aliases_and_re_exports(
+    pub(crate) fn resolve_with_aliases_and_re_exports(
         &self,
         graph: &mut Graph,
         ts_aliases: TsAliasMap,

@@ -15,7 +15,7 @@ use std::path::{Component, Path, PathBuf};
 /// `"typescript"` or `"c_sharp"`). Returns `None` when `language` isn't a
 /// family this module extracts references for, or the statement has no
 /// recognizable reference.
-pub fn extract_import_reference(language: &str, raw_text: &str) -> Option<String> {
+pub(crate) fn extract_import_reference(language: &str, raw_text: &str) -> Option<String> {
     match language {
         "typescript" | "tsx" | "javascript" | "go" => quoted_literal(raw_text),
         "java" => strip_import_statement(raw_text, &["import static ", "import "], ";"),
@@ -214,7 +214,7 @@ pub(crate) fn resolve_relative_path(source_dir: &Path, reference: &str) -> Strin
 /// prefix match against the local package's own module path. Anything else
 /// is left for [`super::PackageMapResolver`]/[`super::LocalArtifactPathResolver`]
 /// or stays unresolved (AC3: never fabricate a match).
-pub struct LanguageImportResolver;
+pub(crate) struct LanguageImportResolver;
 
 impl Resolver for LanguageImportResolver {
     fn strategy(&self) -> &'static str {

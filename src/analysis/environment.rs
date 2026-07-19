@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 /// Normalized output from one or more environment/configuration analyzers.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct EnvironmentFacts {
+pub(crate) struct EnvironmentFacts {
     /// Named environment-variable facts.
     pub env: Vec<EnvFact>,
     /// Named configuration-key facts.
@@ -26,14 +26,14 @@ pub struct EnvironmentFacts {
 
 impl EnvironmentFacts {
     /// Adds facts from another analyzer output.
-    pub fn extend(&mut self, other: Self) {
+    pub(crate) fn extend(&mut self, other: Self) {
         self.env.extend(other.env);
         self.config.extend(other.config);
         self.unresolved.extend(other.unresolved);
     }
 
     /// Sorts all fact collections into a stable order for cache/golden output.
-    pub fn sort_deterministically(&mut self) {
+    pub(crate) fn sort_deterministically(&mut self) {
         self.env.sort_by(|a, b| {
             (
                 a.name.canonical.as_str(),
@@ -79,7 +79,7 @@ impl EnvironmentFacts {
     }
 
     /// Converts Python environment-read references into shared facts.
-    pub fn from_python(analysis: &PythonAnalysis) -> Self {
+    pub(crate) fn from_python(analysis: &PythonAnalysis) -> Self {
         let mut facts = Self::default();
         for reference in &analysis.references {
             if reference.kind == PythonReferenceKind::EnvRead {
@@ -101,7 +101,7 @@ impl EnvironmentFacts {
     }
 
     /// Converts Rust environment-read references into shared facts.
-    pub fn from_rust(analysis: &RustAnalysis) -> Self {
+    pub(crate) fn from_rust(analysis: &RustAnalysis) -> Self {
         let mut facts = Self::default();
         for reference in &analysis.references {
             if reference.kind == RustReferenceKind::EnvRead {
@@ -123,7 +123,7 @@ impl EnvironmentFacts {
     }
 
     /// Converts TypeScript/TSX environment reads into shared facts.
-    pub fn from_typescript(analysis: &TypeScriptAnalysis) -> Self {
+    pub(crate) fn from_typescript(analysis: &TypeScriptAnalysis) -> Self {
         let mut facts = Self::default();
         for reference in &analysis.env_reads {
             match &reference.name {
@@ -153,7 +153,7 @@ impl EnvironmentFacts {
     }
 
     /// Converts Dockerfile `ENV` and `ARG` assignments into definitions.
-    pub fn from_dockerfile(analysis: &DockerfileAnalysis) -> Self {
+    pub(crate) fn from_dockerfile(analysis: &DockerfileAnalysis) -> Self {
         let mut facts = Self::default();
         for assignment in analysis.env.iter().chain(&analysis.args) {
             push_env_value(
@@ -174,7 +174,7 @@ impl EnvironmentFacts {
     }
 
     /// Converts Compose service environment blocks into definitions.
-    pub fn from_compose(analysis: &ComposeProfile) -> Self {
+    pub(crate) fn from_compose(analysis: &ComposeProfile) -> Self {
         let mut facts = Self::default();
         for service in &analysis.services {
             for assignment in &service.environment {
@@ -197,7 +197,7 @@ impl EnvironmentFacts {
     }
 
     /// Converts CI workflow step environments into definitions.
-    pub fn from_actions(analysis: &ActionsProfile) -> Self {
+    pub(crate) fn from_actions(analysis: &ActionsProfile) -> Self {
         let mut facts = Self::default();
         for job in &analysis.jobs {
             for step in &job.steps {
@@ -222,7 +222,7 @@ impl EnvironmentFacts {
     }
 
     /// Converts structured config paths and environment references into facts.
-    pub fn from_structured(analysis: &StructuredAnalysis) -> Self {
+    pub(crate) fn from_structured(analysis: &StructuredAnalysis) -> Self {
         let mut facts = Self::default();
         for entity in &analysis.entities {
             let Some(key) = config_path_key(&entity.config_path) else {
@@ -261,7 +261,7 @@ impl EnvironmentFacts {
     }
 
     /// Parses `.env` assignments and Java/Spring-style property files.
-    pub fn parse_assignments(artifact: &Artifact, text: &str) -> Self {
+    pub(crate) fn parse_assignments(artifact: &Artifact, text: &str) -> Self {
         let file_name = artifact
             .path
             .as_str()
@@ -340,7 +340,7 @@ impl EnvironmentFacts {
 
 /// A dynamic environment expression kept for review without a fake name.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UnresolvedEnvironmentFact {
+pub(crate) struct UnresolvedEnvironmentFact {
     /// Expression as written by the source.
     pub expression: String,
     /// Fact role.

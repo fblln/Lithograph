@@ -71,7 +71,7 @@ use dispatch::{analyzer_kind, artifact_cache_key, compute_fresh};
 
 /// Builds a typed semantic graph from repository artifacts.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct GraphBuilder;
+pub(crate) struct GraphBuilder;
 
 impl GraphBuilder {
     /// Builds the graph for `artifacts` rooted at `repo_root`, reading each
@@ -80,7 +80,7 @@ impl GraphBuilder {
     /// Every artifact gets an `Artifact` node regardless of analyzer support,
     /// so unsupported artifacts remain visible in the graph. Equivalent to
     /// [`Self::build_with_cache`] with no cache, i.e. always parses fresh.
-    pub fn build(&self, repo_root: &Path, artifacts: &[Artifact]) -> Graph {
+    pub(crate) fn build(&self, repo_root: &Path, artifacts: &[Artifact]) -> Graph {
         self.build_with_report(repo_root, artifacts, None).graph
     }
 
@@ -90,7 +90,7 @@ impl GraphBuilder {
     /// written back to `cache` so a later run with the same content hash can
     /// reuse it. The resulting graph is identical either way: only whether an
     /// artifact's file is actually read and reparsed changes.
-    pub fn build_with_cache(
+    pub(crate) fn build_with_cache(
         &self,
         repo_root: &Path,
         artifacts: &[Artifact],
@@ -102,7 +102,7 @@ impl GraphBuilder {
     /// Builds a graph and reports the deterministic pass outputs used to
     /// create it. This is the production entry point for callers needing
     /// invalidation and observability data.
-    pub fn build_with_report(
+    pub(crate) fn build_with_report(
         &self,
         repo_root: &Path,
         artifacts: &[Artifact],
@@ -113,7 +113,7 @@ impl GraphBuilder {
 
     /// Builds the same graph as [`Self::build_with_report`] while retaining
     /// deterministic, inspectable state after every pipeline pass.
-    pub fn build_with_trace(
+    pub(crate) fn build_with_trace(
         &self,
         repo_root: &Path,
         artifacts: &[Artifact],

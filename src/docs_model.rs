@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 /// Semantic section families required by generated architecture and ops docs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[allow(missing_docs)]
-pub enum DocumentSectionKind {
+pub(crate) enum DocumentSectionKind {
     SystemOverview,
     C4Context,
     C4Container,
@@ -25,14 +25,14 @@ pub enum DocumentSectionKind {
 /// Freshness state relative to the graph snapshot used to render a section.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(missing_docs)]
-pub enum DocumentFreshness {
+pub(crate) enum DocumentFreshness {
     Current,
     Stale { current_graph_snapshot_id: String },
 }
 /// One stable, evidence-backed architecture/ops section.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(missing_docs)]
-pub struct GraphDocumentSection {
+pub(crate) struct GraphDocumentSection {
     pub id: String,
     pub kind: DocumentSectionKind,
     pub title: String,
@@ -48,7 +48,7 @@ pub struct GraphDocumentSection {
 /// The versioned document model for one graph snapshot.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(missing_docs)]
-pub struct GraphDocument {
+pub(crate) struct GraphDocument {
     pub id: String,
     pub graph_snapshot_id: String,
     pub schema_version: u32,
@@ -56,7 +56,7 @@ pub struct GraphDocument {
 }
 impl GraphDocument {
     /// Constructs an empty stable document for a graph snapshot.
-    pub fn new(
+    pub(crate) fn new(
         id: impl Into<String>,
         graph_snapshot_id: impl Into<String>,
         schema_version: u32,
@@ -70,7 +70,7 @@ impl GraphDocument {
     }
     /// Adds a section with an id stable across runs for the same document/kind/title.
     #[allow(clippy::too_many_arguments)]
-    pub fn add_section(
+    pub(crate) fn add_section(
         &mut self,
         kind: DocumentSectionKind,
         title: impl Into<String>,
@@ -128,7 +128,7 @@ impl GraphDocument {
         id
     }
     /// Reports whether the document is current for the supplied graph snapshot.
-    pub fn freshness(&self, graph_snapshot_id: &str) -> DocumentFreshness {
+    pub(crate) fn freshness(&self, graph_snapshot_id: &str) -> DocumentFreshness {
         if self.graph_snapshot_id == graph_snapshot_id {
             DocumentFreshness::Current
         } else {
@@ -138,7 +138,7 @@ impl GraphDocument {
         }
     }
     /// Returns all document sections linked to a graph node, edge, cluster, or tension id.
-    pub fn related_sections(&self, entity_id: &str) -> Vec<&GraphDocumentSection> {
+    pub(crate) fn related_sections(&self, entity_id: &str) -> Vec<&GraphDocumentSection> {
         self.sections
             .iter()
             .filter(|s| {
@@ -149,7 +149,7 @@ impl GraphDocument {
             .collect()
     }
     /// Returns sections keyed by stable id for reverse graph-link resolution.
-    pub fn section_index(&self) -> BTreeMap<String, &GraphDocumentSection> {
+    pub(crate) fn section_index(&self) -> BTreeMap<String, &GraphDocumentSection> {
         self.sections
             .iter()
             .map(|section| (section.id.clone(), section))

@@ -3,9 +3,9 @@
 use serde::{Deserialize, Serialize};
 
 /// Current persisted section-claim schema.
-pub const SECTION_CLAIM_SCHEMA_VERSION: u32 = 1;
+pub(crate) const SECTION_CLAIM_SCHEMA_VERSION: u32 = 1;
 /// Current normalization and fingerprint semantics.
-pub const SECTION_FINGERPRINT_VERSION: u32 = 1;
+pub(crate) const SECTION_FINGERPRINT_VERSION: u32 = 1;
 
 /// Observable repository fact a documentation claim can be checked against.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -102,7 +102,7 @@ struct ClaimLine {
 }
 
 /// Extracts stable claims from one repository-relative Markdown document.
-pub fn extract_section_claims(artifact_path: &str, markdown: &str) -> Vec<DocumentSectionClaims> {
+pub(crate) fn extract_section_claims(artifact_path: &str, markdown: &str) -> Vec<DocumentSectionClaims> {
     let mut sections = Vec::new();
     let mut current = PendingSection {
         heading: "Preamble".to_owned(),
@@ -157,7 +157,7 @@ pub fn extract_section_claims(artifact_path: &str, markdown: &str) -> Vec<Docume
 }
 
 /// Returns whether claims should be extracted for this repository-relative path.
-pub fn is_human_authored_markdown(path: &str) -> bool {
+pub(crate) fn is_human_authored_markdown(path: &str) -> bool {
     let normalized = path.replace('\\', "/");
     normalized.ends_with(".md") && !normalized.starts_with("docs/lithograph/")
 }

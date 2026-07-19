@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 /// Trace traversal direction.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum TraceDirection {
+pub(crate) enum TraceDirection {
     /// Follow inbound relations.
     Inbound,
     /// Follow outbound relations.
@@ -21,7 +21,7 @@ pub enum TraceDirection {
 
 /// Trace traversal parameters.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TraceParams {
+pub(crate) struct TraceParams {
     /// Node id, exact name, or query substring used to choose the root node.
     pub query: String,
     /// Traversal depth. Defaults to 2 when zero.
@@ -34,7 +34,7 @@ pub struct TraceParams {
 
 /// Graph trace output.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TraceResult {
+pub(crate) struct TraceResult {
     /// Root search result.
     pub root: SearchResult,
     /// Visited nodes with hop distance.
@@ -45,7 +45,7 @@ pub struct TraceResult {
 
 /// One visited node and its hop distance from the root.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NodeHop {
+pub(crate) struct NodeHop {
     /// Node information.
     pub node: SearchResult,
     /// Hop distance from the root.
@@ -54,7 +54,7 @@ pub struct NodeHop {
 
 /// Shortest chain of relations between two nodes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PathResult {
+pub(crate) struct PathResult {
     /// Node the path starts from.
     pub start: SearchResult,
     /// Each step away from `start`, in order. Empty when both ends resolve
@@ -64,7 +64,7 @@ pub struct PathResult {
 
 /// One step along a [`PathResult`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PathHop {
+pub(crate) struct PathHop {
     /// Node reached by this step.
     pub node: SearchResult,
     /// Kind of the relation traversed.
@@ -81,7 +81,7 @@ pub struct PathHop {
 
 /// One relation included in a trace result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TraceRelation {
+pub(crate) struct TraceRelation {
     /// Source node id.
     pub source: GraphNodeId,
     /// Target node id.
@@ -92,7 +92,7 @@ pub struct TraceRelation {
 
 impl<'a> KnowledgeIndex<'a> {
     /// Traces the graph around the first node matching `params.query`.
-    pub fn trace(&self, params: &TraceParams) -> Option<TraceResult> {
+    pub(crate) fn trace(&self, params: &TraceParams) -> Option<TraceResult> {
         let root = self.find_root(params.query.as_str())?;
         let degree = self.degree_index();
         let adjacency = self.adjacency(params.direction);
@@ -156,7 +156,7 @@ impl<'a> KnowledgeIndex<'a> {
     /// caller can read each hop's [`PathHop::forward`] to see which way the
     /// underlying relation actually points. Ties are broken by node id so a
     /// given graph always yields the same path (LIT-47).
-    pub fn shortest_path(&self, from: &str, to: &str) -> Option<PathResult> {
+    pub(crate) fn shortest_path(&self, from: &str, to: &str) -> Option<PathResult> {
         let start = self.find_root(from)?;
         let end = self.find_root(to)?;
         let degree = self.degree_index();
@@ -244,7 +244,7 @@ impl<'a> KnowledgeIndex<'a> {
     /// [`Self::trace`] that always uses [`TraceDirection::Inbound`]
     /// regardless of `params.direction`, since "impact" only ever means
     /// upstream dependents, never downstream dependencies.
-    pub fn impact_analysis(&self, params: &TraceParams) -> Option<TraceResult> {
+    pub(crate) fn impact_analysis(&self, params: &TraceParams) -> Option<TraceResult> {
         self.trace(&TraceParams {
             query: params.query.clone(),
             depth: params.depth,

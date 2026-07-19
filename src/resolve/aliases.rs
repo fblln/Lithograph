@@ -23,7 +23,7 @@ struct AliasRules {
 
 /// Every tsconfig alias rule in the repository, queried by importing file.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TsAliasMap {
+pub(crate) struct TsAliasMap {
     rules: Vec<AliasRules>,
 }
 
@@ -34,7 +34,7 @@ impl TsAliasMap {
     /// another config by path, which only the whole set can answer (AC3). A
     /// child's own `paths` win over an inherited one, matching TypeScript,
     /// where `compilerOptions` are merged key by key.
-    pub fn build(configs: &BTreeMap<String, TsConfigProfile>) -> Self {
+    pub(crate) fn build(configs: &BTreeMap<String, TsConfigProfile>) -> Self {
         let mut rules = Vec::new();
         for (path, profile) in configs {
             // Only `tsconfig.json` governs a directory. A repository has
@@ -80,7 +80,7 @@ impl TsAliasMap {
     }
 
     /// True when no config in the repository declares any alias.
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.rules.is_empty()
     }
 
@@ -91,7 +91,7 @@ impl TsAliasMap {
     /// through the normal candidate order, which is what keeps a miss a miss
     /// (AC4): an alias pointing at a file that does not exist yields no
     /// artifact and the specifier falls through to existing resolution.
-    pub fn resolve(&self, source_path: &str, specifier: &str) -> Vec<String> {
+    pub(crate) fn resolve(&self, source_path: &str, specifier: &str) -> Vec<String> {
         let Some(rules) = self.nearest(source_path) else {
             return Vec::new();
         };

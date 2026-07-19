@@ -78,11 +78,11 @@ pub struct DriftReport {
 /// Scans Markdown documentation for likely drift against the current
 /// repository and graph.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct DriftDetector;
+pub(crate) struct DriftDetector;
 
 impl DriftDetector {
     /// Scans every safe Markdown artifact for drift.
-    pub fn scan(&self, artifacts: &[Artifact], graph: &Graph, repo_root: &Path) -> DriftReport {
+    pub(crate) fn scan(&self, artifacts: &[Artifact], graph: &Graph, repo_root: &Path) -> DriftReport {
         let known_make_targets = make_targets(artifacts, repo_root);
         let known_just_targets = just_targets(artifacts, repo_root);
         let known_npm_scripts = npm_scripts(artifacts, repo_root);

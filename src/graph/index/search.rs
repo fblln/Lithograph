@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 /// Structured graph search parameters.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct SearchParams {
+pub(crate) struct SearchParams {
     /// Optional node label filter, e.g. `Symbol`, `Artifact`, or `Package`.
     pub label: Option<String>,
     /// Optional case-insensitive substring matched against node names, ids, and paths.
@@ -18,7 +18,7 @@ pub struct SearchParams {
 
 /// One graph search result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SearchResult {
+pub(crate) struct SearchResult {
     /// Graph node id.
     pub id: GraphNodeId,
     /// Node label.
@@ -35,7 +35,7 @@ pub struct SearchResult {
 
 impl<'a> KnowledgeIndex<'a> {
     /// Searches nodes by label and substring query.
-    pub fn search(&self, params: &SearchParams) -> Vec<SearchResult> {
+    pub(crate) fn search(&self, params: &SearchParams) -> Vec<SearchResult> {
         let degree = self.degree_index();
         let query = params.query.as_ref().map(|query| query.to_lowercase());
         let label = params.label.as_ref().map(|label| label.to_lowercase());

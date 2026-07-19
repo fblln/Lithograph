@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// Deterministic module-level dependency matrix for CLI inspection.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DependencyMatrix {
+pub(crate) struct DependencyMatrix {
     /// Module ids in SCC-condensation topological order.
     pub modules: Vec<GraphNodeId>,
     /// Aggregated directed relation counts, indexed by `modules`.
@@ -18,7 +18,7 @@ pub struct DependencyMatrix {
 
 impl<'a> KnowledgeIndex<'a> {
     /// Computes a deterministic Design Structure Matrix over real Module nodes.
-    pub fn dependency_matrix(&self) -> DependencyMatrix {
+    pub(crate) fn dependency_matrix(&self) -> DependencyMatrix {
         let modules: BTreeSet<GraphNodeId> = self
             .graph
             .nodes

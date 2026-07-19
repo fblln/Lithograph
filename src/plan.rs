@@ -66,14 +66,14 @@ pub struct DocumentationModule {
 /// Typed optional semantic grouping proposal, suitable for schema-validated
 /// LLM or research output before falling back to deterministic planning.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SemanticGroupingProposal {
+pub(crate) struct SemanticGroupingProposal {
     /// Proposed module groups.
     pub groups: Vec<ProposedModuleGroup>,
 }
 
 /// One proposed semantic module group.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ProposedModuleGroup {
+pub(crate) struct ProposedModuleGroup {
     /// Proposed human-readable module name.
     pub name: String,
     /// Existing module ids to merge into this group.
@@ -84,7 +84,7 @@ pub struct ProposedModuleGroup {
 
 /// Result of applying an optional grouping proposal.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SemanticGroupingResult {
+pub(crate) struct SemanticGroupingResult {
     /// Planned modules, either proposed groups or deterministic fallback.
     pub modules: Vec<DocumentationModule>,
     /// Actionable warnings when fallback was used.
@@ -96,7 +96,7 @@ pub struct SemanticGroupingResult {
 /// Plans deterministic documentation modules from a repository's artifacts
 /// and semantic graph.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct ModulePlanner;
+pub(crate) struct ModulePlanner;
 
 /// Default per-module token budget: a module whose [`estimate_tokens`]
 /// exceeds this is split into multiple same-kind sub-modules (and therefore
@@ -104,7 +104,7 @@ pub struct ModulePlanner;
 /// oversized/truncated context. Deliberately generous relative to
 /// `generation::context`'s per-page excerpt caps, since this is a
 /// module-splitting threshold, not the actual LLM context window.
-pub const DEFAULT_TOKEN_BUDGET: u32 = 6000;
+pub(crate) const DEFAULT_TOKEN_BUDGET: u32 = 6000;
 
 /// Default page-count ceiling: once bucketing would produce more than this
 /// many modules, the smallest ones (fewest member artifacts first) are
@@ -113,12 +113,12 @@ pub const DEFAULT_TOKEN_BUDGET: u32 = 6000;
 /// generous -- well above what any reasonably diverse repository plans to
 /// today -- so this is a no-op except for repositories fragmented into an
 /// unusually large number of small buckets.
-pub const DEFAULT_PAGE_CEILING: usize = 40;
+pub(crate) const DEFAULT_PAGE_CEILING: usize = 40;
 
 impl ModulePlanner {
     /// Plans modules under [`DEFAULT_TOKEN_BUDGET`] and [`DEFAULT_PAGE_CEILING`],
     /// sorted by ID for deterministic output.
-    pub fn plan(&self, graph: &Graph, artifacts: &[Artifact]) -> Vec<DocumentationModule> {
+    pub(crate) fn plan(&self, graph: &Graph, artifacts: &[Artifact]) -> Vec<DocumentationModule> {
         self.plan_with_budgets(graph, artifacts, DEFAULT_TOKEN_BUDGET, DEFAULT_PAGE_CEILING)
     }
 
@@ -126,7 +126,7 @@ impl ModulePlanner {
     /// default plan. Deep language ownership boundaries (Rust crates and
     /// Python packages) stay intact; smaller supporting areas are grouped by
     /// semantic kind so generated docs can be less fragmented when requested.
-    pub fn plan_with_semantic_grouping(
+    pub(crate) fn plan_with_semantic_grouping(
         &self,
         graph: &Graph,
         artifacts: &[Artifact],
@@ -138,7 +138,7 @@ impl ModulePlanner {
     /// Applies an optional typed semantic grouping proposal to the
     /// deterministic base plan. Invalid, incomplete, or low-confidence
     /// proposals fall back to the deterministic planner with a warning.
-    pub fn plan_with_grouping_proposal(
+    pub(crate) fn plan_with_grouping_proposal(
         &self,
         graph: &Graph,
         artifacts: &[Artifact],
@@ -168,7 +168,7 @@ impl ModulePlanner {
 
     /// Plans modules exactly like [`Self::plan`], with a caller-supplied
     /// `token_budget` and [`DEFAULT_PAGE_CEILING`].
-    pub fn plan_with_budget(
+    pub(crate) fn plan_with_budget(
         &self,
         graph: &Graph,
         artifacts: &[Artifact],
@@ -191,7 +191,7 @@ impl ModulePlanner {
     /// `Miscellaneous` module (smallest first, by member-artifact count)
     /// until the total fits -- see [`merge_small_buckets_to_ceiling`]. A
     /// repository already at or under the ceiling is unaffected.
-    pub fn plan_with_budgets(
+    pub(crate) fn plan_with_budgets(
         &self,
         graph: &Graph,
         artifacts: &[Artifact],

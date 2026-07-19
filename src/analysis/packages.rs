@@ -25,7 +25,7 @@ fn line_evidence(artifact: &Artifact, line: usize) -> EvidenceRef {
 /// Ecosystem a package manifest analyzer parsed. `Copy` so it can be used as
 /// an [`AnalyzerKind`](crate::analysis::AnalyzerKind) cache-key discriminant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum PackageManifestFormat {
+pub(crate) enum PackageManifestFormat {
     /// npm `package.json`.
     Npm,
     /// Go `go.mod`.
@@ -43,7 +43,7 @@ pub enum PackageManifestFormat {
 impl PackageManifestFormat {
     /// The registry/classifier format id matching this variant. Inverse of
     /// [`Self::from_format_id`].
-    pub fn format_id(self) -> &'static str {
+    pub(crate) fn format_id(self) -> &'static str {
         match self {
             Self::Npm => "npm",
             Self::GoMod => "go-mod",
@@ -56,7 +56,7 @@ impl PackageManifestFormat {
 
     /// Looks up the variant matching a classifier format id (see
     /// `inventory::classify::package_manifest`).
-    pub fn from_format_id(id: &str) -> Option<Self> {
+    pub(crate) fn from_format_id(id: &str) -> Option<Self> {
         Some(match id {
             "npm" => Self::Npm,
             "go-mod" => Self::GoMod,
@@ -69,7 +69,7 @@ impl PackageManifestFormat {
     }
 
     /// Runs this format's analyzer against `text`.
-    pub fn analyze(self, artifact: &Artifact, text: &str) -> PackageManifestAnalysis {
+    pub(crate) fn analyze(self, artifact: &Artifact, text: &str) -> PackageManifestAnalysis {
         match self {
             Self::Npm => NpmPackageAnalyzer.analyze(artifact, text),
             Self::GoMod => GoModAnalyzer.analyze(artifact, text),
@@ -83,7 +83,7 @@ impl PackageManifestFormat {
 
 /// One dependency (or local package name) declared by a manifest.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PackageDependency {
+pub(crate) struct PackageDependency {
     /// Package name.
     pub name: String,
     /// Version requirement, when the manifest states one.
@@ -94,7 +94,7 @@ pub struct PackageDependency {
 
 /// Package facts extracted from one manifest file.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct PackageManifestAnalysis {
+pub(crate) struct PackageManifestAnalysis {
     /// This manifest's own package name, when the format declares one.
     pub local_package: Option<PackageDependency>,
     /// Declared dependencies.
@@ -107,11 +107,11 @@ pub struct PackageManifestAnalysis {
 
 /// Parser-backed analyzer for npm `package.json` manifests.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct NpmPackageAnalyzer;
+pub(crate) struct NpmPackageAnalyzer;
 
 impl NpmPackageAnalyzer {
     /// Extracts package facts from `package.json` text.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> PackageManifestAnalysis {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> PackageManifestAnalysis {
         let value = match parse_value(text, StructuredFormat::Json) {
             Ok(value) => value,
             Err(error) => {
@@ -163,11 +163,11 @@ impl NpmPackageAnalyzer {
 
 /// Parser-backed analyzer for PHP Composer `composer.json` manifests.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct ComposerAnalyzer;
+pub(crate) struct ComposerAnalyzer;
 
 impl ComposerAnalyzer {
     /// Extracts package facts from `composer.json` text.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> PackageManifestAnalysis {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> PackageManifestAnalysis {
         let value = match parse_value(text, StructuredFormat::Json) {
             Ok(value) => value,
             Err(error) => {
@@ -225,11 +225,11 @@ impl ComposerAnalyzer {
 /// structured data format, so this parses the small stable grammar directly
 /// rather than routing through [`parse_value`].
 #[derive(Debug, Clone, Copy, Default)]
-pub struct GoModAnalyzer;
+pub(crate) struct GoModAnalyzer;
 
 impl GoModAnalyzer {
     /// Extracts package facts from `go.mod` text.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> PackageManifestAnalysis {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> PackageManifestAnalysis {
         let mut local_package = None;
         let mut dependencies = Vec::new();
         let mut in_require_block = false;
@@ -291,11 +291,11 @@ fn parse_require_entry(entry: &str, artifact: &Artifact, line: usize) -> Option<
 
 /// XML-backed analyzer for Maven `pom.xml` manifests.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct MavenPomAnalyzer;
+pub(crate) struct MavenPomAnalyzer;
 
 impl MavenPomAnalyzer {
     /// Extracts package facts from `pom.xml` text.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> PackageManifestAnalysis {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> PackageManifestAnalysis {
         let document = match roxmltree::Document::parse(text) {
             Ok(document) => document,
             Err(error) => {
@@ -374,7 +374,7 @@ fn xml_child_text<'a>(node: roxmltree::Node<'a, 'a>, tag: &str) -> Option<&'a st
 /// package name (that lives in `settings.gradle`), so `local_package` is
 /// always `None`.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct GradleAnalyzer;
+pub(crate) struct GradleAnalyzer;
 
 const GRADLE_DEPENDENCY_CONFIGURATIONS: &[&str] = &[
     "api",
@@ -391,7 +391,7 @@ const GRADLE_DEPENDENCY_CONFIGURATIONS: &[&str] = &[
 
 impl GradleAnalyzer {
     /// Extracts dependency facts from `build.gradle`/`build.gradle.kts` text.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> PackageManifestAnalysis {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> PackageManifestAnalysis {
         let mut dependencies = Vec::new();
         for (index, line) in text.lines().enumerate() {
             let trimmed = line.trim_start();
@@ -444,14 +444,14 @@ fn quoted_literal(text: &str) -> Option<&str> {
 
 /// XML-backed analyzer for .NET `.csproj` project files.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct CsprojAnalyzer;
+pub(crate) struct CsprojAnalyzer;
 
 impl CsprojAnalyzer {
     /// Extracts package facts from `.csproj` text. The project's own name is
     /// its `AssemblyName` property when present, otherwise the artifact's
     /// file stem (`MyApp.csproj` -> `MyApp`), matching how `dotnet` derives
     /// the default assembly name.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> PackageManifestAnalysis {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> PackageManifestAnalysis {
         let document = match roxmltree::Document::parse(text) {
             Ok(document) => document,
             Err(error) => {

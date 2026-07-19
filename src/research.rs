@@ -262,7 +262,7 @@ impl AgentMemory {
 /// `AgentMemory`'s persisted shape changes in a way a reader must know
 /// about; a file with a lower `schema_version` is stale and should be
 /// treated as absent (regenerate) rather than read as current.
-pub const AGENT_MEMORY_SCHEMA_VERSION: u32 = 1;
+pub(crate) const AGENT_MEMORY_SCHEMA_VERSION: u32 = 1;
 
 /// Versioned envelope persisted as `agent-memory.json` (LIT-22.6.5 AC1):
 /// schema version, an input hash over the artifacts/graph that produced
@@ -273,7 +273,7 @@ pub const AGENT_MEMORY_SCHEMA_VERSION: u32 = 1;
 /// top level (unchanged shape for existing readers), with the envelope
 /// fields as additional sibling keys.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AgentMemoryIndex {
+pub(crate) struct AgentMemoryIndex {
     /// Schema version this file was written with. `#[serde(default)]`
     /// means a file written before this field existed reads back as `0`
     /// -- an explicit, checkable "pre-versioning" marker (AC3) rather
@@ -296,7 +296,7 @@ pub struct AgentMemoryIndex {
 
 impl AgentMemoryIndex {
     /// Wraps `memory` in a current-schema-version index.
-    pub fn new(memory: AgentMemory, input_hash: String) -> Self {
+    pub(crate) fn new(memory: AgentMemory, input_hash: String) -> Self {
         let report_keys = memory.present_report_keys();
         Self {
             schema_version: AGENT_MEMORY_SCHEMA_VERSION,
@@ -310,13 +310,13 @@ impl AgentMemoryIndex {
     /// True when this index was written by the current schema version
     /// (AC3). A caller that finds `false` should treat the memory as
     /// stale rather than trust its shape.
-    pub fn is_current_schema(&self) -> bool {
+    pub(crate) fn is_current_schema(&self) -> bool {
         self.schema_version == AGENT_MEMORY_SCHEMA_VERSION
     }
 
     /// Persists the combined index (AC1) and every per-agent report file
     /// (AC2).
-    pub fn persist(&self, research_dir: &Path) -> std::io::Result<()> {
+    pub(crate) fn persist(&self, research_dir: &Path) -> std::io::Result<()> {
         JsonStore.write_if_changed(&research_dir.join("agent-memory.json"), self)?;
         self.memory.persist(research_dir)
     }
@@ -360,14 +360,14 @@ pub struct ResearchBrief {
 
 /// Builds deterministic research artifacts from the already-validated graph.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct ResearchBuilder;
+pub(crate) struct ResearchBuilder;
 
 impl ResearchBuilder {
     /// Derives compact agent-style reports without calling a model. Runs
     /// every agent (AC1) through the shared `KnowledgeAgent` framework
     /// (LIT-22.6.2), in a fixed order (AC4), against one shared
     /// [`AgentContext`] built from `artifacts`/`graph`/`modules`.
-    pub fn build(
+    pub(crate) fn build(
         &self,
         artifacts: &[Artifact],
         graph: &Graph,
@@ -1227,7 +1227,7 @@ fn node_labels(graph: &Graph) -> BTreeMap<&str, String> {
 }
 
 /// Path to the combined agent-memory file under a repository root.
-pub fn agent_memory_path(repo_root: &Path) -> PathBuf {
+pub(crate) fn agent_memory_path(repo_root: &Path) -> PathBuf {
     repo_root.join(".lithograph/research/agent-memory.json")
 }
 

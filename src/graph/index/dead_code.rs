@@ -12,7 +12,7 @@ impl<'a> KnowledgeIndex<'a> {
     /// true entry points like a `main` function or reflection-based
     /// dynamic dispatch), not a certainty; callers should treat the result
     /// as candidates to review, not a definite deletion list.
-    pub fn find_dead_code(&self) -> Vec<SearchResult> {
+    pub(crate) fn find_dead_code(&self) -> Vec<SearchResult> {
         // `Contains` (an artifact/class defining this symbol) is structural,
         // not a use -- every symbol has exactly one, so counting it would
         // make every symbol look "referenced" and this method useless.

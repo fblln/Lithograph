@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 /// Conservative thresholds for local graph-health detectors.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HealthThresholds {
+pub(crate) struct HealthThresholds {
     /// Minimum total degree before reporting a god-class candidate.
     pub god_class_degree: usize,
     /// Minimum incident edges before reporting a bridge bottleneck.
@@ -32,7 +32,7 @@ impl Default for HealthThresholds {
 
 /// Stable finding category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum HealthRule {
+pub(crate) enum HealthRule {
     /// Oversized high-degree class-like node.
     GodClass,
     /// High-degree bridge node.
@@ -52,7 +52,7 @@ pub enum HealthRule {
 }
 /// Triage severity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum HealthSeverity {
+pub(crate) enum HealthSeverity {
     /// Worth tracking during normal maintenance.
     Low,
     /// Needs an investigation when modifying the area.
@@ -62,7 +62,7 @@ pub enum HealthSeverity {
 }
 /// Explainable persisted code-health finding.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HealthFinding {
+pub(crate) struct HealthFinding {
     /// Deterministic rule and affected-node identity.
     pub id: String,
     /// Detector that produced the result.
@@ -82,7 +82,7 @@ pub struct HealthFinding {
 }
 
 /// Runs every offline detector with the supplied conservative thresholds.
-pub fn detect_health(graph: &Graph, thresholds: &HealthThresholds) -> Vec<HealthFinding> {
+pub(crate) fn detect_health(graph: &Graph, thresholds: &HealthThresholds) -> Vec<HealthFinding> {
     let mut degrees = BTreeMap::<GraphNodeId, usize>::new();
     let mut cochange = BTreeMap::<GraphNodeId, usize>::new();
     let mut findings = Vec::new();

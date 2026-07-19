@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 /// Parsed Dockerfile facts.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct DockerfileAnalysis {
+pub(crate) struct DockerfileAnalysis {
     /// Recognized Dockerfile instructions in source order.
     pub instructions: Vec<DockerInstruction>,
     /// Build stages introduced by `FROM`.
@@ -38,7 +38,7 @@ pub struct DockerfileAnalysis {
 
 /// Dockerfile instruction kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum DockerInstructionKind {
+pub(crate) enum DockerInstructionKind {
     /// `FROM`.
     From,
     /// `COPY`.
@@ -75,7 +75,7 @@ pub enum DockerInstructionKind {
 
 /// Recognized Dockerfile instruction.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DockerInstruction {
+pub(crate) struct DockerInstruction {
     /// Instruction kind.
     pub kind: DockerInstructionKind,
     /// Raw instruction payload after the keyword.
@@ -88,7 +88,7 @@ pub struct DockerInstruction {
 
 /// Docker build stage.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DockerStage {
+pub(crate) struct DockerStage {
     /// Zero-based stage index.
     pub index: usize,
     /// Base image reference, preserved exactly after option parsing.
@@ -103,7 +103,7 @@ pub struct DockerStage {
 
 /// Docker `COPY` instruction.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DockerCopy {
+pub(crate) struct DockerCopy {
     /// Optional `--from` stage or image reference.
     pub from: Option<String>,
     /// Source paths.
@@ -118,7 +118,7 @@ pub struct DockerCopy {
 
 /// Docker `ENV` or `ARG` key/value record.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DockerEnv {
+pub(crate) struct DockerEnv {
     /// Variable name.
     pub key: String,
     /// Optional assigned value.
@@ -131,7 +131,7 @@ pub struct DockerEnv {
 
 /// Docker exposed port.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DockerPort {
+pub(crate) struct DockerPort {
     /// Port number or token.
     pub port: String,
     /// Optional protocol suffix such as `tcp` or `udp`.
@@ -145,7 +145,7 @@ pub struct DockerPort {
 /// A single-token instruction value, e.g. one `WORKDIR`/`USER`/`VOLUME`/
 /// `STOPSIGNAL` argument.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DockerSingleValue {
+pub(crate) struct DockerSingleValue {
     /// The value, as written (JSON-array quoting stripped for `VOLUME`).
     pub value: String,
     /// One-based source line.
@@ -156,7 +156,7 @@ pub struct DockerSingleValue {
 
 /// Docker command category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum DockerCommandKind {
+pub(crate) enum DockerCommandKind {
     /// Build-time `RUN`.
     Run,
     /// Runtime `CMD`.
@@ -167,7 +167,7 @@ pub enum DockerCommandKind {
 
 /// Docker command instruction.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DockerCommand {
+pub(crate) struct DockerCommand {
     /// Command category.
     pub kind: DockerCommandKind,
     /// Raw command payload.
@@ -182,7 +182,7 @@ pub struct DockerCommand {
 
 /// Dockerfile analyzer.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct DockerfileAnalyzer;
+pub(crate) struct DockerfileAnalyzer;
 
 #[derive(Debug, Clone)]
 struct ParsedInstruction<'a> {
@@ -194,7 +194,7 @@ struct ParsedInstruction<'a> {
 
 impl DockerfileAnalyzer {
     /// Parses recognized Dockerfile instructions from safe text.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> DockerfileAnalysis {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> DockerfileAnalysis {
         if artifact.text_status != TextStatus::Text
             || artifact.model_policy == ModelExposurePolicy::Never
         {

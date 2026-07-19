@@ -52,14 +52,14 @@ const PRIMARY_PROJECT_ID: &str = "primary";
 
 /// One additional repository root explicitly allowlisted at server start.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NamedProjectRoot {
+pub(crate) struct NamedProjectRoot {
     id: String,
     path: PathBuf,
 }
 
 impl NamedProjectRoot {
     /// Creates a named root. Validation occurs when the registry is built.
-    pub fn new(id: impl Into<String>, path: PathBuf) -> Self {
+    pub(crate) fn new(id: impl Into<String>, path: PathBuf) -> Self {
         Self {
             id: id.into(),
             path,
@@ -143,7 +143,7 @@ fn valid_project_id(id: &str) -> bool {
 /// configured router. Split from [`run`] so tests and callers that need
 /// the bound address up front don't have to go through the
 /// graceful-shutdown-on-ctrl-c blocking loop `run` uses for the CLI.
-pub async fn bind(
+pub(crate) async fn bind(
     repo_root: &Path,
     assets_dir: &Path,
     port: u16,
@@ -154,7 +154,7 @@ pub async fn bind(
 }
 
 /// Multi-project variant of [`bind`], restricted to explicitly named roots.
-pub async fn bind_projects(
+pub(crate) async fn bind_projects(
     primary_root: &Path,
     projects: Vec<NamedProjectRoot>,
     assets_dir: &Path,
@@ -168,7 +168,7 @@ pub async fn bind_projects(
 
 /// Binds and serves until the process receives `Ctrl-C`, writing the bound
 /// address to `writer` first so the caller knows where to browse.
-pub async fn run(
+pub(crate) async fn run(
     repo_root: &Path,
     assets_dir: &Path,
     port: u16,
@@ -182,7 +182,7 @@ pub async fn run(
 }
 
 /// Serves a primary repository plus explicitly named additional roots.
-pub async fn run_projects(
+pub(crate) async fn run_projects(
     primary_root: &Path,
     projects: Vec<NamedProjectRoot>,
     assets_dir: &Path,

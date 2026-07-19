@@ -1,45 +1,47 @@
 //! Lithograph CLI library surface.
 
-pub mod adr;
-pub mod agents;
-pub mod analysis;
-pub mod architecture;
-pub mod ask;
-pub mod cli;
-pub mod commands;
-pub mod docs_model;
-pub mod documentation_claims;
+// Public crate API: only modules consumed by the binaries, integration tests,
+// and examples stay `pub`. Everything else is `pub(crate)` so each module's
+// internals stop being part of the crate's external interface (LIT-85.1).
 pub mod domain;
-pub mod drift;
-pub mod editor_agent;
-pub mod external_knowledge;
-pub mod fts;
 pub mod generation;
 pub mod golden;
-pub mod graph;
-pub mod graph_docs;
 pub mod inventory;
-pub mod knowledge_agent;
 pub mod lab;
 pub mod manifest;
-pub mod mcp;
-pub mod mcp_targets;
-pub mod mermaid;
 pub mod orchestrate;
-pub mod plan;
-pub mod quality;
-pub mod query;
-pub mod research;
-pub mod research_feedback;
-pub mod resolve;
-pub mod run;
-pub mod search;
-pub mod semantic_search;
-pub mod serve;
-pub mod storage;
-pub mod subsystem_docs;
-pub mod viewer;
-pub mod watch;
+
+pub(crate) mod adr;
+pub(crate) mod agents;
+pub(crate) mod analysis;
+pub(crate) mod architecture;
+pub(crate) mod ask;
+pub(crate) mod cli;
+pub(crate) mod commands;
+pub(crate) mod docs_model;
+pub(crate) mod documentation_claims;
+pub(crate) mod drift;
+pub(crate) mod fts;
+pub(crate) mod graph;
+pub(crate) mod graph_docs;
+pub(crate) mod knowledge_agent;
+pub(crate) mod mcp;
+pub(crate) mod mcp_targets;
+pub(crate) mod mermaid;
+pub(crate) mod plan;
+pub(crate) mod quality;
+pub(crate) mod query;
+pub(crate) mod research;
+pub(crate) mod research_feedback;
+pub(crate) mod resolve;
+pub(crate) mod run;
+pub(crate) mod search;
+pub(crate) mod semantic_search;
+pub(crate) mod serve;
+pub(crate) mod storage;
+pub(crate) mod subsystem_docs;
+pub(crate) mod viewer;
+pub(crate) mod watch;
 
 /// Runs the Lithograph command-line interface.
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {

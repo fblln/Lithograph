@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 /// Structured facts extracted from one Markdown artifact.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct MarkdownAnalysis {
+pub(crate) struct MarkdownAnalysis {
     /// First level-one heading, treated as the document title.
     pub title: Option<MarkdownHeading>,
     /// All ATX headings in source order.
@@ -27,7 +27,7 @@ pub struct MarkdownAnalysis {
 
 /// Markdown heading with hierarchy level and evidence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MarkdownHeading {
+pub(crate) struct MarkdownHeading {
     /// ATX heading level from 1 through 6.
     pub level: u8,
     /// Heading text without leading hashes.
@@ -38,7 +38,7 @@ pub struct MarkdownHeading {
 
 /// Markdown link target category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LinkKind {
+pub(crate) enum LinkKind {
     /// Link points outside the repository.
     External,
     /// Link points to a repository-local target.
@@ -47,7 +47,7 @@ pub enum LinkKind {
 
 /// Markdown inline link or image reference.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MarkdownLink {
+pub(crate) struct MarkdownLink {
     /// Link label or image alt text.
     pub label: String,
     /// Raw link target from the Markdown source.
@@ -62,7 +62,7 @@ pub struct MarkdownLink {
 
 /// Fenced Markdown code block.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CodeFence {
+pub(crate) struct CodeFence {
     /// Declared fence language, normalized to lowercase when present.
     pub language: Option<String>,
     /// Whether the fence declares Mermaid.
@@ -73,7 +73,7 @@ pub struct CodeFence {
 
 /// Command extracted from Markdown.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MarkdownCommand {
+pub(crate) struct MarkdownCommand {
     /// Command text without shell prompt markers.
     pub command: String,
     /// Source evidence for the command line.
@@ -82,7 +82,7 @@ pub struct MarkdownCommand {
 
 /// Repository path reference extracted from Markdown text.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MarkdownPathReference {
+pub(crate) struct MarkdownPathReference {
     /// Repository-relative path-like value.
     pub path: String,
     /// Whether the path exists under the analyzed repository root.
@@ -93,7 +93,7 @@ pub struct MarkdownPathReference {
 
 /// Kind of likely Markdown documentation drift.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum DriftKind {
+pub(crate) enum DriftKind {
     /// A local Markdown link target does not resolve.
     BrokenLocalLink,
     /// A path-like reference in prose or code does not resolve.
@@ -102,7 +102,7 @@ pub enum DriftKind {
 
 /// Likely Markdown documentation drift with evidence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MarkdownDrift {
+pub(crate) struct MarkdownDrift {
     /// Drift category.
     pub kind: DriftKind,
     /// Missing or broken target.
@@ -113,7 +113,7 @@ pub struct MarkdownDrift {
 
 /// Markdown analyzer for safe text documentation artifacts.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct MarkdownAnalyzer;
+pub(crate) struct MarkdownAnalyzer;
 
 #[derive(Debug, Clone)]
 struct OpenFence {
@@ -129,7 +129,7 @@ impl MarkdownAnalyzer {
     /// this artifact's content is unchanged) must still have this refreshed
     /// after loading -- a referenced path elsewhere being added or removed
     /// must be reflected even when the reference itself didn't change.
-    pub fn refresh_path_existence(
+    pub(crate) fn refresh_path_existence(
         analysis: &mut MarkdownAnalysis,
         repo_root: &Path,
         artifact_path: &RepoPath,
@@ -140,7 +140,7 @@ impl MarkdownAnalyzer {
     }
 
     /// Extracts Markdown structure and drift signals.
-    pub fn analyze(&self, artifact: &Artifact, text: &str, repo_root: &Path) -> MarkdownAnalysis {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str, repo_root: &Path) -> MarkdownAnalysis {
         if artifact.text_status != TextStatus::Text
             || artifact.model_policy == ModelExposurePolicy::Never
         {

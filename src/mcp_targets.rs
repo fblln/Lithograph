@@ -20,7 +20,7 @@ const SERVER_NAME: &str = "lithograph";
 /// A coding agent Lithograph can register its MCP server with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum AgentTarget {
+pub(crate) enum AgentTarget {
     /// OpenAI Codex CLI, via project-scoped `.codex/config.toml`.
     Codex,
     /// Claude Code, via project-scoped `.mcp.json`.
@@ -34,7 +34,7 @@ pub enum AgentTarget {
 }
 
 /// Every known target, in a stable order.
-pub const ALL_TARGETS: [AgentTarget; 5] = [
+pub(crate) const ALL_TARGETS: [AgentTarget; 5] = [
     AgentTarget::Codex,
     AgentTarget::Claude,
     AgentTarget::Gemini,
@@ -44,7 +44,7 @@ pub const ALL_TARGETS: [AgentTarget; 5] = [
 
 impl AgentTarget {
     /// Stable lowercase identifier, used for `--target` and detection output.
-    pub fn id(self) -> &'static str {
+    pub(crate) fn id(self) -> &'static str {
         match self {
             Self::Codex => "codex",
             Self::Claude => "claude",
@@ -55,7 +55,7 @@ impl AgentTarget {
     }
 
     /// Parses a `--target` value, case-insensitively.
-    pub fn parse(id: &str) -> Option<Self> {
+    pub(crate) fn parse(id: &str) -> Option<Self> {
         ALL_TARGETS
             .into_iter()
             .find(|target| target.id().eq_ignore_ascii_case(id))
@@ -63,7 +63,7 @@ impl AgentTarget {
 
     /// Repository-relative MCP config path this target reads, or `None`
     /// when the target has no MCP integration Lithograph can offer.
-    pub fn config_path(self) -> Option<&'static str> {
+    pub(crate) fn config_path(self) -> Option<&'static str> {
         match self {
             Self::Codex => Some(".codex/config.toml"),
             Self::Claude => Some(".mcp.json"),
@@ -94,7 +94,7 @@ impl Display for AgentTarget {
 
 /// Detection status for one target (AC1): read-only, never writes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct TargetDetection {
+pub(crate) struct TargetDetection {
     /// The target inspected.
     pub target: AgentTarget,
     /// `true` when Lithograph can integrate MCP for this target at all.
@@ -111,7 +111,7 @@ pub struct TargetDetection {
 
 /// Detects every known target's status under `repo_root` without writing
 /// anything (AC1).
-pub fn detect(repo_root: &Path) -> Vec<TargetDetection> {
+pub(crate) fn detect(repo_root: &Path) -> Vec<TargetDetection> {
     ALL_TARGETS
         .into_iter()
         .map(|target| detect_one(repo_root, target))
@@ -147,7 +147,7 @@ fn detect_one(repo_root: &Path, target: AgentTarget) -> TargetDetection {
 
 /// Why a preview or apply could not complete.
 #[derive(Debug)]
-pub enum IntegrationError {
+pub(crate) enum IntegrationError {
     /// The target has no MCP integration Lithograph can offer.
     Unsupported {
         /// The target requested.
@@ -198,7 +198,7 @@ impl From<std::io::Error> for IntegrationError {
 
 /// A previewed or applied integration for one target (AC2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct IntegrationOutcome {
+pub(crate) struct IntegrationOutcome {
     /// The target integrated.
     pub target: AgentTarget,
     /// Config path written to (or that would be written to).
@@ -212,7 +212,7 @@ pub struct IntegrationOutcome {
 }
 
 /// Renders the exact content [`apply`] would write, without touching disk.
-pub fn preview(
+pub(crate) fn preview(
     repo_root: &Path,
     target: AgentTarget,
 ) -> Result<IntegrationOutcome, IntegrationError> {
@@ -222,7 +222,7 @@ pub fn preview(
 /// Merges Lithograph's MCP server entry into `target`'s config file,
 /// writing only when the rendered content actually differs from what's on
 /// disk (idempotent: a second call is always a no-op).
-pub fn apply(
+pub(crate) fn apply(
     repo_root: &Path,
     target: AgentTarget,
 ) -> Result<IntegrationOutcome, IntegrationError> {

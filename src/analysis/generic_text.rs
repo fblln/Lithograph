@@ -5,14 +5,14 @@ use serde::{Deserialize, Serialize};
 
 /// Confidence assigned to an extracted text finding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum FindingConfidence {
+pub(crate) enum FindingConfidence {
     /// Finding was produced by deterministic heuristics.
     Heuristic,
 }
 
 /// Kind of generic text finding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub enum TextFindingKind {
+pub(crate) enum TextFindingKind {
     /// Heading or top-level section-like line.
     Section,
     /// HTTP or HTTPS URL.
@@ -31,7 +31,7 @@ pub enum TextFindingKind {
 
 /// Generic text finding with source line.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TextFinding {
+pub(crate) struct TextFinding {
     /// Finding kind.
     pub kind: TextFindingKind,
     /// Extracted value.
@@ -55,11 +55,11 @@ impl TextFinding {
 
 /// Generic extractor for safe text artifacts.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct GenericTextExtractor;
+pub(crate) struct GenericTextExtractor;
 
 impl GenericTextExtractor {
     /// Extracts deterministic heuristic findings from safe model-exposable text.
-    pub fn extract(&self, artifact: &Artifact, text: &str) -> Vec<TextFinding> {
+    pub(crate) fn extract(&self, artifact: &Artifact, text: &str) -> Vec<TextFinding> {
         if artifact.text_status != TextStatus::Text
             || artifact.model_policy == ModelExposurePolicy::Never
         {

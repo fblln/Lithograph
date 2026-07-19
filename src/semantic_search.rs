@@ -12,7 +12,7 @@ use std::fmt::{Display, Formatter};
 use std::path::Path;
 
 /// Version of the persisted semantic embedding index contract.
-pub const EMBEDDING_INDEX_VERSION: u32 = 1;
+pub(crate) const EMBEDDING_INDEX_VERSION: u32 = 1;
 
 /// Fixed embedding dimensionality used by every provider in this crate, so
 /// vectors from different providers are at least comparably shaped (real
@@ -21,7 +21,7 @@ const EMBEDDING_DIMENSIONS: usize = 64;
 
 /// Failure embedding a piece of text.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EmbeddingError {
+pub(crate) struct EmbeddingError {
     /// Human-readable failure description.
     pub message: String,
 }
@@ -37,7 +37,7 @@ impl std::error::Error for EmbeddingError {}
 /// Provider boundary for turning text into a fixed-size embedding vector
 /// (AC1). Implementations may call a real local or remote model; nothing
 /// in this trait requires it.
-pub trait EmbeddingProvider {
+pub(crate) trait EmbeddingProvider {
     /// Embeds `text` into a vector of [`EMBEDDING_DIMENSIONS`] entries.
     fn embed(&self, text: &str) -> Result<Vec<f32>, EmbeddingError>;
 
@@ -53,7 +53,7 @@ pub trait EmbeddingProvider {
 /// network access and no live model. Every normal test uses this, never a
 /// real provider.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct MockEmbeddingProvider;
+pub(crate) struct MockEmbeddingProvider;
 
 impl EmbeddingProvider for MockEmbeddingProvider {
     fn embed(&self, text: &str) -> Result<Vec<f32>, EmbeddingError> {
@@ -100,7 +100,7 @@ impl EmbeddingProvider for LocalEmbeddingProvider {
 /// (AC1: optional real backend). Any server implementing that response
 /// shape works (OpenAI itself, or a compatible local/hosted server).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OpenAiEmbeddingConfig {
+pub(crate) struct OpenAiEmbeddingConfig {
     /// API base URL, e.g. `https://api.openai.com/v1`.
     pub base_url: String,
     /// Bearer API key. Never included verbatim in error messages.
@@ -112,14 +112,14 @@ pub struct OpenAiEmbeddingConfig {
 /// Real embedding provider over an OpenAI-compatible `/embeddings`
 /// endpoint. Never constructed by any normal test (AC3); exists so a
 /// caller can opt into live semantic search.
-pub struct OpenAiEmbeddingProvider {
+pub(crate) struct OpenAiEmbeddingProvider {
     config: OpenAiEmbeddingConfig,
     agent: ureq::Agent,
 }
 
 impl OpenAiEmbeddingProvider {
     /// Builds a provider from `config`.
-    pub fn new(config: OpenAiEmbeddingConfig) -> Self {
+    pub(crate) fn new(config: OpenAiEmbeddingConfig) -> Self {
         Self {
             config,
             agent: ureq::Agent::new_with_defaults(),
@@ -195,7 +195,7 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
 
 /// One enriched node document eligible for semantic search.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NodeDocument {
+pub(crate) struct NodeDocument {
     /// Stable graph node identifier.
     pub id: GraphNodeId,
     /// Graph node kind, such as `Symbol` or `Config`.
@@ -218,7 +218,7 @@ pub struct NodeDocument {
 
 /// One cached embedding and its enriched source document.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct EmbeddingIndexEntry {
+pub(crate) struct EmbeddingIndexEntry {
     /// Enriched source document.
     pub document: NodeDocument,
     /// Normalized embedding vector.
@@ -229,7 +229,7 @@ pub struct EmbeddingIndexEntry {
 
 /// Versioned, serializable semantic embedding index.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct EmbeddingIndex {
+pub(crate) struct EmbeddingIndex {
     /// Index schema version.
     pub version: u32,
     /// Provider/model identity.
@@ -244,7 +244,7 @@ pub struct EmbeddingIndex {
 
 impl EmbeddingIndex {
     /// Builds an index from enriched graph documents.
-    pub fn build(
+    pub(crate) fn build(
         provider: &dyn EmbeddingProvider,
         graph: &Graph,
         source_hash: impl Into<String>,
@@ -272,7 +272,7 @@ impl EmbeddingIndex {
     }
 
     /// Returns whether this index matches the current source and model.
-    pub fn is_compatible(&self, provider: &dyn EmbeddingProvider, source_hash: &str) -> bool {
+    pub(crate) fn is_compatible(&self, provider: &dyn EmbeddingProvider, source_hash: &str) -> bool {
         self.version == EMBEDDING_INDEX_VERSION
             && self.model_identity == provider.model_identity()
             && self.source_hash == source_hash
@@ -283,7 +283,7 @@ impl EmbeddingIndex {
     }
 
     /// Writes the index only when its deterministic JSON changes.
-    pub fn save_if_changed(&self, path: &Path) -> std::io::Result<bool> {
+    pub(crate) fn save_if_changed(&self, path: &Path) -> std::io::Result<bool> {
         let payload = serde_json::to_vec_pretty(self).map_err(std::io::Error::other)?;
         if std::fs::read(path).ok().as_deref() == Some(payload.as_slice()) {
             return Ok(false);
@@ -296,7 +296,7 @@ impl EmbeddingIndex {
     }
 
     /// Loads a cached index, returning `None` when it does not exist.
-    pub fn load(path: &Path) -> std::io::Result<Option<Self>> {
+    pub(crate) fn load(path: &Path) -> std::io::Result<Option<Self>> {
         if !path.exists() {
             return Ok(None);
         }
@@ -311,7 +311,7 @@ impl EmbeddingIndex {
 /// vector/graph components that produced it, real evidence, and related
 /// graph references.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SemanticSearchResult {
+pub(crate) struct SemanticSearchResult {
     /// Source graph node id.
     pub document_id: String,
     /// Human-readable reference (path or qualified name).
@@ -331,7 +331,7 @@ pub struct SemanticSearchResult {
 
 /// Blends embedding similarity with a graph connectivity signal (AC2).
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SemanticSearchWeights {
+pub(crate) struct SemanticSearchWeights {
     /// Weight applied to the cosine similarity component.
     pub vector: f64,
     /// Weight applied to the graph connectivity component.
@@ -350,14 +350,14 @@ impl Default for SemanticSearchWeights {
 /// Semantic search over the knowledge graph, backed by a pluggable
 /// [`EmbeddingProvider`].
 #[derive(Debug, Clone, Copy, Default)]
-pub struct SemanticSearch;
+pub(crate) struct SemanticSearch;
 
 impl SemanticSearch {
     /// Embeds `query` with `provider`, then ranks every eligible graph
     /// node by a weighted blend of cosine similarity and graph
     /// connectivity (AC2), returning at most `limit` results with
     /// evidence and graph references (AC4).
-    pub fn search(
+    pub(crate) fn search(
         &self,
         provider: &dyn EmbeddingProvider,
         graph: &Graph,
@@ -380,7 +380,7 @@ impl SemanticSearch {
     }
 
     /// Searches a previously built embedding index without rebuilding vectors.
-    pub fn search_index(
+    pub(crate) fn search_index(
         &self,
         provider: &dyn EmbeddingProvider,
         index: &EmbeddingIndex,

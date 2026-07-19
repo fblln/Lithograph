@@ -9,11 +9,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Versioned semantics for repository-tension scoring.
-pub const TENSION_ALGORITHM_VERSION: u32 = 1;
+pub(crate) const TENSION_ALGORITHM_VERSION: u32 = 1;
 /// First-class tension categories shared by non-UI and UI consumers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[allow(missing_docs)]
-pub enum TensionCategory {
+pub(crate) enum TensionCategory {
     CouplingHotspot,
     DependencyCycle,
     BridgeBottleneck,
@@ -27,7 +27,7 @@ pub enum TensionCategory {
 /// Typed explainable repository tension.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(missing_docs)]
-pub struct RepositoryTension {
+pub(crate) struct RepositoryTension {
     pub id: String,
     pub category: TensionCategory,
     pub severity: HealthSeverity,
@@ -46,7 +46,7 @@ pub struct RepositoryTension {
 /// A graph-snapshot-bound tension result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(missing_docs)]
-pub struct TensionSnapshot {
+pub(crate) struct TensionSnapshot {
     pub graph_snapshot_id: String,
     pub algorithm_version: u32,
     pub tensions: Vec<RepositoryTension>,
@@ -54,15 +54,15 @@ pub struct TensionSnapshot {
 /// JSON persistence for typed tension snapshots.
 #[derive(Debug, Clone)]
 #[allow(missing_docs)]
-pub struct TensionSnapshotStore {
+pub(crate) struct TensionSnapshotStore {
     root: std::path::PathBuf,
 }
 #[allow(missing_docs)]
 impl TensionSnapshotStore {
-    pub fn new(root: impl Into<std::path::PathBuf>) -> Self {
+    pub(crate) fn new(root: impl Into<std::path::PathBuf>) -> Self {
         Self { root: root.into() }
     }
-    pub fn save(&self, snapshot: &TensionSnapshot) -> std::io::Result<bool> {
+    pub(crate) fn save(&self, snapshot: &TensionSnapshot) -> std::io::Result<bool> {
         let payload = serde_json::to_string(snapshot).map_err(std::io::Error::other)?;
         let path = self.path(snapshot);
         if JsonStore.read::<String>(&path)?.as_deref() == Some(payload.as_str()) {
@@ -71,7 +71,7 @@ impl TensionSnapshotStore {
         JsonStore.write(&path, &payload)?;
         Ok(true)
     }
-    pub fn load(&self, snapshot: &TensionSnapshot) -> std::io::Result<Option<TensionSnapshot>> {
+    pub(crate) fn load(&self, snapshot: &TensionSnapshot) -> std::io::Result<Option<TensionSnapshot>> {
         let Some(payload): Option<String> = JsonStore.read(&self.path(snapshot))? else {
             return Ok(None);
         };
@@ -94,7 +94,7 @@ impl TensionSnapshotStore {
     }
 }
 /// Scores health, graph-impact, and supplied drift evidence without UI recomputation.
-pub fn score_tensions(
+pub(crate) fn score_tensions(
     graph: &Graph,
     thresholds: &HealthThresholds,
     drift_evidence: &[String],

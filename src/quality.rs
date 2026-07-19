@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 /// One quality finding.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct QualityFinding {
+pub(crate) struct QualityFinding {
     /// Stable finding category.
     pub kind: QualityFindingKind,
     /// Repository-relative generated file or metadata path.
@@ -21,7 +21,7 @@ pub struct QualityFinding {
 
 /// Quality finding categories.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub enum QualityFindingKind {
+pub(crate) enum QualityFindingKind {
     /// A generated page has no recorded evidence refs.
     PageWithoutEvidence,
     /// A generated page still contains an unresolved-question section.
@@ -45,20 +45,20 @@ pub enum QualityFindingKind {
 
 /// Quality inspection report.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct QualityReport {
+pub(crate) struct QualityReport {
     /// Findings sorted by path and kind.
     pub findings: Vec<QualityFinding>,
 }
 
 impl QualityReport {
     /// True when no findings were emitted.
-    pub fn is_clean(&self) -> bool {
+    pub(crate) fn is_clean(&self) -> bool {
         self.findings.is_empty()
     }
 }
 
 /// Runs deterministic quality checks over generated docs and metadata.
-pub fn inspect(repo_root: &Path) -> Result<QualityReport, Box<dyn std::error::Error>> {
+pub(crate) fn inspect(repo_root: &Path) -> Result<QualityReport, Box<dyn std::error::Error>> {
     let manifest_path = repo_root.join(".lithograph/manifest.json");
     let manifest = PageManifest::from_json(&std::fs::read_to_string(manifest_path)?)?;
     let pages = WikiSearch.load_pages(repo_root)?;
@@ -284,7 +284,7 @@ fn normalize_path(path: &Path) -> String {
 }
 
 /// Renders a table-like quality report.
-pub fn render_table(report: &QualityReport) -> String {
+pub(crate) fn render_table(report: &QualityReport) -> String {
     if report.findings.is_empty() {
         return "quality: clean\n".to_owned();
     }

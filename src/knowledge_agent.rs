@@ -24,7 +24,7 @@ use std::fmt::{Display, Formatter};
 /// registry would be more general but less type-safe for no real benefit
 /// at this scale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum DataSourceKey {
+pub(crate) enum DataSourceKey {
     /// Repository artifact inventory.
     Artifacts,
     /// Built and validated semantic graph.
@@ -55,7 +55,7 @@ impl Display for DataSourceKey {
 }
 
 /// One resolved data source value.
-pub enum DataSourceValue<'a> {
+pub(crate) enum DataSourceValue<'a> {
     /// See [`DataSourceKey::Artifacts`].
     Artifacts(&'a [Artifact]),
     /// See [`DataSourceKey::Graph`].
@@ -74,31 +74,31 @@ pub enum DataSourceValue<'a> {
 /// pipeline run and shared read-only across every agent that runs against
 /// it (agents never mutate the context; each returns its own typed output).
 #[derive(Default)]
-pub struct AgentContext<'a> {
+pub(crate) struct AgentContext<'a> {
     values: BTreeMap<DataSourceKey, DataSourceValue<'a>>,
 }
 
 impl<'a> AgentContext<'a> {
     /// Builds an empty context; call [`Self::with`] to populate it.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
     /// Inserts one data source, replacing any existing value for the same
     /// key.
     #[must_use]
-    pub fn with(mut self, key: DataSourceKey, value: DataSourceValue<'a>) -> Self {
+    pub(crate) fn with(mut self, key: DataSourceKey, value: DataSourceValue<'a>) -> Self {
         self.values.insert(key, value);
         self
     }
 
     /// Looks up one data source.
-    pub fn get(&self, key: DataSourceKey) -> Option<&DataSourceValue<'a>> {
+    pub(crate) fn get(&self, key: DataSourceKey) -> Option<&DataSourceValue<'a>> {
         self.values.get(&key)
     }
 
     /// Looks up the artifact inventory, when present.
-    pub fn artifacts(&self) -> Option<&'a [Artifact]> {
+    pub(crate) fn artifacts(&self) -> Option<&'a [Artifact]> {
         match self.get(DataSourceKey::Artifacts) {
             Some(DataSourceValue::Artifacts(artifacts)) => Some(artifacts),
             _ => None,
@@ -106,7 +106,7 @@ impl<'a> AgentContext<'a> {
     }
 
     /// Looks up the graph, when present.
-    pub fn graph(&self) -> Option<&'a Graph> {
+    pub(crate) fn graph(&self) -> Option<&'a Graph> {
         match self.get(DataSourceKey::Graph) {
             Some(DataSourceValue::Graph(graph)) => Some(graph),
             _ => None,
@@ -114,7 +114,7 @@ impl<'a> AgentContext<'a> {
     }
 
     /// Looks up the planned modules, when present.
-    pub fn modules(&self) -> Option<&'a [DocumentationModule]> {
+    pub(crate) fn modules(&self) -> Option<&'a [DocumentationModule]> {
         match self.get(DataSourceKey::Modules) {
             Some(DataSourceValue::Modules(modules)) => Some(modules),
             _ => None,
@@ -122,7 +122,7 @@ impl<'a> AgentContext<'a> {
     }
 
     /// Looks up the research brief, when present.
-    pub fn research_brief(&self) -> Option<&'a ResearchBrief> {
+    pub(crate) fn research_brief(&self) -> Option<&'a ResearchBrief> {
         match self.get(DataSourceKey::ResearchBrief) {
             Some(DataSourceValue::ResearchBrief(brief)) => Some(brief),
             _ => None,
@@ -130,7 +130,7 @@ impl<'a> AgentContext<'a> {
     }
 
     /// Looks up the ADR records, when present.
-    pub fn adr_records(&self) -> Option<&'a [AdrRecord]> {
+    pub(crate) fn adr_records(&self) -> Option<&'a [AdrRecord]> {
         match self.get(DataSourceKey::AdrRecords) {
             Some(DataSourceValue::AdrRecords(records)) => Some(records),
             _ => None,
@@ -138,7 +138,7 @@ impl<'a> AgentContext<'a> {
     }
 
     /// Looks up the drift report, when present.
-    pub fn drift_report(&self) -> Option<&'a DriftReport> {
+    pub(crate) fn drift_report(&self) -> Option<&'a DriftReport> {
         match self.get(DataSourceKey::DriftReport) {
             Some(DataSourceValue::DriftReport(report)) => Some(report),
             _ => None,
@@ -148,7 +148,7 @@ impl<'a> AgentContext<'a> {
 
 /// Which data sources one agent needs (AC1).
 #[derive(Debug, Clone, Copy, Default)]
-pub struct DataSourceSpec {
+pub(crate) struct DataSourceSpec {
     /// Sources that must be present, or [`AgentError::MissingRequiredDataSource`]
     /// is returned before the agent ever runs.
     pub required: &'static [DataSourceKey],
@@ -160,21 +160,21 @@ pub struct DataSourceSpec {
 /// so an agent can adjust its output (or a caller can report reduced
 /// confidence) without treating absence as an error (AC2).
 #[derive(Debug, Clone, Default)]
-pub struct DataSourceResolution {
+pub(crate) struct DataSourceResolution {
     /// Optional keys declared by the agent that had no value in the context.
     pub missing_optional: Vec<DataSourceKey>,
 }
 
 impl DataSourceResolution {
     /// True when `key` was declared optional and had no value.
-    pub fn is_missing(&self, key: DataSourceKey) -> bool {
+    pub(crate) fn is_missing(&self, key: DataSourceKey) -> bool {
         self.missing_optional.contains(&key)
     }
 }
 
 /// A framework-level agent failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AgentError {
+pub(crate) enum AgentError {
     /// A data source the agent declared `required` had no value in the context.
     MissingRequiredDataSource(DataSourceKey),
     /// The agent's own [`KnowledgeAgent::validate`] rejected its output.
@@ -204,7 +204,7 @@ impl std::error::Error for AgentError {}
 /// source or a failed validation. Implementors only need [`Self::compute`]
 /// (and [`Self::data_sources`]); [`Self::post_process`] and
 /// [`Self::validate`] default to no-ops.
-pub trait KnowledgeAgent {
+pub(crate) trait KnowledgeAgent {
     /// Output report type. The type itself is this agent's output schema
     /// (AC1) -- Rust's type system already gives a precise, checked schema,
     /// so the framework doesn't duplicate it as a separate description.
@@ -270,7 +270,7 @@ pub trait KnowledgeAgent {
 /// Distinct data-source keys declared across `required`/`optional` in a
 /// [`DataSourceSpec`], useful for reporting which facts an agent touches
 /// without needing to run it.
-pub fn declared_keys(spec: &DataSourceSpec) -> BTreeSet<DataSourceKey> {
+pub(crate) fn declared_keys(spec: &DataSourceSpec) -> BTreeSet<DataSourceKey> {
     spec.required
         .iter()
         .chain(spec.optional.iter())

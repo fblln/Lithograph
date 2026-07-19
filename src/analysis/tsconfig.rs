@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 
 /// The parts of a `tsconfig.json` that affect module resolution.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct TsConfigProfile {
+pub(crate) struct TsConfigProfile {
     /// `extends` specifier, when the config inherits from another.
     pub extends: Option<String>,
     /// `compilerOptions.baseUrl`, relative to this config's directory.
@@ -30,7 +30,7 @@ pub struct TsConfigProfile {
 /// Returns `None` only when the text is not recoverable as JSON at all. A
 /// config without `paths` parses to an empty profile rather than an error:
 /// most configs have none, and that is not a failure.
-pub fn parse_tsconfig(text: &str) -> Option<TsConfigProfile> {
+pub(crate) fn parse_tsconfig(text: &str) -> Option<TsConfigProfile> {
     #[derive(Deserialize)]
     struct Raw {
         extends: Option<String>,

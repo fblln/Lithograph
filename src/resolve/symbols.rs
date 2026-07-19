@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// One definition addressable by the resolver.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProjectSymbol {
+pub(crate) struct ProjectSymbol {
     /// Stable graph node id.
     pub id: GraphNodeId,
     /// Unqualified declaration name.
@@ -25,7 +25,7 @@ pub struct ProjectSymbol {
 
 /// Project-wide, deterministic indexes over every definition in a graph.
 #[derive(Debug, Clone, Default)]
-pub struct ProjectSymbolRegistry {
+pub(crate) struct ProjectSymbolRegistry {
     /// Definitions by stable graph id.
     pub by_id: BTreeMap<GraphNodeId, ProjectSymbol>,
     /// Candidate ids by simple name.
@@ -42,7 +42,7 @@ pub struct ProjectSymbolRegistry {
 
 impl ProjectSymbolRegistry {
     /// Builds indexes once from a stable graph snapshot.
-    pub fn build(graph: &Graph) -> Self {
+    pub(crate) fn build(graph: &Graph) -> Self {
         let module_language: BTreeMap<_, _> = graph
             .nodes
             .iter()
@@ -139,7 +139,7 @@ impl ProjectSymbolRegistry {
 /// Explicit result of an import-map lookup, including unresolved ambiguity.
 #[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ImportLookup {
+pub(crate) enum ImportLookup {
     SameModule {
         target: GraphNodeId,
         confidence: Confidence,
@@ -163,16 +163,16 @@ pub enum ImportLookup {
 }
 
 /// Resolves names over a [`ProjectSymbolRegistry`] without guessing.
-pub struct ImportMap<'a> {
+pub(crate) struct ImportMap<'a> {
     registry: &'a ProjectSymbolRegistry,
 }
 impl<'a> ImportMap<'a> {
     /// Creates an import map over one registry snapshot.
-    pub fn new(registry: &'a ProjectSymbolRegistry) -> Self {
+    pub(crate) fn new(registry: &'a ProjectSymbolRegistry) -> Self {
         Self { registry }
     }
     /// Looks up a reference with deterministic strategy precedence.
-    pub fn lookup(
+    pub(crate) fn lookup(
         &self,
         source_module: Option<&str>,
         explicit: Option<&str>,
@@ -265,7 +265,7 @@ impl<'a> ImportMap<'a> {
     /// the language rather than being guessed.
     ///
     /// [`lookup`]: ImportMap::lookup
-    pub fn unique_in_language(&self, name: &str, language: &str) -> Option<GraphNodeId> {
+    pub(crate) fn unique_in_language(&self, name: &str, language: &str) -> Option<GraphNodeId> {
         let simple = name.rsplit('.').next().unwrap_or(name);
         let by_name = self.registry.by_simple_name.get(simple)?;
         let of_language = self.registry.by_language.get(language)?;

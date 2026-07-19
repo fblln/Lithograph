@@ -45,7 +45,7 @@ pub struct ArchitectureLayer {
 
 /// Deterministic, evidence-backed architecture layer detector.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct LayerDetector;
+pub(crate) struct LayerDetector;
 
 /// Path components checked in priority order (AC4: ambiguous cases --
 /// a path matching more than one layer's keywords, e.g. `tests/api/`,
@@ -137,7 +137,7 @@ const PATH_LAYER_RULES: &[(LayerKind, &[&str])] = &[
 
 impl LayerDetector {
     /// Classifies every `Artifact` node in `graph`.
-    pub fn detect(&self, graph: &Graph) -> Vec<ArchitectureLayer> {
+    pub(crate) fn detect(&self, graph: &Graph) -> Vec<ArchitectureLayer> {
         let routed_artifacts = artifacts_with_routes(graph);
         let mut layers: Vec<ArchitectureLayer> = graph
             .nodes

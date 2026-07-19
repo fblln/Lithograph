@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
 /// Version of the deterministic local-moving Leiden phase implemented here.
-pub const LEIDEN_ALGORITHM_VERSION: u32 = 5;
+pub(crate) const LEIDEN_ALGORITHM_VERSION: u32 = 5;
 
 /// Edge scope used while detecting communities.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -30,7 +30,7 @@ pub enum CommunityScope {
 /// unresolved references, and documentation/example/test artifacts. Those
 /// facts remain queryable in the graph; they simply do not determine module
 /// boundaries.
-pub fn architecture_aware_scope() -> CommunityScope {
+pub(crate) fn architecture_aware_scope() -> CommunityScope {
     CommunityScope::Architecture
 }
 
@@ -39,7 +39,7 @@ pub fn architecture_aware_scope() -> CommunityScope {
 /// Counts can be compared across machines. Durations are deliberately kept
 /// outside [`CommunitySummary`] so correctness hashes never depend on a clock.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CommunityDiagnostics {
+pub(crate) struct CommunityDiagnostics {
     /// Nodes incident to at least one selected relation.
     pub participating_nodes: u64,
     /// Relations admitted by the selected scope.
@@ -66,7 +66,7 @@ pub struct CommunityDiagnostics {
 
 /// Community result with diagnostics suitable for lab and health consumers.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CommunityAnalysis {
+pub(crate) struct CommunityAnalysis {
     /// Stable community summaries.
     pub communities: Vec<CommunitySummary>,
     /// Phase-level work and timing observations.
@@ -77,7 +77,7 @@ pub struct CommunityAnalysis {
 
 /// Scope preset that keeps code, configuration, and environment neighborhoods
 /// connected while giving direct semantic links more influence.
-pub fn environment_aware_scope() -> CommunityScope {
+pub(crate) fn environment_aware_scope() -> CommunityScope {
     CommunityScope::WeightedRelationKinds(BTreeMap::from([
         (RelationKind::Contains, 1),
         (RelationKind::ReadsEnv, 3),
@@ -91,7 +91,7 @@ pub fn environment_aware_scope() -> CommunityScope {
 
 /// A versioned summary of one detected community.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CommunitySummary {
+pub(crate) struct CommunitySummary {
     /// Stable id derived from its lexicographically first member.
     pub id: String,
     /// Human-readable stable label.
@@ -114,7 +114,7 @@ pub struct CommunitySummary {
 
 /// A persisted, versioned community computation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CommunitySnapshot {
+pub(crate) struct CommunitySnapshot {
     /// Immutable graph snapshot that was analysed.
     pub graph_snapshot_id: String,
     /// Versioned deterministic Leiden semantics.
@@ -127,18 +127,18 @@ pub struct CommunitySnapshot {
 
 /// Deterministically persists community results outside core graph facts.
 #[derive(Debug, Clone)]
-pub struct CommunitySnapshotStore {
+pub(crate) struct CommunitySnapshotStore {
     root: std::path::PathBuf,
 }
 
 impl CommunitySnapshotStore {
     /// Creates a store rooted at `.lithograph/analytics` or equivalent.
-    pub fn new(root: impl Into<std::path::PathBuf>) -> Self {
+    pub(crate) fn new(root: impl Into<std::path::PathBuf>) -> Self {
         Self { root: root.into() }
     }
 
     /// Writes only a changed versioned community snapshot.
-    pub fn save(&self, snapshot: &CommunitySnapshot) -> std::io::Result<bool> {
+    pub(crate) fn save(&self, snapshot: &CommunitySnapshot) -> std::io::Result<bool> {
         let payload = serde_json::to_string(snapshot).map_err(std::io::Error::other)?;
         let path = self.path(snapshot);
         if matches!(
@@ -152,13 +152,13 @@ impl CommunitySnapshotStore {
     }
 
     /// Loads the exact persisted snapshot when present.
-    pub fn load(&self, snapshot: &CommunitySnapshot) -> std::io::Result<Option<CommunitySnapshot>> {
+    pub(crate) fn load(&self, snapshot: &CommunitySnapshot) -> std::io::Result<Option<CommunitySnapshot>> {
         self.load_exact(&snapshot.graph_snapshot_id, &snapshot.scope)
     }
 
     /// Loads an exact graph/scope/version entry. Invalid payloads are treated
     /// as misses so callers can safely recompute and replace them.
-    pub fn load_exact(
+    pub(crate) fn load_exact(
         &self,
         graph_snapshot_id: &str,
         scope: &CommunityScope,
@@ -197,11 +197,11 @@ impl CommunitySnapshotStore {
 }
 
 /// Version of deterministic topic-label semantics over node documents.
-pub const TOPIC_ALGORITHM_VERSION: u32 = 1;
+pub(crate) const TOPIC_ALGORITHM_VERSION: u32 = 1;
 
 /// Topic labels attached to one detected community.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CommunityTopic {
+pub(crate) struct CommunityTopic {
     /// Community identifier.
     pub community_id: String,
     /// Bounded labels ordered by descending score then token.
@@ -212,7 +212,7 @@ pub struct CommunityTopic {
 
 /// Versioned topic/community overlay kept separate from graph resolver edges.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TopicSnapshot {
+pub(crate) struct TopicSnapshot {
     /// Immutable graph snapshot that was analysed.
     pub graph_snapshot_id: String,
     /// Hash of graph and community inputs.
@@ -225,18 +225,18 @@ pub struct TopicSnapshot {
 
 /// Deterministically persists topic overlays and skips identical writes.
 #[derive(Debug, Clone)]
-pub struct TopicSnapshotStore {
+pub(crate) struct TopicSnapshotStore {
     root: std::path::PathBuf,
 }
 
 impl TopicSnapshotStore {
     /// Creates a store rooted at `.lithograph/analytics` or equivalent.
-    pub fn new(root: impl Into<std::path::PathBuf>) -> Self {
+    pub(crate) fn new(root: impl Into<std::path::PathBuf>) -> Self {
         Self { root: root.into() }
     }
 
     /// Writes a topic snapshot only when its content changes.
-    pub fn save(&self, snapshot: &TopicSnapshot) -> std::io::Result<bool> {
+    pub(crate) fn save(&self, snapshot: &TopicSnapshot) -> std::io::Result<bool> {
         let payload = serde_json::to_string(snapshot).map_err(std::io::Error::other)?;
         let path = self.path(snapshot);
         if JsonStore.read::<String>(&path)?.as_deref() == Some(payload.as_str()) {
@@ -247,7 +247,7 @@ impl TopicSnapshotStore {
     }
 
     /// Loads a previously persisted topic snapshot.
-    pub fn load(&self, snapshot: &TopicSnapshot) -> std::io::Result<Option<TopicSnapshot>> {
+    pub(crate) fn load(&self, snapshot: &TopicSnapshot) -> std::io::Result<Option<TopicSnapshot>> {
         let Some(payload): Option<String> = JsonStore.read(&self.path(snapshot))? else {
             return Ok(None);
         };
@@ -269,7 +269,7 @@ impl TopicSnapshotStore {
 }
 
 /// Labels communities from deterministic local node-document token evidence.
-pub fn label_topic_snapshot(
+pub(crate) fn label_topic_snapshot(
     graph_snapshot_id: impl Into<String>,
     graph: &Graph,
     communities: &[CommunitySummary],
@@ -338,12 +338,12 @@ pub fn label_topic_snapshot(
 /// The graph is treated as weighted-undirected for modularity movement. Nodes
 /// visit in sorted-id order and ties select the smallest label, eliminating
 /// random ordering from the usual Leiden implementation.
-pub fn leiden_communities(graph: &Graph, scope: &CommunityScope) -> Vec<CommunitySummary> {
+pub(crate) fn leiden_communities(graph: &Graph, scope: &CommunityScope) -> Vec<CommunitySummary> {
     leiden_communities_with_diagnostics(graph, scope).communities
 }
 
 /// Shared cache-aware entry point for lab, health, and query consumers.
-pub fn analyze_communities(
+pub(crate) fn analyze_communities(
     graph: &Graph,
     scope: &CommunityScope,
     store: Option<&CommunitySnapshotStore>,
@@ -376,7 +376,7 @@ pub fn analyze_communities(
 }
 
 /// Detects communities and reports deterministic work plus per-phase timings.
-pub fn leiden_communities_with_diagnostics(
+pub(crate) fn leiden_communities_with_diagnostics(
     graph: &Graph,
     scope: &CommunityScope,
 ) -> CommunityAnalysis {

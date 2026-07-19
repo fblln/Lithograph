@@ -4,7 +4,7 @@ use crate::docs_model::{DocumentSectionKind, GraphDocument};
 use crate::graph::{Graph, RepositoryTension};
 
 /// Generates an evidence-linked architecture/operations document with safe no-data fallbacks.
-pub fn generate_graph_docs(
+pub(crate) fn generate_graph_docs(
     graph: &Graph,
     tensions: &[RepositoryTension],
     snapshot_id: &str,

@@ -11,17 +11,17 @@ use std::path::Path;
 /// parent directories as needed and treating a missing file as `None`
 /// rather than an error.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct JsonStore;
+pub(crate) struct JsonStore;
 
 impl JsonStore {
     /// Serializes `value` as pretty JSON and writes it to `path`, creating
     /// parent directories as needed.
-    pub fn write<T: Serialize>(&self, path: &Path, value: &T) -> io::Result<()> {
+    pub(crate) fn write<T: Serialize>(&self, path: &Path, value: &T) -> io::Result<()> {
         self.write_rendered(path, &render(value, Layout::Pretty)?)
     }
 
     /// Reads and parses `path`, returning `Ok(None)` when it does not exist.
-    pub fn read<T: DeserializeOwned>(&self, path: &Path) -> io::Result<Option<T>> {
+    pub(crate) fn read<T: DeserializeOwned>(&self, path: &Path) -> io::Result<Option<T>> {
         match std::fs::read_to_string(path) {
             Ok(text) => serde_json::from_str(&text).map(Some).map_err(to_io_error),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
@@ -41,7 +41,7 @@ impl JsonStore {
     /// path, and drops the `DeserializeOwned + PartialEq` bound so borrowed,
     /// non-owning views (e.g. a graph snapshot referencing its graph) can be
     /// persisted without cloning.
-    pub fn write_if_changed<T: Serialize>(&self, path: &Path, value: &T) -> io::Result<bool> {
+    pub(crate) fn write_if_changed<T: Serialize>(&self, path: &Path, value: &T) -> io::Result<bool> {
         self.write_if_changed_layout(path, value, Layout::Pretty)
     }
 
@@ -49,7 +49,7 @@ impl JsonStore {
     /// for large, purely machine-read artifacts -- e.g. the graph snapshot,
     /// tens of megabytes where indentation is pure size and parse overhead --
     /// while small human-inspectable state files stay pretty.
-    pub fn write_if_changed_compact<T: Serialize>(
+    pub(crate) fn write_if_changed_compact<T: Serialize>(
         &self,
         path: &Path,
         value: &T,

@@ -15,7 +15,7 @@ const QUESTION_LIMIT: usize = 10;
 
 /// High-level graph and resolution counts.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GraphReportSummary {
+pub(crate) struct GraphReportSummary {
     /// Total graph nodes.
     pub node_count: usize,
     /// Total graph relations.
@@ -30,7 +30,7 @@ pub struct GraphReportSummary {
 
 /// Ranked node metric rendered in the report.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GraphReportNodeRank {
+pub(crate) struct GraphReportNodeRank {
     /// Stable graph node id.
     pub id: GraphNodeId,
     /// Human-readable node name.
@@ -43,7 +43,7 @@ pub struct GraphReportNodeRank {
 
 /// Cross-cluster node ranked by deterministic betweenness.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GraphReportBridge {
+pub(crate) struct GraphReportBridge {
     /// Stable graph node id.
     pub id: GraphNodeId,
     /// Human-readable node name.
@@ -54,7 +54,7 @@ pub struct GraphReportBridge {
 
 /// Unresolved node and the number of relations that point to it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GraphReportUnresolvedGap {
+pub(crate) struct GraphReportUnresolvedGap {
     /// Stable unresolved node id.
     pub id: GraphNodeId,
     /// Unresolved literal value.
@@ -65,7 +65,7 @@ pub struct GraphReportUnresolvedGap {
 
 /// One bounded low-confidence relation requiring audit.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GraphReportLowConfidenceGap {
+pub(crate) struct GraphReportLowConfidenceGap {
     /// Stable relation id.
     pub relation_id: String,
     /// Source node id.
@@ -78,7 +78,7 @@ pub struct GraphReportLowConfidenceGap {
 
 /// Canonical graph digest derived only from a persisted graph snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GraphReport {
+pub(crate) struct GraphReport {
     /// Summary and resolution counts.
     pub summary: GraphReportSummary,
     /// Highest total-degree nodes.
@@ -99,7 +99,7 @@ pub struct GraphReport {
 
 impl GraphReport {
     /// Derives a bounded report without clocks, randomness, network, or models.
-    pub fn build(graph: &Graph) -> Self {
+    pub(crate) fn build(graph: &Graph) -> Self {
         let node_by_id = graph
             .nodes
             .iter()
@@ -279,7 +279,7 @@ impl GraphReport {
     }
 
     /// Renders canonical Markdown with stable ordering and bounded sections.
-    pub fn render_markdown(&self) -> String {
+    pub(crate) fn render_markdown(&self) -> String {
         let mut output = String::from("# Lithograph Graph Report\n\n");
         output.push_str("## Summary and resolution\n\n");
         output.push_str(&format!(
@@ -368,12 +368,12 @@ impl GraphReport {
 }
 
 /// Canonical path for the persisted report.
-pub fn graph_report_path(repo_root: &Path) -> PathBuf {
+pub(crate) fn graph_report_path(repo_root: &Path) -> PathBuf {
     repo_root.join(".lithograph/GRAPH_REPORT.md")
 }
 
 /// Writes a newly derived report only when its canonical bytes changed.
-pub fn persist_graph_report(repo_root: &Path, graph: &Graph) -> io::Result<bool> {
+pub(crate) fn persist_graph_report(repo_root: &Path, graph: &Graph) -> io::Result<bool> {
     let path = graph_report_path(repo_root);
     let markdown = GraphReport::build(graph).render_markdown();
     if std::fs::read_to_string(&path).ok().as_deref() == Some(markdown.as_str()) {

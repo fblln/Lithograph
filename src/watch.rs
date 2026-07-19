@@ -16,7 +16,7 @@ use std::time::Duration;
 /// [`poll_once`] is the only way staleness gets checked -- nothing in
 /// `init`/`update` reaches this module (AC1).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WatchConfig {
+pub(crate) struct WatchConfig {
     /// Maximum artifacts one poll may scan (AC2's "safe project limits").
     /// Exceeding this returns [`WatchError::ProjectTooLarge`] rather than
     /// silently scanning a truncated subset of the repository.
@@ -37,7 +37,7 @@ impl Default for WatchConfig {
 
 /// Why one poll could not complete.
 #[derive(Debug)]
-pub enum WatchError {
+pub(crate) enum WatchError {
     /// The repository has more artifacts than `max_artifacts` allows.
     ProjectTooLarge {
         /// Artifacts discovered before the walk was abandoned.
@@ -93,7 +93,7 @@ impl From<std::io::Error> for WatchError {
 /// callers -- the CLI's `watch` command renders this directly, and
 /// `WikiMcpServer::detect_changes` reuses the same underlying comparison).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StaleReport {
+pub(crate) struct StaleReport {
     /// `true` when any artifact was added, removed, or content-changed
     /// since the last recorded snapshot (or no snapshot exists yet).
     pub stale: bool,
@@ -107,7 +107,7 @@ pub struct StaleReport {
 /// and compares against `.lithograph/snapshot.json`, without writing
 /// anything. Returns [`WatchError::ProjectTooLarge`] instead of scanning a
 /// truncated subset when the repository exceeds `config.max_artifacts`.
-pub fn poll_once(repo_root: &Path, config: &WatchConfig) -> Result<StaleReport, WatchError> {
+pub(crate) fn poll_once(repo_root: &Path, config: &WatchConfig) -> Result<StaleReport, WatchError> {
     let walk_options = WalkOptions {
         exclude_globs: scan_exclude_globs(),
         ..WalkOptions::default()
@@ -137,7 +137,7 @@ pub fn poll_once(repo_root: &Path, config: &WatchConfig) -> Result<StaleReport, 
 }
 
 /// Renders a [`StaleReport`] for CLI output (AC3).
-pub fn render_report(report: &StaleReport) -> String {
+pub(crate) fn render_report(report: &StaleReport) -> String {
     if !report.stale {
         return format!(
             "up to date: {} artifact(s) scanned, no changes since the last recorded snapshot\n",

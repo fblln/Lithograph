@@ -12,7 +12,7 @@ use std::path::Path;
 
 /// Filters for one code search request.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct CodeSearchParams {
+pub(crate) struct CodeSearchParams {
     /// Case-insensitive substring to search for. Empty matches nothing.
     pub query: String,
     /// Case-insensitive substring filter on the artifact path.
@@ -35,7 +35,7 @@ pub struct CodeSearchParams {
 
 /// One matching line.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CodeSearchResult {
+pub(crate) struct CodeSearchResult {
     /// Repository-relative artifact path.
     pub artifact_path: String,
     /// One-based matching line number.
@@ -51,7 +51,7 @@ pub struct CodeSearchResult {
 
 /// Grep-like search over safe, indexed repository files.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct CodeSearch;
+pub(crate) struct CodeSearch;
 
 impl CodeSearch {
     /// Runs one search against `artifacts`/`graph`/`modules`, reading file
@@ -59,7 +59,7 @@ impl CodeSearch {
     /// artifact that isn't safe, plain text (AC3): binary, redacted, or
     /// `ModelExposurePolicy::Never`/`ModelExposurePolicy::Redacted`
     /// artifacts are skipped before their bytes are ever read.
-    pub fn search(
+    pub(crate) fn search(
         &self,
         repo_root: &Path,
         artifacts: &[Artifact],

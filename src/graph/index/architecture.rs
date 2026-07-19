@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// original always-on section), so they have no aspect variant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ArchitectureAspect {
+pub(crate) enum ArchitectureAspect {
     /// Module-language breakdown.
     Languages,
     /// Local and external package nodes.
@@ -44,7 +44,7 @@ pub enum ArchitectureAspect {
 /// All [`ArchitectureAspect`] variants, in the order `architecture()`
 /// computes them when no filter is given. Passing `Some` of this set
 /// explicitly is equivalent to passing `None`.
-pub const ALL_ARCHITECTURE_ASPECTS: &[ArchitectureAspect] = &[
+pub(crate) const ALL_ARCHITECTURE_ASPECTS: &[ArchitectureAspect] = &[
     ArchitectureAspect::Languages,
     ArchitectureAspect::Packages,
     ArchitectureAspect::EntryPoints,
@@ -58,7 +58,7 @@ pub const ALL_ARCHITECTURE_ASPECTS: &[ArchitectureAspect] = &[
 
 /// Module count for one language, derived from `Module` graph nodes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct LanguageSummary {
+pub(crate) struct LanguageSummary {
     /// Registry language id (e.g. `"python"`, `"tsx"`).
     pub language: String,
     /// Number of `Module` nodes in this language.
@@ -67,7 +67,7 @@ pub struct LanguageSummary {
 
 /// One file or directory in [`ArchitectureSummary::file_tree`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FileTreeNode {
+pub(crate) struct FileTreeNode {
     /// File or directory name (the final path component).
     pub name: String,
     /// Repository-relative path.
@@ -82,7 +82,7 @@ pub struct FileTreeNode {
 /// queries. `PartialEq` only, not `Eq` -- `clusters` carries a `f64`
 /// cohesion score.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ArchitectureSummary {
+pub(crate) struct ArchitectureSummary {
     /// Graph schema counts. Always included.
     pub schema: GraphSchema,
     /// Module-language breakdown.
@@ -113,7 +113,7 @@ pub struct ArchitectureSummary {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Count for one relation kind in a cluster-to-cluster aggregate.
-pub struct ArchitectureClusterLinkKind {
+pub(crate) struct ArchitectureClusterLinkKind {
     /// Graph relation kind.
     pub kind: RelationKind,
     /// Number of underlying relations of this kind.
@@ -122,7 +122,7 @@ pub struct ArchitectureClusterLinkKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Lightweight underlying relation used for aggregate drill-down.
-pub struct ArchitectureClusterRelation {
+pub(crate) struct ArchitectureClusterRelation {
     /// Source graph node.
     pub source: GraphNodeId,
     /// Target graph node.
@@ -133,7 +133,7 @@ pub struct ArchitectureClusterRelation {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Directed whole-graph relationship aggregate between two clusters.
-pub struct ArchitectureClusterLink {
+pub(crate) struct ArchitectureClusterLink {
     /// Source cluster id.
     pub source: String,
     /// Target cluster id.
@@ -155,7 +155,7 @@ impl<'a> KnowledgeIndex<'a> {
     /// needs e.g. `Packages` avoids paying for clustering or layer
     /// detection. `schema` and `hotspots` are always computed; every
     /// section is deterministic for an unchanged graph (AC3).
-    pub fn architecture(
+    pub(crate) fn architecture(
         &self,
         aspects: Option<&BTreeSet<ArchitectureAspect>>,
     ) -> ArchitectureSummary {

@@ -11,7 +11,7 @@ const END_MARKER: &str = "<!-- lithograph:end -->";
 
 /// What happened to one agent instruction file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AgentFileOutcome {
+pub(crate) enum AgentFileOutcome {
     /// The file had no Lithograph section yet; one was appended.
     Created,
     /// The file already had a Lithograph section with different content; it was replaced.
@@ -22,7 +22,7 @@ pub enum AgentFileOutcome {
 
 /// Result for one processed agent instruction file.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AgentFileResult {
+pub(crate) struct AgentFileResult {
     /// File that was processed.
     pub path: PathBuf,
     /// What happened to it.
@@ -31,7 +31,7 @@ pub struct AgentFileResult {
 
 /// Result of one `integrate-agents` run.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct IntegrateAgentsReport {
+pub(crate) struct IntegrateAgentsReport {
     /// One entry per `AGENTS.md`/`CLAUDE.md` that exists at the repository root.
     pub results: Vec<AgentFileResult>,
 }
@@ -40,7 +40,7 @@ pub struct IntegrateAgentsReport {
 /// `AGENTS.md`/`CLAUDE.md` exist at `repo_root`. Files that don't exist are
 /// left untouched (this command never creates a new instruction file from
 /// scratch, only extends ones the project already has).
-pub fn integrate_agents(repo_root: &Path) -> Result<IntegrateAgentsReport, std::io::Error> {
+pub(crate) fn integrate_agents(repo_root: &Path) -> Result<IntegrateAgentsReport, std::io::Error> {
     let mut results = Vec::new();
     for filename in AGENT_FILES {
         let path = repo_root.join(filename);

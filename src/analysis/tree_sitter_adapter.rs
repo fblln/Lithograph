@@ -528,7 +528,7 @@ impl SyntaxIndexedLanguage {
 
 /// Parses with an optional adapter, falling back to detected-only output when
 /// no parser adapter is available for the language.
-pub fn parse_with_optional_adapter(
+pub(crate) fn parse_with_optional_adapter(
     language_id: &str,
     adapter: Option<&TreeSitterParserAdapter>,
     source: &str,

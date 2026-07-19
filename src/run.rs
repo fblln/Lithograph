@@ -15,7 +15,7 @@ use std::path::Path;
 /// Persisted artifact content-hash snapshot, used to detect changed
 /// artifacts across runs without re-diffing full file content.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct RepositorySnapshot {
+pub(crate) struct RepositorySnapshot {
     /// Artifact path to content hash.
     pub artifact_hashes: BTreeMap<String, String>,
     /// Pipeline inputs that affect graph and documentation invalidation.
@@ -26,7 +26,7 @@ pub struct RepositorySnapshot {
 /// Versioned pipeline facts that decide whether cached graph/research/page
 /// inputs are still compatible with the current binary and run options.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PipelineInvalidationMetadata {
+pub(crate) struct PipelineInvalidationMetadata {
     /// Analyzer/cache semantics version.
     pub analyzer_version: u32,
     /// Language registry routing/tier version.
@@ -62,7 +62,7 @@ impl Default for PipelineInvalidationMetadata {
 
 impl PipelineInvalidationMetadata {
     /// Builds current metadata for a run.
-    pub fn current(prompt_version: &str, semantic_grouping: bool, include_tests: bool) -> Self {
+    pub(crate) fn current(prompt_version: &str, semantic_grouping: bool, include_tests: bool) -> Self {
         Self {
             prompt_version: prompt_version.to_owned(),
             semantic_grouping,
@@ -74,7 +74,7 @@ impl PipelineInvalidationMetadata {
 
 impl RepositorySnapshot {
     /// Builds a snapshot from the current artifact set.
-    pub fn from_artifacts(artifacts: &[Artifact], pipeline: PipelineInvalidationMetadata) -> Self {
+    pub(crate) fn from_artifacts(artifacts: &[Artifact], pipeline: PipelineInvalidationMetadata) -> Self {
         Self {
             artifact_hashes: artifacts
                 .iter()
@@ -92,7 +92,7 @@ impl RepositorySnapshot {
     /// Returns artifact paths that are new, removed, or changed relative to
     /// `previous` (the prior run's snapshot). Every artifact is "changed"
     /// when there is no previous snapshot (first run).
-    pub fn changed_since(&self, previous: Option<&RepositorySnapshot>) -> Vec<String> {
+    pub(crate) fn changed_since(&self, previous: Option<&RepositorySnapshot>) -> Vec<String> {
         let Some(previous) = previous else {
             return self.artifact_hashes.keys().cloned().collect();
         };
@@ -115,7 +115,7 @@ impl RepositorySnapshot {
     }
 
     /// Deterministic hash over the whole snapshot.
-    pub fn hash(&self) -> String {
+    pub(crate) fn hash(&self) -> String {
         let mut pairs: Vec<String> = self
             .artifact_hashes
             .iter()
@@ -156,7 +156,7 @@ pub enum PipelineStage {
 
 /// Wall-clock duration of one completed [`PipelineStage`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StageTiming {
+pub(crate) struct StageTiming {
     /// Which stage this measures.
     pub stage: PipelineStage,
     /// Elapsed wall-clock time in milliseconds.
@@ -165,7 +165,7 @@ pub struct StageTiming {
 
 /// Metadata recorded for one `init`/`update` run.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RunMetadata {
+pub(crate) struct RunMetadata {
     /// Unique identifier for this run.
     pub run_id: String,
     /// CLI command that produced this run, e.g. `init`.
@@ -214,7 +214,7 @@ impl RunMetadata {
     /// Fraction of artifacts served from cache this run: `1.0` when there
     /// were no artifacts to reanalyze at all (vacuously fully cached),
     /// otherwise `cache_hits / (cache_hits + cache_misses)`.
-    pub fn cache_hit_rate(&self) -> f64 {
+    pub(crate) fn cache_hit_rate(&self) -> f64 {
         let total = self.cache_hits + self.cache_misses;
         if total == 0 {
             1.0
@@ -228,12 +228,12 @@ impl RunMetadata {
 /// count: the standard ~4-characters-per-token heuristic for English/code
 /// text. Deliberately never a live API-reported usage count, so it stays
 /// available offline and reproducibly across runs (LIT-22.8.4 AC1).
-pub fn estimate_tokens(prompt_chars: usize) -> u64 {
+pub(crate) fn estimate_tokens(prompt_chars: usize) -> u64 {
     (prompt_chars as u64).div_ceil(4)
 }
 
 /// Inputs required to compute one run metadata record.
-pub struct RunMetadataInput<'a> {
+pub(crate) struct RunMetadataInput<'a> {
     /// CLI command that produced this run.
     pub command: &'a str,
     /// Repository root used to read git metadata.
@@ -261,7 +261,7 @@ pub struct RunMetadataInput<'a> {
 
 impl RunMetadata {
     /// Computes run metadata for one completed run.
-    pub fn compute(
+    pub(crate) fn compute(
         input: RunMetadataInput<'_>,
     ) -> Result<(Self, RepositorySnapshot), serde_json::Error> {
         let RunMetadataInput {
@@ -308,7 +308,7 @@ impl RunMetadata {
 /// check flaky. Every threshold is optional; an absent threshold is never
 /// checked (LIT-22.8.4 AC3).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub struct PerformanceBudget {
+pub(crate) struct PerformanceBudget {
     /// Maximum allowed graph node count.
     pub max_graph_node_count: Option<usize>,
     /// Maximum allowed graph relation count.
@@ -321,7 +321,7 @@ pub struct PerformanceBudget {
 
 /// One budget threshold a [`RunMetadata`] exceeded.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct BudgetViolation {
+pub(crate) struct BudgetViolation {
     /// Stable metric name, e.g. `"graph_node_count"`.
     pub metric: &'static str,
     /// The configured threshold, rendered as text.
@@ -334,7 +334,7 @@ impl PerformanceBudget {
     /// Checks `metadata` against every configured threshold, returning one
     /// [`BudgetViolation`] per threshold exceeded (empty when within
     /// budget).
-    pub fn check(&self, metadata: &RunMetadata) -> Vec<BudgetViolation> {
+    pub(crate) fn check(&self, metadata: &RunMetadata) -> Vec<BudgetViolation> {
         let mut violations = Vec::new();
         if let Some(max) = self.max_graph_node_count
             && metadata.graph_node_count > max
