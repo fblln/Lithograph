@@ -57,4 +57,6 @@ export interface LayoutRequest {
   node_labels?: string[]
   node_ids?: string[]
   edge_types?: string[]
+  // LIT-84: exclude Unresolved nodes and their edges from the slice. Off by default.
+  hide_unresolved?: boolean
 }

@@ -18,6 +18,7 @@ export interface ExplorerUrlState {
   workspaceMode?: 'explore' | 'docs'
   docSectionId?: string
   showUnprovenEdges?: boolean
+  hideUnresolved?: boolean
 }
 
 export const DEFAULT_VIEW_MODE: ViewMode = 'cluster'
@@ -40,6 +41,7 @@ export function parseUrlState(search: string): ExplorerUrlState {
   const workspaceMode = params.get('workspace') === 'docs' ? 'docs' : undefined
   const docSectionId = params.get('doc')
   const showUnprovenEdges = params.get('unproven') === 'hide' ? false : undefined
+  const hideUnresolved = params.get('unresolved') === 'hide' ? true : undefined
 
   return {
     ...(projectId ? { projectId } : {}),
@@ -54,6 +56,7 @@ export function parseUrlState(search: string): ExplorerUrlState {
     ...(workspaceMode ? { workspaceMode } : {}),
     ...(docSectionId ? { docSectionId } : {}),
     ...(showUnprovenEdges === false ? { showUnprovenEdges } : {}),
+    ...(hideUnresolved ? { hideUnresolved } : {}),
   }
 }
 
@@ -72,6 +75,7 @@ export function serializeUrlState(state: ExplorerUrlState): string {
   if (state.workspaceMode === 'docs') params.set('workspace', 'docs')
   if (state.docSectionId) params.set('doc', state.docSectionId)
   if (state.showUnprovenEdges === false) params.set('unproven', 'hide')
+  if (state.hideUnresolved) params.set('unresolved', 'hide')
 
   const query = params.toString()
   return query ? `?${query}` : ''

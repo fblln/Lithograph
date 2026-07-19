@@ -25,7 +25,12 @@ fn execute_graph_report<W>(
 where
     W: Write,
 {
-    let graph = GraphStore::new(&args.path).load()?.graph;
+    let loaded = GraphStore::new(&args.path).load()?.graph;
+    let graph = if args.hide_unresolved {
+        loaded.without_unresolved()
+    } else {
+        loaded
+    };
     writer.write_all(GraphReport::build(&graph).render_markdown().as_bytes())?;
     Ok(())
 }
