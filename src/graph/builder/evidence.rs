@@ -209,10 +209,21 @@ impl BuilderState {
                 continue;
             }
             let evidence = syntax_fact_evidence(artifact, definition.span.clone());
-            let qualified = format!(
-                "{}::{}@L{}",
-                artifact.path, definition.kind, definition.span.start_line
-            );
+            // LIT-75: a named TS/JS type-level declaration (interface, type
+            // alias, enum) gets a name-bearing qualified name so a reference
+            // to it -- `props: FooProps`, `state: AppState` -- resolves to
+            // the definition instead of an `Unresolved` node. Without this
+            // it was interned anonymously by kind and line, unreachable by
+            // name. Deliberately gated to these TS-specific node kinds: other
+            // languages' definitions keep the positional identity their
+            // symbols already have, so this changes nothing outside TS/TSX.
+            let qualified = match named_definition_symbol(&definition.kind, &definition.text) {
+                Some(name) => format!("{}::{}", artifact.path, name),
+                None => format!(
+                    "{}::{}@L{}",
+                    artifact.path, definition.kind, definition.span.start_line
+                ),
+            };
             let symbol_id = self.insert(GraphNode::Symbol(SymbolNode {
                 id: GraphNodeId::new(format!("symbol:{qualified}")),
                 kind: SymbolKind::Definition,
@@ -400,6 +411,34 @@ impl BuilderState {
     }
 }
 
+/// The declared name of a TS/TSX type-level definition, when `kind` is one of
+/// the name-bearing declaration node kinds and a leading identifier follows
+/// the keyword. Restricted to these TypeScript-grammar kinds so the change is
+/// invisible to every other syntax-indexed language: their definition node
+/// kinds never match, so they keep their positional `kind@Lline` identity.
+fn named_definition_symbol<'a>(kind: &str, text: &'a str) -> Option<&'a str> {
+    let keyword = match kind {
+        "interface_declaration" => "interface",
+        "type_alias_declaration" => "type",
+        "enum_declaration" => "enum",
+        _ => return None,
+    };
+    // `export`/`declare`/`const` may precede the keyword (`export const enum
+    // E`); scan tokens for the keyword, then take the identifier after it.
+    let mut tokens = text
+        .split_whitespace()
+        .skip_while(|token| *token != keyword);
+    tokens.next()?; // the keyword itself
+    let name = tokens.next()?;
+    // Stop at the first non-identifier character: `Foo<T>`, `Foo=`, `Foo{`.
+    let end = name
+        .find(|character: char| {
+            !(character.is_alphanumeric() || character == '_' || character == '$')
+        })
+        .unwrap_or(name.len());
+    (end > 0).then(|| &name[..end])
+}
+
 fn generic_finding_evidence(artifact: &Artifact, line: u32) -> EvidenceRef {
     let base = EvidenceRef::file(ArtifactId::from_path(&artifact.path), artifact.path.clone());
     match crate::domain::SourceSpan::new(line, line) {
@@ -504,8 +543,22 @@ mod tests {
                 .iter()
                 .any(|relation| relation.kind == RelationKind::Usages)
         );
+        // The syntax pass emits every TypeRefs/Usages at Low/SyntaxOnly.
+        // Post-build resolution (LIT-75) may legitimately upgrade a reference
+        // that lands on a same-file or imported local symbol -- e.g. the
+        // class name `Widget` referenced within its own file -- so the Low
+        // invariant holds for those still targeting an `Unresolved` node.
+        let unresolved_ids: std::collections::BTreeSet<_> = graph
+            .nodes
+            .iter()
+            .filter_map(|node| match node {
+                GraphNode::Unresolved(node) => Some(node.id.clone()),
+                _ => None,
+            })
+            .collect();
         for relation in graph.relations.iter().filter(|relation| {
             matches!(relation.kind, RelationKind::TypeRefs | RelationKind::Usages)
+                && unresolved_ids.contains(&relation.target)
         }) {
             assert_eq!(relation.confidence, Confidence::Low);
             assert_eq!(

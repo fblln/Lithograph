@@ -14,10 +14,9 @@
     {
       "name": "assets",
       "kind": "Directory",
-      "member_count": 2,
+      "member_count": 1,
       "evidence": [
-        "artifact:assets/logo.svg",
-        "unresolved:xmlns=\"http://www.w3.org/2000/svg"
+        "artifact:assets/logo.svg"
       ]
     },
     {
@@ -61,7 +60,7 @@
     {
       "name": "web",
       "kind": "Directory",
-      "member_count": 21,
+      "member_count": 19,
       "evidence": [
         "artifact:web/index.html",
         "artifact:web/src/App.tsx",
@@ -137,8 +136,6 @@
     "README.md -[References]-> vendor/example/lib.rs (High)",
     "README.md -[References]-> web/index.html (High)",
     "README.md -[References]-> web/src/App.tsx (High)",
-    "assets/logo.svg -[References]-> xmlns=\"http://www.w3.org/2000/svg (Low)",
-    "assets/logo.svg -[References]-> xmlns=\"http://www.w3.org/2000/svg (Low)",
     "config/schema.json -[References]-> https://json-schema.org/draft/2020-12/schema (Low)",
     "config/settings.yaml -[References]-> config/schema.json (High)",
     "config/settings.yaml -[References]-> /usr/local/bin/worker (Low)",
@@ -154,7 +151,9 @@
     "src/python_app/__init__.py -[Imports]-> src.python_app.service (High)",
     "src/python_app/service.py -[Imports]-> __future__ (High)",
     "src/python_app/service.py -[Imports]-> json (High)",
-    "src/python_app/service.py -[Imports]-> os (High)"
+    "src/python_app/service.py -[Imports]-> os (High)",
+    "src/python_app/service.py -[Imports]-> pathlib (High)",
+    "src/python_app/service.py -[Imports]-> subprocess (High)"
   ],
   "evidence": [
     {

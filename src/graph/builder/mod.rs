@@ -398,6 +398,7 @@ impl GraphBuilder {
         crate::resolve::HybridResolverPipeline::default_pipeline()
             .resolve_with_aliases(&mut graph, ts_aliases);
         crate::resolve::resolve_environment_links(&mut graph);
+        classify_javascript_builtins(&mut graph);
         prune_orphaned_unresolved_nodes(&mut graph);
         let resolution_decisions = trace_decisions_for_relations(
             &graph,
@@ -539,6 +540,105 @@ fn trace_decisions_for_relations(
 /// relation. A node created and immediately shared by several relations
 /// (the common case, since `BuilderState::unresolved` deduplicates by id)
 /// survives as long as at least one relation still targets it.
+/// LIT-77: retargets references to bare JavaScript/TypeScript builtin globals
+/// (`Array`, `Blob`, `JSON`, `btoa`, `Record`, ...) from a per-file
+/// `Unresolved` node onto a shared external builtin `Symbol` -- the JS
+/// analogue of LIT-6's Python-stdlib and LIT-66's Rust-prelude
+/// classification. It runs *after* resolution, so a name a local definition
+/// or a relative/package import already claimed (LIT-71/75) never reaches
+/// here; a name still unresolved at this point is one nothing local or
+/// imported explained, which is exactly when a global builtin is the honest
+/// classification rather than a guess. Only TS/JS-language Calls, Usages, and
+/// type references are eligible -- an import statement never names a global.
+fn classify_javascript_builtins(graph: &mut Graph) {
+    let unresolved_names: BTreeMap<&GraphNodeId, &str> = graph
+        .nodes
+        .iter()
+        .filter_map(|node| match node {
+            GraphNode::Unresolved(node) => Some((&node.id, node.value.as_str())),
+            _ => None,
+        })
+        .collect();
+    // Builtin name -> evidence to attach to its interned symbol (from the
+    // first eligible reference, in relation order, so it is deterministic).
+    let mut builtins: BTreeMap<String, EvidenceRef> = BTreeMap::new();
+    let mut retargets: Vec<(usize, String)> = Vec::new();
+    for (index, relation) in graph.relations.iter().enumerate() {
+        if !matches!(
+            relation.kind,
+            RelationKind::Calls
+                | RelationKind::Usages
+                | RelationKind::TypeRefs
+                | RelationKind::UsesType
+        ) {
+            continue;
+        }
+        let is_js = relation
+            .provenance
+            .as_ref()
+            .and_then(|provenance| provenance.language.as_deref())
+            .is_some_and(|language| matches!(language, "typescript" | "tsx" | "javascript"));
+        if !is_js {
+            continue;
+        }
+        let Some(name) = unresolved_names.get(&relation.target) else {
+            continue;
+        };
+        if !crate::analysis::is_javascript_builtin(name) {
+            continue;
+        }
+        // Every such reference carries its call/use-site evidence; without it
+        // there is nothing to attach to the interned symbol, so leave it be.
+        let Some(evidence) = relation.evidence.first() else {
+            continue;
+        };
+        builtins
+            .entry((*name).to_owned())
+            .or_insert_with(|| evidence.clone());
+        retargets.push((index, (*name).to_owned()));
+    }
+    if retargets.is_empty() {
+        return;
+    }
+    // Intern one external `Symbol` per builtin (`javascript::Array`) plus its
+    // `BelongsToPackage` edge to a shared external `javascript` package, the
+    // same shape `python_external_symbol` produces for stdlib members.
+    let package_id = GraphNodeId::new("package:javascript");
+    if !graph.nodes.iter().any(|node| node.id() == &package_id) {
+        graph.nodes.push(GraphNode::Package(PackageNode {
+            id: package_id.clone(),
+            name: "javascript".to_owned(),
+            is_external: true,
+        }));
+    }
+    for (name, evidence) in &builtins {
+        let symbol_id = GraphNodeId::new(format!("symbol:javascript::{name}"));
+        graph.nodes.push(GraphNode::Symbol(SymbolNode {
+            id: symbol_id.clone(),
+            kind: SymbolKind::External,
+            qualified_name: format!("javascript::{name}"),
+            doc: None,
+            evidence: evidence.clone(),
+        }));
+        graph.relations.push(Relation {
+            id: format!(
+                "belongs-to-package:{}:{}",
+                symbol_id.as_str(),
+                package_id.as_str()
+            ),
+            source: symbol_id,
+            target: package_id.clone(),
+            kind: RelationKind::BelongsToPackage,
+            confidence: Confidence::High,
+            evidence: vec![evidence.clone()],
+            provenance: None,
+        });
+    }
+    for (index, name) in retargets {
+        graph.relations[index].target = GraphNodeId::new(format!("symbol:javascript::{name}"));
+    }
+}
+
 fn prune_orphaned_unresolved_nodes(graph: &mut Graph) {
     let referenced: BTreeSet<&GraphNodeId> = graph
         .relations
@@ -566,6 +666,18 @@ struct BuilderState {
     environment_facts: EnvironmentFacts,
     artifact_paths: BTreeSet<String>,
     python_modules: BTreeMap<String, GraphNodeId>,
+    /// LIT-76: each Python module also indexed by its *package-relative*
+    /// dotted path -- the path from the source root a Python interpreter
+    /// would put on `sys.path`, i.e. with the leading non-package directories
+    /// stripped. A file `backend/app/core/config.py` in a repo where `app` is
+    /// the top-level package (its `__init__.py` sits under `backend/`) is
+    /// keyed `app.core.config` here, matching how the code imports it (`from
+    /// app.core.config import ...`), while its node identity stays the
+    /// whole-repo `module:backend.app.core.config`. A pure resolution
+    /// fallback: entries exist only where the package-relative path differs
+    /// from the whole-repo one, so it never changes an already-resolvable
+    /// import.
+    python_package_relative_modules: BTreeMap<String, GraphNodeId>,
     rust_modules: BTreeMap<String, GraphNodeId>,
     /// Repository-relative source root directory of every known Cargo
     /// build target (e.g. `"rust/src"` for a `rust/src/lib.rs` target),
@@ -614,6 +726,7 @@ impl BuilderState {
                 .map(|artifact| artifact.path.as_str().to_owned())
                 .collect(),
             python_modules: BTreeMap::new(),
+            python_package_relative_modules: BTreeMap::new(),
             rust_modules: BTreeMap::new(),
             rust_crate_roots: BTreeSet::new(),
             rust_local_crates: BTreeSet::new(),
@@ -667,6 +780,27 @@ impl BuilderState {
             Some(root) => rust_source::module_path(&artifact_path[root.len() + 1..]),
             None => rust_source::module_path(artifact_path),
         }
+    }
+    /// The package-relative dotted module path of a Python file: the path
+    /// from its source root, found by dropping the leading directories that
+    /// are not themselves Python packages. `app` is the top-level package
+    /// when `.../app/__init__.py` exists but its parent has no `__init__.py`,
+    /// so the source root is that parent and `app` begins the import path.
+    /// Returns `None` when the file sits in no package at all (no ancestor
+    /// `__init__.py`), where the whole-repo module path is already correct.
+    fn python_package_relative_module(&self, artifact_path: &str) -> Option<String> {
+        let trimmed = artifact_path.strip_suffix(".py")?;
+        // For a package's own `__init__.py`, the module is the package
+        // directory chain itself; for a plain module, drop the file name.
+        let chain = trimmed.strip_suffix("/__init__").unwrap_or(trimmed);
+        let segments: Vec<&str> = chain.split('/').collect();
+        // The first prefix that is a package directory (has `__init__.py`)
+        // starts the import path; everything before it is the source root.
+        let package_start = (0..segments.len()).find(|&end| {
+            let dir = segments[..=end].join("/");
+            self.artifact_paths.contains(&format!("{dir}/__init__.py"))
+        })?;
+        (package_start > 0).then(|| segments[package_start..].join("."))
     }
     fn insert(&mut self, node: GraphNode) -> GraphNodeId {
         let id = node.id().clone();
@@ -749,6 +883,15 @@ impl BuilderState {
                     ModuleLanguage::Python,
                     file_evidence(artifact),
                 );
+                // LIT-76: also index the module under the package-relative
+                // path the code actually imports, when a source-root prefix
+                // was stripped (`backend.app.core.config` -> `app.core.config`).
+                if let Some(relative) = self.python_package_relative_module(artifact.path.as_str())
+                    && relative != module_path
+                {
+                    self.python_package_relative_modules
+                        .insert(relative, id.clone());
+                }
                 self.python_modules.insert(module_path, id);
             }
             Some("rust") => {

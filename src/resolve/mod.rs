@@ -244,7 +244,7 @@ impl HybridResolverPipeline {
     /// or artifact path verbatim.
     pub fn default_pipeline() -> Self {
         Self::new(vec![
-            Box::new(TypeScriptCallResolver),
+            Box::new(TypeScriptImportBindingResolver),
             Box::new(SymbolNameResolver),
             Box::new(LanguageImportResolver),
             Box::new(PackageMapResolver),
@@ -344,15 +344,27 @@ impl Resolver for SymbolNameResolver {
     }
 }
 
-/// Resolves a named TypeScript/TSX call through a direct named binding from a
-/// relative local import. It runs before import resolution mutates the raw
-/// statement away, and accepts only one callable-symbol match; namespace,
-/// default, missing, and ambiguous bindings remain unresolved.
-struct TypeScriptCallResolver;
+/// Resolves a TypeScript/TSX reference -- a call, a JSX/use-site `Usages`, or
+/// a `TypeRefs` -- to a local symbol reached through a direct binding from a
+/// relative import. It runs before import resolution mutates the raw
+/// statement away, handles both named (`import { X }`) and default
+/// (`import X`) bindings, and accepts only one symbol match; namespace,
+/// renamed-default, missing, and ambiguous bindings remain unresolved.
+///
+/// LIT-75: broadened from `Calls`-only to `Usages`/`TypeRefs` as well, which
+/// is the largest single class of remaining Unresolved nodes on real
+/// front-ends -- `<ActionsMenu/>` (a JSX `Usages`) and `props: ApiError` (a
+/// `TypeRefs`) each imported once from a local file, previously minting a
+/// per-file `unresolved:<name>` node instead of pointing at the definition
+/// the graph already held. The honesty boundary is unchanged: the reference
+/// name must be a binding of an actual relative import in this file, and the
+/// import's target file must define a symbol with the corresponding name;
+/// zero or multiple candidates stay unresolved rather than guess.
+struct TypeScriptImportBindingResolver;
 
-impl Resolver for TypeScriptCallResolver {
+impl Resolver for TypeScriptImportBindingResolver {
     fn strategy(&self) -> &'static str {
-        "typescript-import-binding-call"
+        "typescript-import-binding"
     }
 
     fn resolve(
@@ -361,15 +373,36 @@ impl Resolver for TypeScriptCallResolver {
         relation: &Relation,
         unresolved_value: &str,
     ) -> Option<ResolvedTarget> {
-        if relation.kind != crate::graph::RelationKind::Calls {
-            return None;
-        }
+        use crate::graph::RelationKind;
+        // A call must land on a callable symbol (preserving the original
+        // conservatism); a use-site or type reference may name any local
+        // symbol -- a component, class, interface, type alias, or enum.
+        let require_callable = match relation.kind {
+            RelationKind::Calls => true,
+            RelationKind::Usages | RelationKind::TypeRefs => false,
+            _ => return None,
+        };
         let language = relation.provenance.as_ref()?.language.as_deref()?;
         if !matches!(language, "typescript" | "tsx") {
             return None;
         }
         let source_path = relation.source.as_str().strip_prefix("artifact:")?;
         let mut candidates = BTreeSet::new();
+
+        // LIT-75 same-file case: a reference to a top-level symbol declared in
+        // this very file (a component referencing its own name, a type used
+        // where it is defined) needs no import -- the definition is right
+        // here. The builder already resolves same-file *calls* via its
+        // callable index; this covers the use-site and type references it
+        // leaves behind. Matched by exact `{file}::{name}` qualified name, so
+        // it never reaches into a nested class method or another file.
+        if let Some(symbol_id) = context
+            .symbols_by_qualified_name
+            .get(format!("{source_path}::{unresolved_value}").as_str())
+            && (!require_callable || context.callable_symbol_ids.contains(symbol_id))
+        {
+            candidates.insert((*symbol_id).clone());
+        }
 
         // LIT-37: same-source imports come from the prebuilt index (relation
         // order preserved) rather than a full scan of every graph relation.
@@ -389,10 +422,22 @@ impl Resolver for TypeScriptCallResolver {
             else {
                 continue;
             };
-            let Some((exported, _)) = extract_typescript_import_bindings(raw_import)
+            // The exported name this file's binding refers to. A named
+            // binding carries it explicitly (`{ X as y }` -> X); a default
+            // binding does not name the export, so we match by convention on
+            // the local binding name and rely on the target file actually
+            // defining a symbol of that name below -- a renamed default
+            // (`import Foo from "./ActionsMenu"`) finds no `ActionsMenu.tsx::Foo`
+            // and correctly stays unresolved.
+            let exported = extract_typescript_import_bindings(raw_import)
                 .into_iter()
                 .find(|(_, local)| local == unresolved_value)
-            else {
+                .map(|(exported, _)| exported)
+                .or_else(|| {
+                    extract_typescript_default_import_binding(raw_import)
+                        .filter(|local| local == unresolved_value)
+                });
+            let Some(exported) = exported else {
                 continue;
             };
             let Some(reference) = extract_import_reference(language, raw_import) else {
@@ -407,7 +452,7 @@ impl Resolver for TypeScriptCallResolver {
                 else {
                     continue;
                 };
-                if context.callable_symbol_ids.contains(symbol_id) {
+                if !require_callable || context.callable_symbol_ids.contains(symbol_id) {
                     candidates.insert((*symbol_id).clone());
                 }
             }

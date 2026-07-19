@@ -607,10 +607,10 @@
       "text": "web/src/App.tsx::App "
     },
     {
-      "id": "symbol:web/src/App.tsx::type_alias_declaration@L3",
+      "id": "symbol:web/src/App.tsx::RouteSummary",
       "kind": "Symbol",
-      "reference": "web/src/App.tsx::type_alias_declaration@L3",
-      "text": "web/src/App.tsx::type_alias_declaration@L3 "
+      "reference": "web/src/App.tsx::RouteSummary",
+      "text": "web/src/App.tsx::RouteSummary "
     }
   ]
 }

@@ -2,11 +2,11 @@
 
 ## Summary and resolution
 
-- Nodes: 136
-- Relations: 161
-- Resolved relations: 137 of 161 (85.0%)
-- Unresolved relations: 24
-- Low-confidence relations: 30
+- Nodes: 133
+- Relations: 159
+- Resolved relations: 139 of 159 (87.4%)
+- Unresolved relations: 20
+- Low-confidence relations: 26
 
 ## God nodes by degree
 
@@ -40,14 +40,11 @@ No module dependency cycles detected.
 
 - `unresolved:str` — str (4 inbound relations)
 - `unresolved:ghcr.io/example/route-api:dev` — ghcr.io/example/route-api:dev (2 inbound relations)
-- `unresolved:xmlns="http://www.w3.org/2000/svg` — xmlns="http://www.w3.org/2000/svg (2 inbound relations)
 - `unresolved:/usr/local/bin/worker` — /usr/local/bin/worker (1 inbound relations)
 - `unresolved:/var/cache/ridgeline` — /var/cache/ridgeline (1 inbound relations)
-- `unresolved:App` — App (1 inbound relations)
 - `unresolved:None` — None (1 inbound relations)
 - `unresolved:React` — React (1 inbound relations)
 - `unresolved:RouteBaker::from_env` — RouteBaker::from_env (1 inbound relations)
-- `unresolved:RouteSummary` — RouteSummary (1 inbound relations)
 - `unresolved:assets/` — assets/ (1 inbound relations)
 - `unresolved:dict[str, object]` — dict[str, object] (1 inbound relations)
 - `unresolved:fixture_worker::bake_route` — fixture_worker::bake_route (1 inbound relations)
@@ -67,19 +64,19 @@ No module dependency cycles detected.
 - `artifact:Makefile` → `artifact:rust/Cargo.toml` (References, relation `relation:9`)
 - `artifact:Makefile` → `unresolved:ghcr.io/example/route-api:dev` (References, relation `relation:12`)
 - `artifact:Makefile` → `unresolved:ghcr.io/example/route-api:dev` (References, relation `relation:13`)
-- `artifact:assets/logo.svg` → `unresolved:xmlns="http://www.w3.org/2000/svg` (References, relation `relation:36`)
-- `artifact:assets/logo.svg` → `unresolved:xmlns="http://www.w3.org/2000/svg` (References, relation `relation:37`)
-- `artifact:config/schema.json` → `unresolved:https://json-schema.org/draft/2020-12/schema` (References, relation `relation:38`)
-- `artifact:config/settings.yaml` → `unresolved:/usr/local/bin/worker` (References, relation `relation:46`)
-- `artifact:config/settings.yaml` → `unresolved:/var/cache/ridgeline` (References, relation `relation:45`)
-- `artifact:config/settings.yaml` → `unresolved:assets/` (References, relation `relation:41`)
-- `artifact:rust/src/bin/worker.rs` → `symbol:std::env::args` (Calls, relation `relation:75`)
-- `artifact:rust/src/lib.rs` → `unresolved:RouteBaker::from_env` (Calls, relation `relation:83`)
-- `artifact:src/python_app/service.py` → `unresolved:str` (Calls, relation `relation:113`)
-- `artifact:src/python_app/service.py` → `command:src/python_app/service.py#31` (RunsCommand, relation `relation:112`)
-- `artifact:web/src/App.tsx` → `unresolved:import React from "react";` (Imports, relation `relation:128`)
-- `artifact:web/src/App.tsx` → `unresolved:RouteSummary` (TypeRefs, relation `relation:130`)
-- `artifact:web/src/App.tsx` → `unresolved:App` (Usages, relation `relation:132`)
+- `artifact:config/schema.json` → `unresolved:https://json-schema.org/draft/2020-12/schema` (References, relation `relation:36`)
+- `artifact:config/settings.yaml` → `unresolved:/usr/local/bin/worker` (References, relation `relation:44`)
+- `artifact:config/settings.yaml` → `unresolved:/var/cache/ridgeline` (References, relation `relation:43`)
+- `artifact:config/settings.yaml` → `unresolved:assets/` (References, relation `relation:39`)
+- `artifact:rust/src/bin/worker.rs` → `symbol:std::env::args` (Calls, relation `relation:73`)
+- `artifact:rust/src/lib.rs` → `unresolved:RouteBaker::from_env` (Calls, relation `relation:81`)
+- `artifact:src/python_app/service.py` → `unresolved:str` (Calls, relation `relation:111`)
+- `artifact:src/python_app/service.py` → `command:src/python_app/service.py#31` (RunsCommand, relation `relation:110`)
+- `artifact:web/src/App.tsx` → `unresolved:import React from "react";` (Imports, relation `relation:126`)
+- `artifact:web/src/App.tsx` → `unresolved:React` (Usages, relation `relation:127`)
+- `artifact:web/src/App.tsx` → `unresolved:h1` (Usages, relation `relation:132`)
+- `artifact:web/src/App.tsx` → `unresolved:main` (Usages, relation `relation:131`)
+- `artifact:web/src/App.tsx` → `unresolved:p` (Usages, relation `relation:133`)
 
 ## Suggested audit questions
 
@@ -88,6 +85,6 @@ No module dependency cycles detected.
 - What responsibilities make `artifact:config/schema.json` highly connected, and should any be separated?
 - What repository evidence can resolve `unresolved:str` (str)?
 - What repository evidence can resolve `unresolved:ghcr.io/example/route-api:dev` (ghcr.io/example/route-api:dev)?
-- What repository evidence can resolve `unresolved:xmlns="http://www.w3.org/2000/svg` (xmlns="http://www.w3.org/2000/svg)?
-- Which of the graph's 30 low-confidence relations are justified by source evidence, and which should be corrected?
+- What repository evidence can resolve `unresolved:/usr/local/bin/worker` (/usr/local/bin/worker)?
+- Which of the graph's 26 low-confidence relations are justified by source evidence, and which should be corrected?
 
