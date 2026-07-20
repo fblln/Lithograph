@@ -89,6 +89,30 @@ fn scan_and_plan(
     Ok((artifacts, graph, modules))
 }
 
+/// Scans and builds the graph for a repository with the default (deterministic,
+/// tests-excluded, non-semantic-grouping) options. Shared by consumers that
+/// need the current artifacts and graph without generating documentation, such
+/// as the code-search index refresh (LIT-86.6).
+pub(crate) fn analyze_repository(
+    repo_root: &Path,
+) -> Result<(Vec<Artifact>, Graph, Vec<DocumentationModule>), InitError> {
+    scan_and_plan(repo_root, None, false, false)
+}
+
+/// Builds and persists the enriched code-search index (LIT-86.6) as a derived
+/// sidecar under `.lithograph/derived/`, reconciled against any prior index so
+/// unchanged chunks reuse their embeddings. Best-effort: the index is fully
+/// rebuildable, so a failure here never fails the run. Uses the deterministic
+/// offline mock embedding provider, exactly like the FTS and semantic-search
+/// indexes, so `init`/`update` stay offline and deterministic.
+fn build_code_search_index(repo_root: &Path, artifacts: &[Artifact], graph: &Graph) {
+    let provider = crate::retrieval::semantic_search::MockEmbeddingProvider;
+    let identity = crate::retrieval::code_index::provider_identity(&provider);
+    let _ = crate::retrieval::code_index::build_for_run(
+        repo_root, artifacts, graph, &provider, &identity,
+    );
+}
+
 /// Directory holding cached per-artifact analyzer output, keyed by content
 /// hash. Lives under `.lithograph/`, already excluded from every scan by
 /// [`scan_exclude_globs`].
@@ -342,6 +366,7 @@ pub fn run_init_with_options(
             &lithograph_dir.join("fts-index.json"),
             &FtsIndex::build(&graph),
         )?;
+        build_code_search_index(repo_root, &artifacts, &graph);
         write_research_artifacts(&lithograph_dir, &research)?;
         let manifest_path = lithograph_dir.join("manifest.json");
         JsonStore.write_if_changed(&manifest_path, &manifest)?;
@@ -606,6 +631,7 @@ pub fn run_update_with_options(
             &lithograph_dir.join("fts-index.json"),
             &FtsIndex::build(&graph),
         )?;
+        build_code_search_index(repo_root, &artifacts, &graph);
         write_research_artifacts(&lithograph_dir, &research)?;
         JsonStore.write_if_changed(&manifest_path, &manifest)?;
         JsonStore.write_if_changed(&snapshot_path, &snapshot)?;

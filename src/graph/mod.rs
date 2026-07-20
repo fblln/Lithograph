@@ -4,6 +4,7 @@
 pub(crate) mod analytics;
 pub(crate) mod builder;
 pub(crate) mod communities;
+pub(crate) mod fragment;
 pub(crate) mod health;
 pub(crate) mod index;
 pub(crate) mod layout;

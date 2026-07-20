@@ -119,3 +119,29 @@ baseline acceptance.
 The corpus manifest pins repository URL, commit, Git tree, license, tier, and
 expectation file. Fetch verifies all of those plus a clean checkout. Replay
 bundles reference third-party source by immutable identity and do not copy it.
+
+## Hybrid semantic index gates (LIT-86)
+
+The hybrid retrieval stack (syntax-aware chunking, the persisted vector index,
+graph enrichment, graph-constrained ranking, incremental FTS, and graph
+fragments) is gated at two levels, both fully offline and deterministic (the
+`MockEmbeddingProvider` feature hasher; never a network call or a real model):
+
+- **Component equivalence** is proven where each component is defined: incremental
+  FTS search equals a clean rebuild (`retrieval::fts_incremental`), graph-fragment
+  reassembly is set-identical to the clean graph (`graph::fragment`), vector
+  reconciliation reuses unchanged embeddings and embeds only new/changed content
+  (`retrieval::chunk_index`), and target-state reconciliation recovers from an
+  interrupted commit (`reconcile`).
+- **End-to-end retrieval quality** is gated by `retrieval::hybrid_gate`: an
+  authored fixture repository plus the query taxonomy (natural-language intent,
+  symbol lookup, configuration, negative queries), determinism across repeated
+  runs, path/graph filter scoping, and mutation-freshness (an edit is detected as
+  stale without a silent rebuild and reflected after `--refresh`).
+
+Both run under `just check-all` and `just baseline-pr`; neither downloads a model,
+calls a remote API, rewrites accepted baselines, or asserts on timestamps,
+absolute paths, or run ids. Machine-dependent latency/throughput/memory budgets
+for the hybrid index (cold/warm/edit/shape phases) belong on the dedicated
+performance runner alongside the existing corpus performance suites, not in the
+offline PR gate.

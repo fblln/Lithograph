@@ -6,7 +6,7 @@
 //! not ask the graph the questions it answers best (LIT-47). The queries
 //! themselves live in [`KnowledgeIndex`]; this module only chooses words.
 
-use crate::cli::{AffectedArgs, ExplainArgs, OutputFormat, PathArgs};
+use crate::cli::{AffectedArgs, ExplainArgs, OutputFormat, PathArgs, SearchCodeArgs};
 use crate::graph::{
     Graph, GraphNodeId, GraphStore, KnowledgeIndex, NodeExplanation, PathResult, TraceDirection,
     TraceParams, TraceResult,
@@ -91,6 +91,115 @@ where
         OutputFormat::Table => writer.write_all(render_affected(&reports).as_bytes())?,
     }
     Ok(())
+}
+
+/// Runs enriched raw-code semantic search from the terminal (LIT-86.6). Uses
+/// the deterministic offline mock embedding provider: no network call, no live
+/// model, and it builds/refreshes its own cached index from the repository, so
+/// it does not require a prior `init`.
+pub(crate) fn execute_search_code<W>(
+    args: SearchCodeArgs,
+    writer: &mut W,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    W: Write,
+{
+    use crate::graph::GraphNodeId;
+    use crate::retrieval::chunk_rank::{Expansion, RankFilters, TagExpr};
+    use crate::retrieval::code_index::{CodeSearchRequest, provider_identity, refresh, search};
+    use crate::retrieval::semantic_search::MockEmbeddingProvider;
+
+    let provider = MockEmbeddingProvider;
+    let identity = provider_identity(&provider);
+
+    // An explicit `--refresh` rebuilds the cache up front; the search below then
+    // reads that fresh cache.
+    if args.refresh {
+        refresh(&args.path, &provider, &identity)?;
+    }
+
+    let request = CodeSearchRequest {
+        query: args.query,
+        filters: RankFilters {
+            path_glob: args.path_glob,
+            language: args.language,
+            module_id: args.module_id.map(GraphNodeId::new),
+            package_id: args.package_id.map(GraphNodeId::new),
+            service: args.service,
+            node_id: args.node_id.map(GraphNodeId::new),
+            layer: args.layer,
+            tags: TagExpr {
+                all: args.tags,
+                any: Vec::new(),
+            },
+        },
+        expansion: Expansion {
+            max_hops: args.expand_hops,
+            relations: Vec::new(),
+            direction: None,
+        },
+        limit: args.limit,
+        offset: args.offset,
+        refresh: false,
+    };
+    let response = search(&args.path, &request, &provider, &identity)?;
+
+    match args.format {
+        OutputFormat::Json => write_json(writer, &response)?,
+        OutputFormat::Table => {
+            writer.write_all(render_code_search(&response, args.explain).as_bytes())?;
+        }
+    }
+    Ok(())
+}
+
+/// Renders a code-search response as a terminal table, with a freshness banner
+/// and an optional per-result explanation.
+fn render_code_search(
+    response: &crate::retrieval::code_index::CodeSearchResponse,
+    explain: bool,
+) -> String {
+    let mut out = String::new();
+    let freshness = if response.freshness.is_fresh {
+        "index: fresh"
+    } else {
+        "index: STALE (run with --refresh to rebuild)"
+    };
+    out.push_str(&format!(
+        "{freshness} | provider {} | schema v{} | scoring v{} | {} matched\n",
+        response.provider_model,
+        response.index_schema_version,
+        response.scoring_version,
+        response.total_matched,
+    ));
+    for warning in &response.diagnostics.warnings {
+        out.push_str(&format!("! {warning}\n"));
+    }
+    if response.results.is_empty() {
+        out.push_str("(no results)\n");
+        return out;
+    }
+    for result in &response.results {
+        let span = result
+            .evidence
+            .span
+            .as_ref()
+            .map(|span| format!(":{}-{}", span.start_line, span.end_line))
+            .unwrap_or_default();
+        out.push_str(&format!(
+            "{:.4}  {}{}  [{}]\n",
+            result.features.final_score,
+            result.evidence.path.as_str(),
+            span,
+            result.chunk_id,
+        ));
+        if explain {
+            for step in &result.explanation {
+                out.push_str(&format!("        {step}\n"));
+            }
+        }
+    }
+    out
 }
 
 /// Loads the repository's graph, or explains how to create one.

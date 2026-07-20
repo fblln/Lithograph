@@ -13,12 +13,16 @@ pub mod orchestrate;
 
 pub(crate) mod agent;
 pub(crate) mod analysis;
+pub(crate) mod attachment;
 pub(crate) mod cli;
 pub(crate) mod commands;
 pub(crate) mod docs;
+pub(crate) mod explain;
+pub(crate) mod fingerprint;
 pub(crate) mod graph;
 pub(crate) mod knowledge;
 pub(crate) mod plan;
+pub(crate) mod reconcile;
 pub(crate) mod resolve;
 pub(crate) mod retrieval;
 pub(crate) mod run;
