@@ -1,21 +1,21 @@
 //! `init` orchestration: wires scan, analysis, graph, module planning,
 //! generation, evidence validation, and writes into one product loop.
 
-use crate::adr::AdrStore;
 use crate::analysis::AnalysisCache;
+use crate::docs::adr::AdrStore;
 use crate::domain::{Artifact, EvidenceRef};
-use crate::drift::DriftDetector;
-use crate::fts::FtsIndex;
 use crate::generation::{
     ArchitectureViewContext, ContextBuilder, LanguageModel, ModelError, PageRenderer, RenderError,
 };
 use crate::graph::{Graph, GraphBuilder, GraphIssue, GraphStore, GraphValidator};
 use crate::inventory::{RepositoryWalker, WalkError, WalkOptions};
+use crate::knowledge::drift::DriftDetector;
+use crate::knowledge::research::{AgentMemoryIndex, ResearchBrief, ResearchBuilder};
 use crate::manifest::{
     DocumentationPage, GenerationTask, PageManifest, PageManifestBuilder, TaskKind,
 };
 use crate::plan::{DocumentationModule, ModulePlanner};
-use crate::research::{AgentMemoryIndex, ResearchBrief, ResearchBuilder};
+use crate::retrieval::fts::FtsIndex;
 use crate::run::{
     PipelineInvalidationMetadata, PipelineStage, RepositorySnapshot, RunMetadata, RunMetadataInput,
     StageTiming,

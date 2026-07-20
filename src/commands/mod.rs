@@ -22,7 +22,7 @@ use crate::cli::{Cli, Command};
 use std::io::Write;
 
 /// Runs parsed CLI arguments and writes command output.
-pub fn execute<W>(cli: Cli, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
+pub(crate) fn execute<W>(cli: Cli, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
 where
     W: Write,
 {

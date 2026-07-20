@@ -63,7 +63,7 @@ const PREFIXES: &[(&str, RationaleKind)] = &[
 
 /// One classified comment.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Rationale {
+pub(crate) struct Rationale {
     /// Why the author flagged it.
     pub kind: RationaleKind,
     /// The note itself, with comment syntax and prefix removed.
@@ -75,7 +75,7 @@ pub struct Rationale {
 ///
 /// Accepts the prefix only at the start of the comment body, so a passing
 /// mention ("see the TODO in parse.rs") is not mistaken for a marker.
-pub fn classify(comment: &str) -> Option<Rationale> {
+pub(crate) fn classify(comment: &str) -> Option<Rationale> {
     let body = strip_comment_syntax(comment);
     let trimmed = body.trim_start();
     let (kind, rest) = PREFIXES
@@ -178,7 +178,7 @@ const GENERATED_MARKERS: &[&str] = &[
 const GENERATED_SCAN_BYTES: usize = 2_048;
 
 /// Whether `text` looks machine-written and should contribute no rationale.
-pub fn is_generated_source(text: &str) -> bool {
+pub(crate) fn is_generated_source(text: &str) -> bool {
     let head = head_bytes(text);
     let head_lower = head.to_lowercase();
     GENERATED_MARKERS

@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// original always-on section), so they have no aspect variant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ArchitectureAspect {
+pub(crate) enum ArchitectureAspect {
     /// Module-language breakdown.
     Languages,
     /// Local and external package nodes.
@@ -44,7 +44,8 @@ pub enum ArchitectureAspect {
 /// All [`ArchitectureAspect`] variants, in the order `architecture()`
 /// computes them when no filter is given. Passing `Some` of this set
 /// explicitly is equivalent to passing `None`.
-pub const ALL_ARCHITECTURE_ASPECTS: &[ArchitectureAspect] = &[
+#[cfg(test)]
+pub(crate) const ALL_ARCHITECTURE_ASPECTS: &[ArchitectureAspect] = &[
     ArchitectureAspect::Languages,
     ArchitectureAspect::Packages,
     ArchitectureAspect::EntryPoints,
@@ -58,7 +59,7 @@ pub const ALL_ARCHITECTURE_ASPECTS: &[ArchitectureAspect] = &[
 
 /// Module count for one language, derived from `Module` graph nodes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct LanguageSummary {
+pub(crate) struct LanguageSummary {
     /// Registry language id (e.g. `"python"`, `"tsx"`).
     pub language: String,
     /// Number of `Module` nodes in this language.
@@ -67,7 +68,7 @@ pub struct LanguageSummary {
 
 /// One file or directory in [`ArchitectureSummary::file_tree`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FileTreeNode {
+pub(crate) struct FileTreeNode {
     /// File or directory name (the final path component).
     pub name: String,
     /// Repository-relative path.
@@ -82,7 +83,7 @@ pub struct FileTreeNode {
 /// queries. `PartialEq` only, not `Eq` -- `clusters` carries a `f64`
 /// cohesion score.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ArchitectureSummary {
+pub(crate) struct ArchitectureSummary {
     /// Graph schema counts. Always included.
     pub schema: GraphSchema,
     /// Module-language breakdown.
@@ -102,7 +103,7 @@ pub struct ArchitectureSummary {
     /// `Route` or `Service`.
     pub service_links: Vec<SearchResult>,
     /// Per-artifact architecture layer classification (LIT-22.5.2 AC2).
-    pub layers: Vec<crate::architecture::ArchitectureLayer>,
+    pub layers: Vec<crate::docs::architecture::ArchitectureLayer>,
     /// Functional architecture communities (LIT-22.5.1).
     pub clusters: Vec<ArchitectureCluster>,
     /// Directed whole-graph relationships between functional communities.
@@ -113,7 +114,7 @@ pub struct ArchitectureSummary {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Count for one relation kind in a cluster-to-cluster aggregate.
-pub struct ArchitectureClusterLinkKind {
+pub(crate) struct ArchitectureClusterLinkKind {
     /// Graph relation kind.
     pub kind: RelationKind,
     /// Number of underlying relations of this kind.
@@ -122,7 +123,7 @@ pub struct ArchitectureClusterLinkKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Lightweight underlying relation used for aggregate drill-down.
-pub struct ArchitectureClusterRelation {
+pub(crate) struct ArchitectureClusterRelation {
     /// Source graph node.
     pub source: GraphNodeId,
     /// Target graph node.
@@ -133,7 +134,7 @@ pub struct ArchitectureClusterRelation {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Directed whole-graph relationship aggregate between two clusters.
-pub struct ArchitectureClusterLink {
+pub(crate) struct ArchitectureClusterLink {
     /// Source cluster id.
     pub source: String,
     /// Target cluster id.
@@ -149,13 +150,13 @@ pub struct ArchitectureClusterLink {
 impl<'a> KnowledgeIndex<'a> {
     /// Returns an architecture summary over the graph. `aspects` selects
     /// which optional sections to compute and populate (LIT-22.4.6 AC2);
-    /// `None` computes every aspect (equivalent to passing
-    /// [`ALL_ARCHITECTURE_ASPECTS`]). Unrequested aspects are skipped
+    /// `None` computes every aspect (equivalent to passing every
+    /// `ArchitectureAspect`). Unrequested aspects are skipped
     /// entirely, not just filtered from the output, so a caller that only
     /// needs e.g. `Packages` avoids paying for clustering or layer
     /// detection. `schema` and `hotspots` are always computed; every
     /// section is deterministic for an unchanged graph (AC3).
-    pub fn architecture(
+    pub(crate) fn architecture(
         &self,
         aspects: Option<&BTreeSet<ArchitectureAspect>>,
     ) -> ArchitectureSummary {
@@ -276,7 +277,7 @@ impl<'a> KnowledgeIndex<'a> {
             architecture_docs,
             service_links,
             layers: if wants(ArchitectureAspect::Layers) {
-                crate::architecture::LayerDetector.detect(self.graph)
+                crate::docs::architecture::LayerDetector.detect(self.graph)
             } else {
                 Vec::new()
             },

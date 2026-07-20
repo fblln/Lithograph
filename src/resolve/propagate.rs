@@ -25,13 +25,13 @@ use crate::graph::{
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 /// Stable strategy label recorded on every relation this pass creates.
-pub const PROPAGATE_STRATEGY: &str = "cross-file-type-propagation";
+pub(crate) const PROPAGATE_STRATEGY: &str = "cross-file-type-propagation";
 
 /// What a member call's receiver refers to. Producers normalize the language's
 /// own spelling (`self`/`cls` in Python, `this` in TypeScript) into
 /// [`Receiver::Enclosing`] so this pass stays language-neutral.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Receiver {
+pub(crate) enum Receiver {
     /// The enclosing class instance, typed by the class the call sits in.
     Enclosing,
     /// A bare name, typed by the file's binding environment.
@@ -40,7 +40,7 @@ pub enum Receiver {
 
 /// One `receiver.method(...)` call awaiting a receiver type.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MemberCallFact {
+pub(crate) struct MemberCallFact {
     /// What the call is invoked on.
     pub receiver: Receiver,
     /// Called method name.
@@ -53,7 +53,7 @@ pub struct MemberCallFact {
 
 /// One `name = Ctor(...)` binding, which types `name` as `Ctor`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BindingFact {
+pub(crate) struct BindingFact {
     /// Bound name.
     pub name: String,
     /// Constructor name as written, resolved through the same environment.
@@ -65,7 +65,7 @@ pub struct BindingFact {
 /// One declared superclass awaiting exact resolution through the file's
 /// import/local-class environment.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BaseClassFact {
+pub(crate) struct BaseClassFact {
     /// Class that declares the superclass.
     pub class: String,
     /// Superclass expression as written.
@@ -80,7 +80,7 @@ pub struct BaseClassFact {
 /// by -- a dotted module path for Python, an artifact path for TypeScript --
 /// so `{module}::{symbol}` is an exact lookup rather than a name search.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ImportBindingFact {
+pub(crate) struct ImportBindingFact {
     /// Name as bound in the importing file, after any alias.
     pub local: String,
     /// Namespace that declares the imported name.
@@ -91,7 +91,7 @@ pub struct ImportBindingFact {
 
 /// Every fact one file contributes to propagation.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct FileTypeFacts {
+pub(crate) struct FileTypeFacts {
     /// Namespace this file's own symbols are qualified by.
     pub module: String,
     /// Source language label, recorded on created relations.
@@ -110,7 +110,7 @@ pub struct FileTypeFacts {
 }
 
 /// Per-artifact facts, keyed by repository-relative path.
-pub type TypeFacts = BTreeMap<String, FileTypeFacts>;
+pub(crate) type TypeFacts = BTreeMap<String, FileTypeFacts>;
 
 /// LIT-45.3: re-export statements by containing artifact, built from
 /// [`FileTypeFacts::re_exports`] once per run. Shared with the resolver
@@ -126,7 +126,7 @@ pub(crate) fn re_export_map(facts: &TypeFacts) -> crate::resolve::ReExportMap {
 
 /// Outcome of one [`propagate_types`] run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct PropagateReport {
+pub(crate) struct PropagateReport {
     /// Member calls resolved to a method, each of which created a relation.
     pub resolved: usize,
     /// Member calls whose receiver could not be typed. No edge was created
@@ -138,7 +138,7 @@ pub struct PropagateReport {
 /// Resolves member calls through per-file binding environments and appends a
 /// `Calls` relation for each one whose receiver types to a class with that
 /// method.
-pub fn propagate_types(graph: &mut Graph, facts: &TypeFacts) -> PropagateReport {
+pub(crate) fn propagate_types(graph: &mut Graph, facts: &TypeFacts) -> PropagateReport {
     let mut index = SymbolIndex::build(graph);
     let re_exports = re_export_map(facts);
     let mut report = PropagateReport::default();

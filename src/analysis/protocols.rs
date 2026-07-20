@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 /// Which protocol schema format was parsed. `Copy` so it can be used as an
 /// [`AnalyzerKind`](crate::analysis::AnalyzerKind) cache-key discriminant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ProtocolFormat {
+pub(crate) enum ProtocolFormat {
     /// `.proto` (protobuf/gRPC).
     Proto,
     /// `.graphql`/`.gql` schema.
@@ -21,7 +21,7 @@ pub enum ProtocolFormat {
 impl ProtocolFormat {
     /// Looks up the variant matching a classifier/registry format id (see
     /// `inventory::classify`/`inventory::language`).
-    pub fn from_format_id(id: &str) -> Option<Self> {
+    pub(crate) fn from_format_id(id: &str) -> Option<Self> {
         Some(match id {
             "protobuf" => Self::Proto,
             "graphql" => Self::GraphQl,
@@ -30,7 +30,7 @@ impl ProtocolFormat {
     }
 
     /// Runs this format's analyzer against `text`.
-    pub fn analyze(self, artifact: &Artifact, text: &str) -> Vec<ProtocolRoute> {
+    pub(crate) fn analyze(self, artifact: &Artifact, text: &str) -> Vec<ProtocolRoute> {
         match self {
             Self::Proto => ProtoAnalyzer.analyze(artifact, text),
             Self::GraphQl => GraphQlAnalyzer.analyze(artifact, text),
@@ -41,7 +41,7 @@ impl ProtocolFormat {
 /// One RPC or schema field declaration extracted from a protocol schema
 /// file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ProtocolRoute {
+pub(crate) struct ProtocolRoute {
     /// `"service.rpc"` (protobuf) or `"Query.field"`/`"Mutation.field"`
     /// (GraphQL).
     pub name: String,
@@ -59,12 +59,12 @@ fn line_evidence(artifact: &Artifact, line_number: u32) -> EvidenceRef {
 
 /// Parser-backed analyzer for `.proto` (protobuf/gRPC) schema files.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct ProtoAnalyzer;
+pub(crate) struct ProtoAnalyzer;
 
 impl ProtoAnalyzer {
     /// Extracts one [`ProtocolRoute`] per `rpc` declaration inside each
     /// `service { ... }` block.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> Vec<ProtocolRoute> {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> Vec<ProtocolRoute> {
         let mut routes = Vec::new();
         let mut current_service: Option<String> = None;
         let mut depth_at_service_start = 0i32;
@@ -106,11 +106,11 @@ impl ProtoAnalyzer {
 /// declared directly inside a top-level `type Query { ... }` or
 /// `type Mutation { ... }` block.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct GraphQlAnalyzer;
+pub(crate) struct GraphQlAnalyzer;
 
 impl GraphQlAnalyzer {
     /// Extracts one [`ProtocolRoute`] per `Query`/`Mutation` field.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> Vec<ProtocolRoute> {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> Vec<ProtocolRoute> {
         let mut routes = Vec::new();
         let mut current_root: Option<String> = None;
         let mut depth_at_root_start = 0i32;

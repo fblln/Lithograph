@@ -1,5 +1,5 @@
 //! Typed deterministic tags and taxonomy queries over graph entities.
-use crate::architecture::{LayerDetector, LayerKind};
+use crate::docs::architecture::{LayerDetector, LayerKind};
 use crate::domain::Confidence;
 use crate::graph::{ArchitectureCluster, Graph, GraphNode, Relation, RepositoryTension};
 use serde::{Deserialize, Serialize};
@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(missing_docs)]
-pub enum TagSource {
+pub(crate) enum TagSource {
     Parser,
     Path,
     DependencyRole,
@@ -18,7 +18,7 @@ pub enum TagSource {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(missing_docs)]
-pub struct GraphTag {
+pub(crate) struct GraphTag {
     pub id: String,
     pub entity_id: String,
     pub namespace: String,
@@ -31,7 +31,7 @@ pub struct GraphTag {
 }
 #[allow(missing_docs)]
 impl GraphTag {
-    pub fn new(
+    pub(crate) fn new(
         entity_id: impl Into<String>,
         namespace: impl Into<String>,
         value: impl Into<String>,
@@ -60,17 +60,17 @@ impl GraphTag {
 }
 #[derive(Debug, Clone, Default)]
 #[allow(missing_docs)]
-pub struct TagIndex {
+pub(crate) struct TagIndex {
     tags: Vec<GraphTag>,
 }
 #[allow(missing_docs)]
 impl TagIndex {
-    pub fn new(mut tags: Vec<GraphTag>) -> Self {
+    pub(crate) fn new(mut tags: Vec<GraphTag>) -> Self {
         tags.sort_by(|a, b| a.id.cmp(&b.id));
         tags.dedup_by(|a, b| a.id == b.id);
         Self { tags }
     }
-    pub fn query(&self, include: &[(&str, &str)], exclude: &[(&str, &str)]) -> Vec<String> {
+    pub(crate) fn query(&self, include: &[(&str, &str)], exclude: &[(&str, &str)]) -> Vec<String> {
         let values: BTreeSet<_> = self.tags.iter().map(|tag| tag.entity_id.clone()).collect();
         let values: BTreeSet<_> = values
             .into_iter()
@@ -92,25 +92,19 @@ impl TagIndex {
             .collect();
         values.into_iter().collect()
     }
-    pub fn namespace(&self, namespace: &str) -> Vec<&GraphTag> {
-        self.tags
-            .iter()
-            .filter(|tag| tag.namespace == namespace)
-            .collect()
-    }
     /// Returns all tags in stable id order.
-    pub fn all(&self) -> &[GraphTag] {
+    pub(crate) fn all(&self) -> &[GraphTag] {
         &self.tags
     }
     /// Finds tags whose canonical `namespace:value` begins with a prefix.
-    pub fn search_prefix(&self, prefix: &str) -> Vec<&GraphTag> {
+    pub(crate) fn search_prefix(&self, prefix: &str) -> Vec<&GraphTag> {
         self.tags
             .iter()
             .filter(|tag| format!("{}:{}", tag.namespace, tag.value).starts_with(prefix))
             .collect()
     }
     /// Returns stable `namespace:value` facet counts.
-    pub fn facets(&self) -> BTreeMap<String, usize> {
+    pub(crate) fn facets(&self) -> BTreeMap<String, usize> {
         let mut facets = BTreeMap::new();
         for tag in &self.tags {
             *facets
@@ -121,7 +115,10 @@ impl TagIndex {
     }
 }
 /// Resolves a compact `namespace:value` expression with comma-union and `!` exclusions.
-pub fn resolve_expression(index: &TagIndex, expression: &str) -> Result<Vec<String>, String> {
+pub(crate) fn resolve_expression(
+    index: &TagIndex,
+    expression: &str,
+) -> Result<Vec<String>, String> {
     let mut union = BTreeSet::new();
     for branch in expression.split(';') {
         let mut include = Vec::new();
@@ -153,7 +150,7 @@ pub fn resolve_expression(index: &TagIndex, expression: &str) -> Result<Vec<Stri
     Ok(union.into_iter().collect())
 }
 /// Derives conservative parser/path-style tags from stable graph identifiers.
-pub fn derive_tags(graph: &Graph, snapshot: &str) -> Vec<GraphTag> {
+pub(crate) fn derive_tags(graph: &Graph, snapshot: &str) -> Vec<GraphTag> {
     let detected_layers = LayerDetector.detect(graph);
     let layers: BTreeMap<&str, LayerKind> = detected_layers
         .iter()
@@ -218,24 +215,9 @@ fn layer_value(layer: LayerKind) -> &'static str {
         LayerKind::Unknown => "unknown",
     }
 }
-/// Inherits a cluster or subsystem tag while retaining its exact provenance.
-pub fn inherit_tag(parent: &GraphTag, entity_id: impl Into<String>) -> GraphTag {
-    let mut tag = GraphTag::new(
-        entity_id,
-        parent.namespace.clone(),
-        parent.value.clone(),
-        parent.source,
-        parent.graph_snapshot_id.clone(),
-    );
-    tag.inherited_from = Some(parent.id.clone());
-    tag.confidence = parent.confidence;
-    tag.evidence = parent.evidence.clone();
-    tag
-}
-
 /// Builds display-only tags for a relation without adding them to the
 /// node-scope tag index.
-pub fn relation_display_tags(relation: &Relation, snapshot: &str) -> Vec<GraphTag> {
+pub(crate) fn relation_display_tags(relation: &Relation, snapshot: &str) -> Vec<GraphTag> {
     let mut tag = GraphTag::new(
         &relation.id,
         "relation",
@@ -267,7 +249,7 @@ pub fn relation_display_tags(relation: &Relation, snapshot: &str) -> Vec<GraphTa
 
 /// Builds display-only architecture tags for a cluster. Member ids are kept
 /// as provenance evidence; these tags never participate in node filtering.
-pub fn cluster_display_tags(cluster: &ArchitectureCluster, snapshot: &str) -> Vec<GraphTag> {
+pub(crate) fn cluster_display_tags(cluster: &ArchitectureCluster, snapshot: &str) -> Vec<GraphTag> {
     let mut tag = GraphTag::new(
         &cluster.id,
         "kind",
@@ -284,7 +266,7 @@ pub fn cluster_display_tags(cluster: &ArchitectureCluster, snapshot: &str) -> Ve
 }
 
 /// Builds display-only risk tags for one deterministic tension.
-pub fn tension_display_tags(tension: &RepositoryTension, snapshot: &str) -> Vec<GraphTag> {
+pub(crate) fn tension_display_tags(tension: &RepositoryTension, snapshot: &str) -> Vec<GraphTag> {
     let mut tag = GraphTag::new(
         &tension.id,
         "risk",
@@ -374,25 +356,6 @@ mod tests {
             GraphTag::new("symbol:a", "layer", "api", TagSource::Path, "g1").id
         );
         assert_eq!(index.query(&[("layer", "api")], &[]), vec!["symbol:a"]);
-        assert!(index.namespace("risk").len() == 1);
-    }
-    #[test]
-    fn inherited_tags_preserve_provenance_and_serialize() -> Result<(), Box<dyn std::error::Error>>
-    {
-        let parent = GraphTag::new(
-            "cluster:payments",
-            "owner",
-            "payments",
-            TagSource::User,
-            "g1",
-        );
-        let child = inherit_tag(&parent, "symbol:charge");
-        assert_eq!(child.inherited_from.as_deref(), Some(parent.id.as_str()));
-        assert_eq!(
-            serde_json::from_str::<GraphTag>(&serde_json::to_string(&child)?)?,
-            child
-        );
-        Ok(())
     }
     #[test]
     fn display_tags_keep_entity_provenance_and_real_snapshot()

@@ -11,7 +11,7 @@ use std::fmt::{Display, Formatter};
 
 /// A validation or parse failure, always with an actionable message (AC2).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct QueryError {
+pub(crate) struct QueryError {
     /// Human-readable, actionable description of what was wrong.
     pub message: String,
 }
@@ -61,7 +61,7 @@ enum WhereOperator {
 /// One parsed, validated query (AC1): a fixed node, or node-edge-node,
 /// pattern with an optional filter and a required projection.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MatchQuery {
+pub(crate) struct MatchQuery {
     source: NodePattern,
     hop: Option<(RelationPattern, NodePattern)>,
     filter: Option<WhereClause>,
@@ -71,7 +71,7 @@ pub struct MatchQuery {
 /// One returned row: the matched node plus structured graph refs and
 /// evidence (AC3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct QueryRow {
+pub(crate) struct QueryRow {
     /// Which `RETURN` alias this row's node came from.
     pub alias: String,
     /// Matched graph node id.
@@ -85,7 +85,7 @@ pub struct QueryRow {
 }
 
 /// Parses `text` into a [`MatchQuery`] (AC1/AC2).
-pub fn parse(text: &str) -> Result<MatchQuery, QueryError> {
+pub(crate) fn parse(text: &str) -> Result<MatchQuery, QueryError> {
     let tokens = tokenize(text)?;
     let mut parser = Parser {
         tokens,
@@ -96,7 +96,7 @@ pub fn parse(text: &str) -> Result<MatchQuery, QueryError> {
 
 /// Runs `query` against `graph`, returning one [`QueryRow`] per matched
 /// pattern occurrence, per `RETURN` alias, in a stable order.
-pub fn evaluate(query: &MatchQuery, graph: &Graph) -> Vec<QueryRow> {
+pub(crate) fn evaluate(query: &MatchQuery, graph: &Graph) -> Vec<QueryRow> {
     let candidates: Vec<&GraphNode> = graph
         .nodes
         .iter()

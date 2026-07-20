@@ -19,14 +19,14 @@ use std::path::PathBuf;
 
 /// Bump when analyzer output semantics or serialization change in a way that
 /// should force fresh analyzer output instead of reusing old cache entries.
-pub const ANALYSIS_CACHE_VERSION: u32 = 12;
+pub(crate) const ANALYSIS_CACHE_VERSION: u32 = 12;
 
 /// Tags which analyzer produced an [`AnalyzerOutput`], so a cache lookup can
 /// reject a stale entry whose artifact has since been reclassified to a
 /// different analyzer (e.g. after a classifier rule change) even though its
 /// content hash happens to collide.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum AnalyzerKind {
+pub(crate) enum AnalyzerKind {
     /// `PythonAnalyzer`.
     Python,
     /// `RustAnalyzer`.
@@ -71,7 +71,7 @@ pub enum AnalyzerKind {
 /// a variant's own field of the same name, which this project already hit
 /// once with `GraphNode`/`node_type` (see `src/graph/model.rs`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum AnalyzerOutput {
+pub(crate) enum AnalyzerOutput {
     /// [`PythonAnalyzer`](crate::analysis::PythonAnalyzer) output.
     Python(PythonAnalysis),
     /// [`RustAnalyzer`](crate::analysis::RustAnalyzer) output.
@@ -118,7 +118,7 @@ pub enum AnalyzerOutput {
 
 impl AnalyzerOutput {
     /// Returns the kind tag matching this output's variant.
-    pub fn kind(&self) -> AnalyzerKind {
+    pub(crate) fn kind(&self) -> AnalyzerKind {
         match self {
             Self::Python(_) => AnalyzerKind::Python,
             Self::Rust(_) => AnalyzerKind::Rust,
@@ -147,7 +147,7 @@ impl AnalyzerOutput {
 /// to a fresh parse, so a cache that is empty, stale, or partially corrupt is
 /// always safe, never a correctness hazard.
 #[derive(Debug)]
-pub struct AnalysisCache {
+pub(crate) struct AnalysisCache {
     dir: PathBuf,
     hits: Cell<usize>,
     misses: Cell<usize>,
@@ -156,7 +156,7 @@ pub struct AnalysisCache {
 impl AnalysisCache {
     /// Creates a cache rooted at `dir`. The directory is created lazily on
     /// first write, not here.
-    pub fn new(dir: impl Into<PathBuf>) -> Self {
+    pub(crate) fn new(dir: impl Into<PathBuf>) -> Self {
         Self {
             dir: dir.into(),
             hits: Cell::new(0),
@@ -168,7 +168,7 @@ impl AnalysisCache {
     /// exists, deserializes cleanly, and matches `expected`. Every other case
     /// -- missing file, corrupt/undeserializable JSON, or a kind mismatch --
     /// is a miss, never an error.
-    pub fn get(&self, content_hash: &str, expected: AnalyzerKind) -> Option<AnalyzerOutput> {
+    pub(crate) fn get(&self, content_hash: &str, expected: AnalyzerKind) -> Option<AnalyzerOutput> {
         let path = self.entry_path(content_hash, expected);
         let loaded: Option<AnalyzerOutput> = JsonStore.read(&path).ok().flatten();
         match loaded {
@@ -186,18 +186,18 @@ impl AnalysisCache {
     /// Writes `output` under `content_hash`. Best-effort: a write failure
     /// (read-only filesystem, full disk) is swallowed, since a missing cache
     /// entry is never a correctness problem, only a slower next run.
-    pub fn put(&self, content_hash: &str, output: &AnalyzerOutput) {
+    pub(crate) fn put(&self, content_hash: &str, output: &AnalyzerOutput) {
         let _ = JsonStore.write(&self.entry_path(content_hash, output.kind()), output);
     }
 
     /// Number of successful cache lookups so far.
-    pub fn hits(&self) -> usize {
+    pub(crate) fn hits(&self) -> usize {
         self.hits.get()
     }
 
     /// Number of failed cache lookups so far -- equivalently, the number of
     /// artifacts that had to be freshly read and parsed.
-    pub fn misses(&self) -> usize {
+    pub(crate) fn misses(&self) -> usize {
         self.misses.get()
     }
 
@@ -219,7 +219,7 @@ impl AnalysisCache {
     /// snapshots the same way it discards analyzer entries. The builder owns
     /// serialization, since the snapshot references graph types the analysis
     /// layer cannot depend on.
-    pub fn clone_snapshot_path(&self, identity: &str) -> PathBuf {
+    pub(crate) fn clone_snapshot_path(&self, identity: &str) -> PathBuf {
         self.dir
             .join(format!("v{ANALYSIS_CACHE_VERSION}-clone-{identity}.json"))
     }

@@ -11,21 +11,17 @@ mod schema;
 mod search;
 mod trace;
 
-pub use architecture::{
-    ALL_ARCHITECTURE_ASPECTS, ArchitectureAspect, ArchitectureClusterLink,
-    ArchitectureClusterLinkKind, ArchitectureClusterRelation, ArchitectureSummary, FileTreeNode,
-    LanguageSummary,
-};
-pub use clusters::ArchitectureCluster;
+pub(crate) use architecture::{ArchitectureAspect, ArchitectureSummary};
+pub(crate) use clusters::ArchitectureCluster;
 pub(crate) use common::{node_file_path, node_label, node_name};
-pub use dependency_matrix::DependencyMatrix;
-pub use explain::{Neighbor, NodeExplanation};
-pub use package::PackageSummary;
-pub use schema::{GraphSchema, LabelCount, TypeCount};
-pub use search::{SearchParams, SearchResult};
-pub use trace::{
-    NodeHop, PathHop, PathResult, TraceDirection, TraceParams, TraceRelation, TraceResult,
-};
+pub(crate) use dependency_matrix::DependencyMatrix;
+pub(crate) use explain::NodeExplanation;
+pub(crate) use schema::GraphSchema;
+pub(crate) use search::SearchParams;
+pub(crate) use trace::{PathResult, TraceDirection, TraceParams, TraceResult};
+// Referenced only from another module's tests.
+#[cfg(test)]
+pub(crate) use architecture::ALL_ARCHITECTURE_ASPECTS;
 
 use crate::graph::{Graph, GraphNode, GraphNodeId};
 use common::node_search_text;
@@ -33,13 +29,13 @@ use std::collections::BTreeMap;
 
 /// Queryable knowledge index over one graph snapshot.
 #[derive(Debug, Clone, Copy)]
-pub struct KnowledgeIndex<'a> {
+pub(crate) struct KnowledgeIndex<'a> {
     graph: &'a Graph,
 }
 
 impl<'a> KnowledgeIndex<'a> {
     /// Creates an index over a graph snapshot.
-    pub fn new(graph: &'a Graph) -> Self {
+    pub(crate) fn new(graph: &'a Graph) -> Self {
         Self { graph }
     }
 

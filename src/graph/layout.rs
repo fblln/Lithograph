@@ -22,7 +22,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 /// Versioned deterministic layout semantics. Bumped whenever positioning
 /// or budgeting rules change, so a cached result computed under an older
 /// version is never served as if it were current.
-pub const LAYOUT_ALGORITHM_VERSION: u32 = 2;
+pub(crate) const LAYOUT_ALGORITHM_VERSION: u32 = 2;
 
 /// Default node budget applied when `max_nodes` is unset.
 const DEFAULT_NODE_BUDGET: usize = 150;
@@ -45,7 +45,7 @@ const RING_SPACING: f64 = 120.0;
 /// pseudo-root); present selects detail mode (a focused neighborhood
 /// around the node it resolves to).
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct LayoutRequest {
+pub(crate) struct LayoutRequest {
     /// Node id, exact name, or substring used to resolve the focus node
     /// (matched the same flexible way as `trace_path`). `None` selects
     /// overview mode.
@@ -84,7 +84,7 @@ pub struct LayoutRequest {
 
 /// One positioned node in a layout result.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct PositionedNode {
+pub(crate) struct PositionedNode {
     /// Node id.
     pub id: GraphNodeId,
     /// Node label (e.g. `"Symbol"`, `"Artifact"`).
@@ -107,7 +107,7 @@ pub struct PositionedNode {
 
 /// One relation included in a layout result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct LayoutEdge {
+pub(crate) struct LayoutEdge {
     /// Stable relation identity.
     #[serde(default)]
     pub id: String,
@@ -140,7 +140,7 @@ fn low_confidence() -> Confidence {
 /// Explicit budget accounting for one layout response. Every truncation is
 /// reported, never silent (LIT-24.16 AC3/AC5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct LayoutBudget {
+pub(crate) struct LayoutBudget {
     /// Node budget actually applied (after defaulting/clamping).
     pub node_budget: usize,
     /// Edge budget actually applied (after defaulting/clamping).
@@ -161,7 +161,7 @@ pub struct LayoutBudget {
 
 /// A computed layout: a budgeted, positioned graph slice.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct LayoutResult {
+pub(crate) struct LayoutResult {
     /// Content-derived id of the graph this layout was computed from.
     pub graph_snapshot_id: String,
     /// Layout algorithm version this result was computed under.
@@ -179,7 +179,7 @@ pub struct LayoutResult {
 /// A persisted, versioned layout computation, keyed by graph snapshot,
 /// algorithm version, and the exact request that produced it (AC2).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct LayoutSnapshot {
+pub(crate) struct LayoutSnapshot {
     /// Content-derived id of the graph this layout was computed from.
     pub graph_snapshot_id: String,
     /// Layout algorithm version this result was computed under.
@@ -194,18 +194,18 @@ pub struct LayoutSnapshot {
 /// so a repeated request against an unchanged graph is a cache hit instead
 /// of a recomputation.
 #[derive(Debug, Clone)]
-pub struct LayoutSnapshotStore {
+pub(crate) struct LayoutSnapshotStore {
     root: std::path::PathBuf,
 }
 
 impl LayoutSnapshotStore {
     /// Creates a store rooted at (typically) `.lithograph/layout`.
-    pub fn new(root: impl Into<std::path::PathBuf>) -> Self {
+    pub(crate) fn new(root: impl Into<std::path::PathBuf>) -> Self {
         Self { root: root.into() }
     }
 
     /// Writes a layout snapshot only when its content changes.
-    pub fn save(&self, snapshot: &LayoutSnapshot) -> std::io::Result<bool> {
+    pub(crate) fn save(&self, snapshot: &LayoutSnapshot) -> std::io::Result<bool> {
         let path = self.path(
             &snapshot.graph_snapshot_id,
             snapshot.algorithm_version,
@@ -215,7 +215,7 @@ impl LayoutSnapshotStore {
     }
 
     /// Loads a previously persisted layout snapshot for this exact key.
-    pub fn load(
+    pub(crate) fn load(
         &self,
         graph_snapshot_id: &str,
         algorithm_version: u32,
@@ -241,7 +241,7 @@ impl LayoutSnapshotStore {
 /// computation (AC2). A missing or unreadable cache entry is treated as a
 /// miss, not a failure -- a corrupt cache must never block computing a
 /// fresh result, and a failed cache write must never fail the request.
-pub fn compute_layout_cached(
+pub(crate) fn compute_layout_cached(
     graph: &Graph,
     request: &LayoutRequest,
     store: &LayoutSnapshotStore,
@@ -262,7 +262,10 @@ pub fn compute_layout_cached(
 }
 
 /// Computes a layout without consulting or populating any cache.
-pub fn compute_layout(graph: &Graph, request: &LayoutRequest) -> Result<LayoutResult, String> {
+pub(crate) fn compute_layout(
+    graph: &Graph,
+    request: &LayoutRequest,
+) -> Result<LayoutResult, String> {
     let snapshot_id = graph_snapshot_id(graph)?;
 
     if request.center_node.is_none() && graph.nodes.is_empty() {

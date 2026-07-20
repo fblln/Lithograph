@@ -8,7 +8,7 @@ use std::process::{Command, Stdio};
 
 /// One Mermaid validation finding.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MermaidIssue {
+pub(crate) struct MermaidIssue {
     /// Markdown file path.
     pub path: PathBuf,
     /// One-based fence index within the file.
@@ -21,7 +21,7 @@ pub struct MermaidIssue {
 
 /// Validation report.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MermaidReport {
+pub(crate) struct MermaidReport {
     /// Issues sorted by file and line.
     pub issues: Vec<MermaidIssue>,
     /// Number of Mermaid fences checked.
@@ -30,7 +30,7 @@ pub struct MermaidReport {
 
 impl MermaidReport {
     /// True when every Mermaid fence validated.
-    pub fn is_clean(&self) -> bool {
+    pub(crate) fn is_clean(&self) -> bool {
         self.issues.is_empty()
     }
 }
@@ -45,7 +45,7 @@ struct MermaidFence {
 }
 
 /// Validates Mermaid fences under `path`.
-pub fn validate(
+pub(crate) fn validate(
     path: &Path,
     node_validator: Option<&Path>,
 ) -> Result<MermaidReport, Box<dyn std::error::Error>> {
@@ -201,7 +201,7 @@ fn run_node_validator(validator: &Path, body: &str) -> Result<(), String> {
 /// immediately before the bracket is checked -- the id -- not the label
 /// text inside the brackets, so a label containing spaces or punctuation
 /// never triggers a finding.
-pub fn validate_node_ids(fence_body: &str) -> Vec<String> {
+pub(crate) fn validate_node_ids(fence_body: &str) -> Vec<String> {
     let mut issues = Vec::new();
     for (line_index, line) in fence_body.lines().enumerate() {
         let Some(id) = declared_node_id(line) else {
@@ -244,7 +244,7 @@ fn is_safe_id(id: &str) -> bool {
 /// token, so the diagram still renders correctly rather than dangling
 /// (LIT-22.7.2 AC3). Never called by [`validate`] or by any normal test
 /// path -- only when a caller explicitly opts in.
-pub fn fix_node_ids(fence_body: &str) -> String {
+pub(crate) fn fix_node_ids(fence_body: &str) -> String {
     let mut renames: BTreeMap<String, String> = BTreeMap::new();
     let mut next = 1usize;
     for line in fence_body.lines() {
@@ -301,7 +301,7 @@ fn push_token(output: &mut String, token: &mut String, renames: &BTreeMap<String
 /// each Markdown file only when a fence actually changed. Returns the
 /// number of files rewritten. Only invoked when a caller explicitly asks
 /// for it (CLI `--fix`); never part of [`validate`] or normal tests.
-pub fn fix_path(path: &Path) -> Result<usize, std::io::Error> {
+pub(crate) fn fix_path(path: &Path) -> Result<usize, std::io::Error> {
     let mut files_changed = 0usize;
     for file in markdown_files(path)? {
         let original = std::fs::read_to_string(&file)?;
@@ -341,7 +341,7 @@ pub fn fix_path(path: &Path) -> Result<usize, std::io::Error> {
 }
 
 /// Renders validation results.
-pub fn render_report(report: &MermaidReport) -> String {
+pub(crate) fn render_report(report: &MermaidReport) -> String {
     if report.issues.is_empty() {
         return format!("validated {} Mermaid fence(s)\n", report.fences_checked);
     }

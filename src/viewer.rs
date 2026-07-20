@@ -1,7 +1,7 @@
 //! Static generated-wiki viewer output.
 
-use crate::architecture::LayerKind;
-use crate::ask::{WikiPage, WikiSearch};
+use crate::agent::ask::{WikiPage, WikiSearch};
+use crate::docs::architecture::LayerKind;
 use crate::graph::{ArchitectureSummary, GraphSchema, GraphStore, KnowledgeIndex};
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 /// Viewer generation report.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ViewerReport {
+pub(crate) struct ViewerReport {
     /// Output directory.
     pub output_dir: PathBuf,
     /// Main HTML file.
@@ -19,9 +19,9 @@ pub struct ViewerReport {
 }
 
 /// Wiki page id for the deterministic graph summary pane (LIT-22.7.4 AC2).
-pub const GRAPH_SUMMARY_PAGE_ID: &str = "viewer-graph-summary";
+pub(crate) const GRAPH_SUMMARY_PAGE_ID: &str = "viewer-graph-summary";
 /// Wiki page id for the deterministic architecture summary pane (LIT-22.7.4 AC2).
-pub const ARCHITECTURE_SUMMARY_PAGE_ID: &str = "viewer-architecture-summary";
+pub(crate) const ARCHITECTURE_SUMMARY_PAGE_ID: &str = "viewer-architecture-summary";
 
 /// Generates a lightweight static viewer with navigation, search, and
 /// browser-side Mermaid rendering when Mermaid is available from a local or
@@ -34,7 +34,7 @@ pub const ARCHITECTURE_SUMMARY_PAGE_ID: &str = "viewer-architecture-summary";
 /// covering the same ground are stale relative to the graph (AC2). They
 /// participate in the same nav list, in-browser search, and Markdown
 /// rendering as every other page (AC1, AC3): no new UI machinery.
-pub fn generate(
+pub(crate) fn generate(
     repo_root: &Path,
     output_dir: &Path,
 ) -> Result<ViewerReport, Box<dyn std::error::Error>> {
@@ -242,7 +242,7 @@ fn viewer_html(data: &str) -> String {
 }
 
 /// Renders a compact viewer report.
-pub fn render_report(report: &ViewerReport) -> String {
+pub(crate) fn render_report(report: &ViewerReport) -> String {
     format!(
         "viewer wrote {} page(s) to {}\n",
         report.page_count,

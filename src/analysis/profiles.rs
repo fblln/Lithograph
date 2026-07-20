@@ -51,7 +51,7 @@ fn scalar_to_string(value: &Value) -> Option<String> {
 
 /// Key/value fact shared by Compose environment blocks and CI step environments.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EnvVarFact {
+pub(crate) struct EnvVarFact {
     /// Environment variable name.
     pub key: String,
     /// Assigned value, when a literal value is present.
@@ -95,7 +95,7 @@ fn object_environment(artifact: &Artifact, path: &str, value: &Value) -> Vec<Env
 
 /// Cargo package or workspace facts extracted from `Cargo.toml`.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct CargoProfile {
+pub(crate) struct CargoProfile {
     /// `[package]` facts, when present.
     pub package: Option<CargoPackage>,
     /// `[workspace] members` entries.
@@ -112,7 +112,7 @@ pub struct CargoProfile {
 
 /// `[package]` facts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CargoPackage {
+pub(crate) struct CargoPackage {
     /// Package name.
     pub name: Option<String>,
     /// Package version.
@@ -125,7 +125,7 @@ pub struct CargoPackage {
 
 /// `[workspace] members` entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CargoWorkspaceMember {
+pub(crate) struct CargoWorkspaceMember {
     /// Member path or glob.
     pub path: String,
     /// Evidence for the workspace members list.
@@ -134,7 +134,7 @@ pub struct CargoWorkspaceMember {
 
 /// Cargo build target kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CargoTargetKind {
+pub(crate) enum CargoTargetKind {
     /// `[lib]` target.
     Lib,
     /// `[[bin]]` target.
@@ -143,7 +143,7 @@ pub enum CargoTargetKind {
 
 /// `[lib]` or `[[bin]]` build target.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CargoTarget {
+pub(crate) struct CargoTarget {
     /// Target kind.
     pub kind: CargoTargetKind,
     /// Target name.
@@ -156,7 +156,7 @@ pub struct CargoTarget {
 
 /// `[features]` entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CargoFeature {
+pub(crate) struct CargoFeature {
     /// Feature name.
     pub name: String,
     /// Features and optional dependencies this feature enables.
@@ -167,7 +167,7 @@ pub struct CargoFeature {
 
 /// Dependency table category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CargoDependencyKind {
+pub(crate) enum CargoDependencyKind {
     /// `[dependencies]`.
     Normal,
     /// `[dev-dependencies]`.
@@ -178,7 +178,7 @@ pub enum CargoDependencyKind {
 
 /// Dependency entry from a dependency table.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CargoDependency {
+pub(crate) struct CargoDependency {
     /// Dependency crate name.
     pub name: String,
     /// Dependency table category.
@@ -191,11 +191,11 @@ pub struct CargoDependency {
 
 /// Parser-backed analyzer for `Cargo.toml` manifests.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct CargoProfileAnalyzer;
+pub(crate) struct CargoProfileAnalyzer;
 
 impl CargoProfileAnalyzer {
     /// Parses and analyzes a safe `Cargo.toml` artifact.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> CargoProfile {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> CargoProfile {
         if !exposable(artifact) {
             return CargoProfile::default();
         }
@@ -331,7 +331,7 @@ fn dependency_requirement(spec: &Value) -> Option<String> {
 
 /// `pyproject.toml` project metadata extracted with PEP 621 conventions.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct PyProjectProfile {
+pub(crate) struct PyProjectProfile {
     /// `[project]` facts, when present.
     pub project: Option<PythonProject>,
     /// Parse error when the manifest is malformed.
@@ -340,7 +340,7 @@ pub struct PyProjectProfile {
 
 /// `[project]` facts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PythonProject {
+pub(crate) struct PythonProject {
     /// Project name.
     pub name: Option<String>,
     /// Project version.
@@ -355,7 +355,7 @@ pub struct PythonProject {
 
 /// PEP 508 dependency requirement from `[project] dependencies`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PythonDependency {
+pub(crate) struct PythonDependency {
     /// Raw PEP 508 requirement string.
     pub requirement: String,
     /// Evidence for this requirement.
@@ -364,11 +364,11 @@ pub struct PythonDependency {
 
 /// Parser-backed analyzer for `pyproject.toml` project metadata.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct PyProjectAnalyzer;
+pub(crate) struct PyProjectAnalyzer;
 
 impl PyProjectAnalyzer {
     /// Parses and analyzes a safe `pyproject.toml` artifact.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> PyProjectProfile {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> PyProjectProfile {
         if !exposable(artifact) {
             return PyProjectProfile::default();
         }
@@ -534,7 +534,7 @@ fn dependency_name(requirement: &str) -> &str {
 
 /// `requirements.txt` package requirement.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PythonRequirement {
+pub(crate) struct PythonRequirement {
     /// Package name.
     pub name: String,
     /// Version specifier or marker text, when present.
@@ -547,18 +547,18 @@ pub struct PythonRequirement {
 
 /// `requirements.txt` analysis output.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct RequirementsProfile {
+pub(crate) struct RequirementsProfile {
     /// Package requirements in file order.
     pub requirements: Vec<PythonRequirement>,
 }
 
 /// Line-based analyzer for pip `requirements.txt` files.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct RequirementsAnalyzer;
+pub(crate) struct RequirementsAnalyzer;
 
 impl RequirementsAnalyzer {
     /// Parses and analyzes a safe `requirements.txt` artifact.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> RequirementsProfile {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> RequirementsProfile {
         if !exposable(artifact) {
             return RequirementsProfile::default();
         }
@@ -595,7 +595,7 @@ impl RequirementsAnalyzer {
 
 /// Docker Compose service facts extracted from a compose file.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct ComposeProfile {
+pub(crate) struct ComposeProfile {
     /// Services in declaration order.
     pub services: Vec<ComposeService>,
     /// Parse error when the compose file is malformed.
@@ -604,7 +604,7 @@ pub struct ComposeProfile {
 
 /// One Docker Compose service.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ComposeService {
+pub(crate) struct ComposeService {
     /// Service name.
     pub name: String,
     /// Image reference, when set directly.
@@ -627,7 +627,7 @@ pub struct ComposeService {
 
 /// One Docker Compose port mapping.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ComposePort {
+pub(crate) struct ComposePort {
     /// Host-published port, when the mapping specifies one.
     pub published: Option<String>,
     /// Container-side port.
@@ -638,11 +638,11 @@ pub struct ComposePort {
 
 /// Parser-backed analyzer for Docker Compose files.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct ComposeProfileAnalyzer;
+pub(crate) struct ComposeProfileAnalyzer;
 
 impl ComposeProfileAnalyzer {
     /// Parses and analyzes a safe Docker Compose artifact.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> ComposeProfile {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> ComposeProfile {
         if !exposable(artifact) {
             return ComposeProfile::default();
         }
@@ -755,7 +755,7 @@ fn compose_depends_on(service: &Map<String, Value>) -> Vec<String> {
 
 /// GitHub Actions workflow facts extracted from a workflow file.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct ActionsProfile {
+pub(crate) struct ActionsProfile {
     /// Workflow display name.
     pub name: Option<String>,
     /// Jobs in declaration order.
@@ -766,7 +766,7 @@ pub struct ActionsProfile {
 
 /// One GitHub Actions job.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ActionsJob {
+pub(crate) struct ActionsJob {
     /// Job ID as declared under `jobs`.
     pub id: String,
     /// `runs-on` runner summary.
@@ -779,7 +779,7 @@ pub struct ActionsJob {
 
 /// One GitHub Actions workflow step.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ActionsStep {
+pub(crate) struct ActionsStep {
     /// Step display name.
     pub name: Option<String>,
     /// Referenced reusable action, for `uses` steps.
@@ -796,7 +796,7 @@ pub struct ActionsStep {
 
 /// Container image build or publish hint for a step.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ActionsStepHint {
+pub(crate) enum ActionsStepHint {
     /// Step appears to build a container image.
     Build {
         /// Image reference, when it could be extracted from a `-t`/`--tag` flag.
@@ -811,11 +811,11 @@ pub enum ActionsStepHint {
 
 /// Parser-backed analyzer for GitHub Actions workflow files.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct ActionsProfileAnalyzer;
+pub(crate) struct ActionsProfileAnalyzer;
 
 impl ActionsProfileAnalyzer {
     /// Parses and analyzes a safe GitHub Actions workflow artifact.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> ActionsProfile {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> ActionsProfile {
         if !exposable(artifact) {
             return ActionsProfile::default();
         }

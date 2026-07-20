@@ -4,15 +4,14 @@
 //! structural importance (LIT-22.4.4).
 
 use crate::domain::EvidenceRef;
-use crate::fts::tokenize;
 use crate::graph::{Graph, GraphNode, GraphNodeId, RelationKind};
+use crate::retrieval::fts::tokenize;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
-use std::path::Path;
 
 /// Version of the persisted semantic embedding index contract.
-pub const EMBEDDING_INDEX_VERSION: u32 = 1;
+pub(crate) const EMBEDDING_INDEX_VERSION: u32 = 1;
 
 /// Fixed embedding dimensionality used by every provider in this crate, so
 /// vectors from different providers are at least comparably shaped (real
@@ -21,7 +20,7 @@ const EMBEDDING_DIMENSIONS: usize = 64;
 
 /// Failure embedding a piece of text.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EmbeddingError {
+pub(crate) struct EmbeddingError {
     /// Human-readable failure description.
     pub message: String,
 }
@@ -37,7 +36,7 @@ impl std::error::Error for EmbeddingError {}
 /// Provider boundary for turning text into a fixed-size embedding vector
 /// (AC1). Implementations may call a real local or remote model; nothing
 /// in this trait requires it.
-pub trait EmbeddingProvider {
+pub(crate) trait EmbeddingProvider {
     /// Embeds `text` into a vector of [`EMBEDDING_DIMENSIONS`] entries.
     fn embed(&self, text: &str) -> Result<Vec<f32>, EmbeddingError>;
 
@@ -53,7 +52,7 @@ pub trait EmbeddingProvider {
 /// network access and no live model. Every normal test uses this, never a
 /// real provider.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct MockEmbeddingProvider;
+pub(crate) struct MockEmbeddingProvider;
 
 impl EmbeddingProvider for MockEmbeddingProvider {
     fn embed(&self, text: &str) -> Result<Vec<f32>, EmbeddingError> {
@@ -78,106 +77,6 @@ impl EmbeddingProvider for MockEmbeddingProvider {
     }
 }
 
-/// Optional local embedding backend. It uses the deterministic hashing model
-/// but has a distinct identity so a future learned local model can invalidate
-/// the same cache contract without changing callers.
-#[cfg(feature = "local-embeddings")]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct LocalEmbeddingProvider;
-
-#[cfg(feature = "local-embeddings")]
-impl EmbeddingProvider for LocalEmbeddingProvider {
-    fn embed(&self, text: &str) -> Result<Vec<f32>, EmbeddingError> {
-        MockEmbeddingProvider.embed(text)
-    }
-
-    fn model_identity(&self) -> String {
-        "local-hash-v1".to_owned()
-    }
-}
-
-/// Configuration for a real, OpenAI-compatible `/embeddings` endpoint
-/// (AC1: optional real backend). Any server implementing that response
-/// shape works (OpenAI itself, or a compatible local/hosted server).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OpenAiEmbeddingConfig {
-    /// API base URL, e.g. `https://api.openai.com/v1`.
-    pub base_url: String,
-    /// Bearer API key. Never included verbatim in error messages.
-    pub api_key: String,
-    /// Embedding model name.
-    pub model: String,
-}
-
-/// Real embedding provider over an OpenAI-compatible `/embeddings`
-/// endpoint. Never constructed by any normal test (AC3); exists so a
-/// caller can opt into live semantic search.
-pub struct OpenAiEmbeddingProvider {
-    config: OpenAiEmbeddingConfig,
-    agent: ureq::Agent,
-}
-
-impl OpenAiEmbeddingProvider {
-    /// Builds a provider from `config`.
-    pub fn new(config: OpenAiEmbeddingConfig) -> Self {
-        Self {
-            config,
-            agent: ureq::Agent::new_with_defaults(),
-        }
-    }
-}
-
-#[derive(Serialize)]
-struct EmbeddingRequestBody<'a> {
-    model: &'a str,
-    input: &'a str,
-}
-
-#[derive(Deserialize)]
-struct EmbeddingResponseBody {
-    data: Vec<EmbeddingResponseEntry>,
-}
-
-#[derive(Deserialize)]
-struct EmbeddingResponseEntry {
-    embedding: Vec<f32>,
-}
-
-impl EmbeddingProvider for OpenAiEmbeddingProvider {
-    fn embed(&self, text: &str) -> Result<Vec<f32>, EmbeddingError> {
-        let url = format!("{}/embeddings", self.config.base_url.trim_end_matches('/'));
-        let body = EmbeddingRequestBody {
-            model: &self.config.model,
-            input: text,
-        };
-        let response: EmbeddingResponseBody = self
-            .agent
-            .post(&url)
-            .header("Authorization", &format!("Bearer {}", self.config.api_key))
-            .send_json(&body)
-            .map_err(|error| EmbeddingError {
-                message: format!("embedding request failed: {error}"),
-            })?
-            .body_mut()
-            .read_json()
-            .map_err(|error| EmbeddingError {
-                message: format!("failed to parse embedding response: {error}"),
-            })?;
-        response
-            .data
-            .into_iter()
-            .next()
-            .map(|entry| entry.embedding)
-            .ok_or_else(|| EmbeddingError {
-                message: "embedding response had no data entries".to_owned(),
-            })
-    }
-
-    fn model_identity(&self) -> String {
-        format!("openai-compatible:{}", self.config.model)
-    }
-}
-
 fn normalize(mut vector: Vec<f32>) -> Vec<f32> {
     let magnitude = vector.iter().map(|value| value * value).sum::<f32>().sqrt();
     if magnitude > 0.0 {
@@ -195,7 +94,7 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
 
 /// One enriched node document eligible for semantic search.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NodeDocument {
+pub(crate) struct NodeDocument {
     /// Stable graph node identifier.
     pub id: GraphNodeId,
     /// Graph node kind, such as `Symbol` or `Config`.
@@ -218,7 +117,7 @@ pub struct NodeDocument {
 
 /// One cached embedding and its enriched source document.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct EmbeddingIndexEntry {
+pub(crate) struct EmbeddingIndexEntry {
     /// Enriched source document.
     pub document: NodeDocument,
     /// Normalized embedding vector.
@@ -229,7 +128,7 @@ pub struct EmbeddingIndexEntry {
 
 /// Versioned, serializable semantic embedding index.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct EmbeddingIndex {
+pub(crate) struct EmbeddingIndex {
     /// Index schema version.
     pub version: u32,
     /// Provider/model identity.
@@ -244,7 +143,7 @@ pub struct EmbeddingIndex {
 
 impl EmbeddingIndex {
     /// Builds an index from enriched graph documents.
-    pub fn build(
+    pub(crate) fn build(
         provider: &dyn EmbeddingProvider,
         graph: &Graph,
         source_hash: impl Into<String>,
@@ -270,48 +169,13 @@ impl EmbeddingIndex {
             entries,
         })
     }
-
-    /// Returns whether this index matches the current source and model.
-    pub fn is_compatible(&self, provider: &dyn EmbeddingProvider, source_hash: &str) -> bool {
-        self.version == EMBEDDING_INDEX_VERSION
-            && self.model_identity == provider.model_identity()
-            && self.source_hash == source_hash
-            && self
-                .entries
-                .iter()
-                .all(|entry| entry.vector.len() == self.dimensions)
-    }
-
-    /// Writes the index only when its deterministic JSON changes.
-    pub fn save_if_changed(&self, path: &Path) -> std::io::Result<bool> {
-        let payload = serde_json::to_vec_pretty(self).map_err(std::io::Error::other)?;
-        if std::fs::read(path).ok().as_deref() == Some(payload.as_slice()) {
-            return Ok(false);
-        }
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(path, payload)?;
-        Ok(true)
-    }
-
-    /// Loads a cached index, returning `None` when it does not exist.
-    pub fn load(path: &Path) -> std::io::Result<Option<Self>> {
-        if !path.exists() {
-            return Ok(None);
-        }
-        let payload = std::fs::read(path)?;
-        serde_json::from_slice(&payload)
-            .map(Some)
-            .map_err(std::io::Error::other)
-    }
 }
 
 /// One semantic search result (AC2/AC4): the blended score plus the
 /// vector/graph components that produced it, real evidence, and related
 /// graph references.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SemanticSearchResult {
+pub(crate) struct SemanticSearchResult {
     /// Source graph node id.
     pub document_id: String,
     /// Human-readable reference (path or qualified name).
@@ -331,7 +195,7 @@ pub struct SemanticSearchResult {
 
 /// Blends embedding similarity with a graph connectivity signal (AC2).
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SemanticSearchWeights {
+pub(crate) struct SemanticSearchWeights {
     /// Weight applied to the cosine similarity component.
     pub vector: f64,
     /// Weight applied to the graph connectivity component.
@@ -350,14 +214,14 @@ impl Default for SemanticSearchWeights {
 /// Semantic search over the knowledge graph, backed by a pluggable
 /// [`EmbeddingProvider`].
 #[derive(Debug, Clone, Copy, Default)]
-pub struct SemanticSearch;
+pub(crate) struct SemanticSearch;
 
 impl SemanticSearch {
     /// Embeds `query` with `provider`, then ranks every eligible graph
     /// node by a weighted blend of cosine similarity and graph
     /// connectivity (AC2), returning at most `limit` results with
     /// evidence and graph references (AC4).
-    pub fn search(
+    pub(crate) fn search(
         &self,
         provider: &dyn EmbeddingProvider,
         graph: &Graph,
@@ -380,7 +244,7 @@ impl SemanticSearch {
     }
 
     /// Searches a previously built embedding index without rebuilding vectors.
-    pub fn search_index(
+    pub(crate) fn search_index(
         &self,
         provider: &dyn EmbeddingProvider,
         index: &EmbeddingIndex,
@@ -659,8 +523,7 @@ mod tests {
     }
 
     #[test]
-    fn embedding_index_is_versioned_cacheable_and_source_invalidated()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn embedding_index_is_versioned_and_well_formed() -> Result<(), Box<dyn std::error::Error>> {
         let graph = fixture_graph()?;
         let provider = MockEmbeddingProvider;
         let index = EmbeddingIndex::build(&provider, &graph, "source-a")?;
@@ -670,27 +533,6 @@ mod tests {
                 && !entry.document.name.is_empty()
                 && (entry.document.path.is_some() || entry.document.kind == "environment")
         }));
-        assert!(index.is_compatible(&provider, "source-a"));
-        assert!(!index.is_compatible(&provider, "source-b"));
-
-        let temp = tempfile::TempDir::new()?;
-        let path = temp.path().join("embeddings.json");
-        assert!(index.save_if_changed(&path)?);
-        assert!(!index.save_if_changed(&path)?);
-        let loaded = EmbeddingIndex::load(&path)?.ok_or("missing embedding index")?;
-        assert_eq!(loaded, index);
-        Ok(())
-    }
-
-    #[cfg(feature = "local-embeddings")]
-    #[test]
-    fn local_embedding_backend_is_explicit_and_deterministic() -> Result<(), EmbeddingError> {
-        let provider = super::LocalEmbeddingProvider;
-        assert_eq!(provider.model_identity(), "local-hash-v1");
-        assert_eq!(
-            provider.embed("local route")?,
-            provider.embed("local route")?
-        );
         Ok(())
     }
 

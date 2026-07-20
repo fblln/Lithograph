@@ -63,40 +63,10 @@ pub struct DocumentationModule {
     pub estimated_tokens: u32,
 }
 
-/// Typed optional semantic grouping proposal, suitable for schema-validated
-/// LLM or research output before falling back to deterministic planning.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SemanticGroupingProposal {
-    /// Proposed module groups.
-    pub groups: Vec<ProposedModuleGroup>,
-}
-
-/// One proposed semantic module group.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ProposedModuleGroup {
-    /// Proposed human-readable module name.
-    pub name: String,
-    /// Existing module ids to merge into this group.
-    pub module_ids: Vec<String>,
-    /// Confidence from 0 to 100.
-    pub confidence: u8,
-}
-
-/// Result of applying an optional grouping proposal.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SemanticGroupingResult {
-    /// Planned modules, either proposed groups or deterministic fallback.
-    pub modules: Vec<DocumentationModule>,
-    /// Actionable warnings when fallback was used.
-    pub warnings: Vec<String>,
-    /// True when proposal output was accepted.
-    pub used_proposal: bool,
-}
-
 /// Plans deterministic documentation modules from a repository's artifacts
 /// and semantic graph.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct ModulePlanner;
+pub(crate) struct ModulePlanner;
 
 /// Default per-module token budget: a module whose [`estimate_tokens`]
 /// exceeds this is split into multiple same-kind sub-modules (and therefore
@@ -104,7 +74,7 @@ pub struct ModulePlanner;
 /// oversized/truncated context. Deliberately generous relative to
 /// `generation::context`'s per-page excerpt caps, since this is a
 /// module-splitting threshold, not the actual LLM context window.
-pub const DEFAULT_TOKEN_BUDGET: u32 = 6000;
+pub(crate) const DEFAULT_TOKEN_BUDGET: u32 = 6000;
 
 /// Default page-count ceiling: once bucketing would produce more than this
 /// many modules, the smallest ones (fewest member artifacts first) are
@@ -113,12 +83,12 @@ pub const DEFAULT_TOKEN_BUDGET: u32 = 6000;
 /// generous -- well above what any reasonably diverse repository plans to
 /// today -- so this is a no-op except for repositories fragmented into an
 /// unusually large number of small buckets.
-pub const DEFAULT_PAGE_CEILING: usize = 40;
+pub(crate) const DEFAULT_PAGE_CEILING: usize = 40;
 
 impl ModulePlanner {
     /// Plans modules under [`DEFAULT_TOKEN_BUDGET`] and [`DEFAULT_PAGE_CEILING`],
     /// sorted by ID for deterministic output.
-    pub fn plan(&self, graph: &Graph, artifacts: &[Artifact]) -> Vec<DocumentationModule> {
+    pub(crate) fn plan(&self, graph: &Graph, artifacts: &[Artifact]) -> Vec<DocumentationModule> {
         self.plan_with_budgets(graph, artifacts, DEFAULT_TOKEN_BUDGET, DEFAULT_PAGE_CEILING)
     }
 
@@ -126,55 +96,13 @@ impl ModulePlanner {
     /// default plan. Deep language ownership boundaries (Rust crates and
     /// Python packages) stay intact; smaller supporting areas are grouped by
     /// semantic kind so generated docs can be less fragmented when requested.
-    pub fn plan_with_semantic_grouping(
+    pub(crate) fn plan_with_semantic_grouping(
         &self,
         graph: &Graph,
         artifacts: &[Artifact],
     ) -> Vec<DocumentationModule> {
         let base = self.plan(graph, artifacts);
         semantic_group_modules(base)
-    }
-
-    /// Applies an optional typed semantic grouping proposal to the
-    /// deterministic base plan. Invalid, incomplete, or low-confidence
-    /// proposals fall back to the deterministic planner with a warning.
-    pub fn plan_with_grouping_proposal(
-        &self,
-        graph: &Graph,
-        artifacts: &[Artifact],
-        proposal: Option<SemanticGroupingProposal>,
-    ) -> SemanticGroupingResult {
-        let base = self.plan(graph, artifacts);
-        let Some(proposal) = proposal else {
-            return SemanticGroupingResult {
-                modules: base,
-                warnings: Vec::new(),
-                used_proposal: false,
-            };
-        };
-        match apply_grouping_proposal(&base, &proposal) {
-            Ok(modules) => SemanticGroupingResult {
-                modules,
-                warnings: Vec::new(),
-                used_proposal: true,
-            },
-            Err(warning) => SemanticGroupingResult {
-                modules: base,
-                warnings: vec![warning],
-                used_proposal: false,
-            },
-        }
-    }
-
-    /// Plans modules exactly like [`Self::plan`], with a caller-supplied
-    /// `token_budget` and [`DEFAULT_PAGE_CEILING`].
-    pub fn plan_with_budget(
-        &self,
-        graph: &Graph,
-        artifacts: &[Artifact],
-        token_budget: u32,
-    ) -> Vec<DocumentationModule> {
-        self.plan_with_budgets(graph, artifacts, token_budget, DEFAULT_PAGE_CEILING)
     }
 
     /// Plans modules with both budgets fully configurable.
@@ -191,7 +119,7 @@ impl ModulePlanner {
     /// `Miscellaneous` module (smallest first, by member-artifact count)
     /// until the total fits -- see [`merge_small_buckets_to_ceiling`]. A
     /// repository already at or under the ceiling is unaffected.
-    pub fn plan_with_budgets(
+    pub(crate) fn plan_with_budgets(
         &self,
         graph: &Graph,
         artifacts: &[Artifact],
@@ -234,78 +162,6 @@ impl ModulePlanner {
         modules.sort_by(|a, b| a.id.cmp(&b.id));
         modules
     }
-}
-
-fn apply_grouping_proposal(
-    base: &[DocumentationModule],
-    proposal: &SemanticGroupingProposal,
-) -> Result<Vec<DocumentationModule>, String> {
-    if proposal.groups.is_empty() {
-        return Err("semantic grouping proposal contained no groups".to_owned());
-    }
-    let by_id: BTreeMap<&str, &DocumentationModule> = base
-        .iter()
-        .map(|module| (module.id.as_str(), module))
-        .collect();
-    let mut seen = BTreeSet::new();
-    let mut output = Vec::new();
-    for group in &proposal.groups {
-        if group.name.trim().is_empty() {
-            return Err("semantic grouping proposal contains an unnamed group".to_owned());
-        }
-        if group.confidence < 70 {
-            return Err(format!(
-                "semantic grouping proposal group `{}` has low confidence {}",
-                group.name, group.confidence
-            ));
-        }
-        if group.module_ids.is_empty() {
-            return Err(format!(
-                "semantic grouping proposal group `{}` has no module ids",
-                group.name
-            ));
-        }
-        let mut members = Vec::new();
-        let mut hashes = Vec::new();
-        let mut estimated_tokens = 0u32;
-        let mut kind = ModuleKind::Miscellaneous;
-        for module_id in &group.module_ids {
-            if !seen.insert(module_id.clone()) {
-                return Err(format!(
-                    "semantic grouping proposal references `{module_id}` more than once"
-                ));
-            }
-            let module = by_id.get(module_id.as_str()).ok_or_else(|| {
-                format!("semantic grouping proposal references unknown module `{module_id}`")
-            })?;
-            members.extend(module.members.iter().cloned());
-            hashes.push(module.input_hash.as_str());
-            estimated_tokens = estimated_tokens.saturating_add(module.estimated_tokens);
-            if group.module_ids.len() == 1 {
-                kind = module.kind;
-            }
-        }
-        members.sort();
-        members.dedup();
-        hashes.sort_unstable();
-        output.push(DocumentationModule {
-            id: format!("module-plan:semantic-proposed:{}", slugify(&group.name)),
-            name: group.name.clone(),
-            kind,
-            members,
-            input_hash: blake3::hash(hashes.join("\n").as_bytes())
-                .to_hex()
-                .to_string(),
-            estimated_tokens,
-        });
-    }
-    if seen.len() != base.len() {
-        return Err(
-            "semantic grouping proposal did not cover every deterministic module".to_owned(),
-        );
-    }
-    output.sort_by(|a, b| a.id.cmp(&b.id));
-    Ok(output)
 }
 
 fn semantic_group_modules(modules: Vec<DocumentationModule>) -> Vec<DocumentationModule> {
@@ -705,7 +561,7 @@ fn file_name(path: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::{ModuleKind, ModulePlanner, ProposedModuleGroup, SemanticGroupingProposal};
+    use super::{DEFAULT_PAGE_CEILING, ModuleKind, ModulePlanner};
     use crate::graph::GraphBuilder;
     use crate::inventory::{RepositoryWalker, WalkOptions};
     use std::path::Path;
@@ -761,61 +617,6 @@ mod tests {
             semantic_modules
                 .iter()
                 .any(|module| module.id.starts_with("module-plan:semantic:"))
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn valid_grouping_proposal_uses_typed_groups() -> Result<(), Box<dyn std::error::Error>> {
-        let root = fixture_root();
-        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
-        let graph = GraphBuilder.build(&root, &artifacts);
-        let base = ModulePlanner.plan(&graph, &artifacts);
-        let proposal = SemanticGroupingProposal {
-            groups: base
-                .iter()
-                .map(|module| ProposedModuleGroup {
-                    name: module.name.clone(),
-                    module_ids: vec![module.id.clone()],
-                    confidence: 90,
-                })
-                .collect(),
-        };
-
-        let result = ModulePlanner.plan_with_grouping_proposal(&graph, &artifacts, Some(proposal));
-
-        assert!(result.used_proposal);
-        assert!(result.warnings.is_empty());
-        assert_eq!(result.modules.len(), base.len());
-
-        Ok(())
-    }
-
-    #[test]
-    fn invalid_grouping_proposal_falls_back_with_warning() -> Result<(), Box<dyn std::error::Error>>
-    {
-        let root = fixture_root();
-        let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(&root)?;
-        let graph = GraphBuilder.build(&root, &artifacts);
-        let base = ModulePlanner.plan(&graph, &artifacts);
-        let proposal = SemanticGroupingProposal {
-            groups: vec![ProposedModuleGroup {
-                name: "Low confidence".to_owned(),
-                module_ids: vec![base[0].id.clone()],
-                confidence: 10,
-            }],
-        };
-
-        let result = ModulePlanner.plan_with_grouping_proposal(&graph, &artifacts, Some(proposal));
-
-        assert!(!result.used_proposal);
-        assert_eq!(result.modules, base);
-        assert!(
-            result
-                .warnings
-                .iter()
-                .any(|warning| warning.contains("low confidence"))
         );
 
         Ok(())
@@ -964,8 +765,8 @@ module-plan:rust-crate:fixture-worker|RustCrate|fixture-worker|16|365"
         let artifacts = RepositoryWalker::new(WalkOptions::default()).walk(repo.path())?;
         let graph = GraphBuilder.build(repo.path(), &artifacts);
 
-        let first = ModulePlanner.plan_with_budget(&graph, &artifacts, 250);
-        let second = ModulePlanner.plan_with_budget(&graph, &artifacts, 250);
+        let first = ModulePlanner.plan_with_budgets(&graph, &artifacts, 250, DEFAULT_PAGE_CEILING);
+        let second = ModulePlanner.plan_with_budgets(&graph, &artifacts, 250, DEFAULT_PAGE_CEILING);
         assert_eq!(first, second, "splitting must be deterministic");
 
         let mut parts: Vec<_> = first
@@ -992,7 +793,8 @@ module-plan:rust-crate:fixture-worker|RustCrate|fixture-worker|16|365"
         );
 
         // Under a budget large enough to hold everything, no split happens.
-        let unsplit = ModulePlanner.plan_with_budget(&graph, &artifacts, 10_000);
+        let unsplit =
+            ModulePlanner.plan_with_budgets(&graph, &artifacts, 10_000, DEFAULT_PAGE_CEILING);
         assert!(
             unsplit
                 .iter()

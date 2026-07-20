@@ -9,7 +9,7 @@ use std::path::PathBuf;
 #[command(version)]
 #[command(about = "Compile repository knowledge into evidence-backed documentation.")]
 #[command(long_about = None)]
-pub struct Cli {
+pub(crate) struct Cli {
     /// Command to run.
     #[command(subcommand)]
     pub command: Option<Command>,
@@ -17,7 +17,7 @@ pub struct Cli {
 
 /// Top-level Lithograph commands.
 #[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
-pub enum Command {
+pub(crate) enum Command {
     /// Scan, analyze, plan, generate, and write documentation for a repository.
     Init(InitArgs),
     /// Rescan and selectively regenerate documentation for changed content.
@@ -72,7 +72,7 @@ pub enum Command {
 
 /// Research feedback command namespace.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct ResearchCommand {
+pub(crate) struct ResearchCommand {
     /// Feedback operation.
     #[command(subcommand)]
     pub target: ResearchTarget,
@@ -80,7 +80,7 @@ pub struct ResearchCommand {
 
 /// Research feedback operations.
 #[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
-pub enum ResearchTarget {
+pub(crate) enum ResearchTarget {
     /// Record the observed outcome of one answer.
     SaveResult(ResearchSaveResultArgs),
     /// Aggregate recorded outcomes into deterministic lessons.
@@ -89,7 +89,7 @@ pub enum ResearchTarget {
 
 /// Arguments for `research save-result`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct ResearchSaveResultArgs {
+pub(crate) struct ResearchSaveResultArgs {
     /// Repository path.
     pub path: PathBuf,
     /// Question that was answered.
@@ -114,7 +114,7 @@ pub struct ResearchSaveResultArgs {
 
 /// Arguments for `research reflect`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct ResearchReflectArgs {
+pub(crate) struct ResearchReflectArgs {
     /// Repository path.
     pub path: PathBuf,
     /// Unix timestamp in seconds used for all decay calculations.
@@ -125,7 +125,7 @@ pub struct ResearchReflectArgs {
 /// CLI spelling for an answer outcome.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 #[value(rename_all = "snake_case")]
-pub enum ResearchOutcomeArg {
+pub(crate) enum ResearchOutcomeArg {
     /// The answer and its cited sources were useful.
     Useful,
     /// The cited sources led to a dead end.
@@ -134,7 +134,7 @@ pub enum ResearchOutcomeArg {
     Corrected,
 }
 
-impl From<ResearchOutcomeArg> for crate::research_feedback::AnswerOutcome {
+impl From<ResearchOutcomeArg> for crate::knowledge::research_feedback::AnswerOutcome {
     fn from(value: ResearchOutcomeArg) -> Self {
         match value {
             ResearchOutcomeArg::Useful => Self::Useful,
@@ -146,7 +146,7 @@ impl From<ResearchOutcomeArg> for crate::research_feedback::AnswerOutcome {
 
 /// Arguments for `integrate-mcp`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct IntegrateMcpArgs {
+pub(crate) struct IntegrateMcpArgs {
     /// Repository path to integrate.
     pub path: PathBuf,
     /// Agent target id (`codex`, `claude`, `gemini`, `zed`, `aider`). When
@@ -164,7 +164,7 @@ pub struct IntegrateMcpArgs {
 
 /// Arguments for `watch`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct WatchArgs {
+pub(crate) struct WatchArgs {
     /// Repository path to watch.
     pub path: PathBuf,
     /// Maximum artifacts one poll may scan before refusing to proceed.
@@ -184,7 +184,7 @@ pub struct WatchArgs {
 
 /// ADR command namespace.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct AdrCommand {
+pub(crate) struct AdrCommand {
     /// ADR operation.
     #[command(subcommand)]
     pub target: AdrTarget,
@@ -192,7 +192,7 @@ pub struct AdrCommand {
 
 /// ADR operations.
 #[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
-pub enum AdrTarget {
+pub(crate) enum AdrTarget {
     /// Create a new ADR.
     Create(AdrCreateArgs),
     /// Read one ADR by id.
@@ -207,7 +207,7 @@ pub enum AdrTarget {
 
 /// Arguments for `adr create`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct AdrCreateArgs {
+pub(crate) struct AdrCreateArgs {
     /// Repository path.
     pub path: PathBuf,
     /// Short decision title.
@@ -229,7 +229,7 @@ pub struct AdrCreateArgs {
 
 /// Arguments for `adr get`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct AdrGetArgs {
+pub(crate) struct AdrGetArgs {
     /// Repository path.
     pub path: PathBuf,
     /// ADR id, e.g. `ADR-0001`.
@@ -242,7 +242,7 @@ pub struct AdrGetArgs {
 /// Arguments for `adr update`. Provide either `--section`/`--value`, or
 /// `--status`, or both.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct AdrUpdateArgs {
+pub(crate) struct AdrUpdateArgs {
     /// Repository path.
     pub path: PathBuf,
     /// ADR id, e.g. `ADR-0001`.
@@ -263,7 +263,7 @@ pub struct AdrUpdateArgs {
 
 /// Arguments for `adr delete`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct AdrDeleteArgs {
+pub(crate) struct AdrDeleteArgs {
     /// Repository path.
     pub path: PathBuf,
     /// ADR id, e.g. `ADR-0001`.
@@ -272,7 +272,7 @@ pub struct AdrDeleteArgs {
 
 /// Arguments for `adr list`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct AdrListArgs {
+pub(crate) struct AdrListArgs {
     /// Repository path.
     pub path: PathBuf,
     /// Output format.
@@ -280,7 +280,7 @@ pub struct AdrListArgs {
     pub format: OutputFormat,
 }
 
-/// CLI-facing mirror of [`crate::adr::AdrStatus`] (clap's `ValueEnum` derive
+/// CLI-facing mirror of [`crate::docs::adr::AdrStatus`] (clap's `ValueEnum` derive
 /// needs a local type in most configurations here).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum AdrStatusArg {
@@ -294,7 +294,7 @@ pub enum AdrStatusArg {
     Superseded,
 }
 
-impl From<AdrStatusArg> for crate::adr::AdrStatus {
+impl From<AdrStatusArg> for crate::docs::adr::AdrStatus {
     fn from(value: AdrStatusArg) -> Self {
         match value {
             AdrStatusArg::Proposed => Self::Proposed,
@@ -307,7 +307,7 @@ impl From<AdrStatusArg> for crate::adr::AdrStatus {
 
 /// Graph artifact command namespace.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct GraphCommand {
+pub(crate) struct GraphCommand {
     /// Graph artifact operation.
     #[command(subcommand)]
     pub target: GraphTarget,
@@ -315,7 +315,7 @@ pub struct GraphCommand {
 
 /// Graph artifact operations.
 #[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
-pub enum GraphTarget {
+pub(crate) enum GraphTarget {
     /// Export the current graph snapshot as a compressed artifact.
     Export(GraphExportArgs),
     /// Import a compressed graph artifact into this repository's graph store.
@@ -326,7 +326,7 @@ pub enum GraphTarget {
 
 /// Arguments for `graph report`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct GraphReportArgs {
+pub(crate) struct GraphReportArgs {
     /// Repository path with a generated Lithograph graph store.
     #[arg(default_value = ".")]
     pub path: PathBuf,
@@ -338,7 +338,7 @@ pub struct GraphReportArgs {
 
 /// Arguments for `path`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct PathArgs {
+pub(crate) struct PathArgs {
     /// Repository path with a generated Lithograph graph store.
     #[arg(long, default_value = ".")]
     pub path: PathBuf,
@@ -353,7 +353,7 @@ pub struct PathArgs {
 
 /// Arguments for `explain`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct ExplainArgs {
+pub(crate) struct ExplainArgs {
     /// Repository path with a generated Lithograph graph store.
     #[arg(long, default_value = ".")]
     pub path: PathBuf,
@@ -366,7 +366,7 @@ pub struct ExplainArgs {
 
 /// Arguments for `affected`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct AffectedArgs {
+pub(crate) struct AffectedArgs {
     /// Repository path with a generated Lithograph graph store.
     #[arg(long, default_value = ".")]
     pub path: PathBuf,
@@ -386,7 +386,7 @@ pub struct AffectedArgs {
 
 /// Arguments for `graph export`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct GraphExportArgs {
+pub(crate) struct GraphExportArgs {
     /// Repository path with a generated Lithograph graph store.
     pub path: PathBuf,
     /// Output compressed artifact path.
@@ -396,7 +396,7 @@ pub struct GraphExportArgs {
 
 /// Arguments for `graph import`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct GraphImportArgs {
+pub(crate) struct GraphImportArgs {
     /// Repository path whose graph store should receive the artifact.
     pub path: PathBuf,
     /// Compressed artifact path to import.
@@ -405,7 +405,7 @@ pub struct GraphImportArgs {
 
 /// Arguments for `golden`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct GoldenArgs {
+pub(crate) struct GoldenArgs {
     /// Repository path with generated Lithograph output.
     pub path: PathBuf,
     /// Snapshot directory.
@@ -418,7 +418,7 @@ pub struct GoldenArgs {
 
 /// Arguments for `quality`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct QualityArgs {
+pub(crate) struct QualityArgs {
     /// Repository path with generated Lithograph docs.
     pub path: PathBuf,
     /// Output format.
@@ -428,7 +428,7 @@ pub struct QualityArgs {
 
 /// Arguments for `validate-mermaid`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct ValidateMermaidArgs {
+pub(crate) struct ValidateMermaidArgs {
     /// Repository path or Markdown file to validate.
     pub path: PathBuf,
     /// Optional local Node validator script. It receives Mermaid text on stdin.
@@ -442,14 +442,14 @@ pub struct ValidateMermaidArgs {
 
 /// Arguments for `mcp-server`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct McpServerArgs {
+pub(crate) struct McpServerArgs {
     /// Repository path with generated Lithograph docs.
     pub path: PathBuf,
 }
 
 /// Arguments for `viewer`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct ViewerArgs {
+pub(crate) struct ViewerArgs {
     /// Repository path with generated Lithograph docs.
     pub path: PathBuf,
     /// Output directory for the static viewer.
@@ -459,7 +459,7 @@ pub struct ViewerArgs {
 
 /// Arguments for `serve`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct ServeArgs {
+pub(crate) struct ServeArgs {
     /// Repository path with generated Lithograph docs.
     pub path: PathBuf,
     /// Additional explicitly allowlisted repositories, as `ID=PATH`.
@@ -480,7 +480,7 @@ pub struct ServeArgs {
 
 /// Arguments for `drift`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct DriftArgs {
+pub(crate) struct DriftArgs {
     /// Repository path to scan.
     pub path: PathBuf,
     /// Output format.
@@ -490,7 +490,7 @@ pub struct DriftArgs {
 
 /// Arguments for `ask`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct AskArgs {
+pub(crate) struct AskArgs {
     /// Repository path with generated Lithograph docs.
     pub path: PathBuf,
     /// Question to answer from generated docs.
@@ -502,7 +502,7 @@ pub struct AskArgs {
 
 /// Arguments for `mcp-export`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct McpExportArgs {
+pub(crate) struct McpExportArgs {
     /// Repository path with generated Lithograph docs.
     pub path: PathBuf,
     /// Optional question to answer in the export payload.
@@ -512,7 +512,7 @@ pub struct McpExportArgs {
 
 /// Arguments for `init` and `update`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct InitArgs {
+pub(crate) struct InitArgs {
     /// Repository path to compile documentation for.
     pub path: PathBuf,
     /// Prompt template version stamped on generated pages.
@@ -528,14 +528,14 @@ pub struct InitArgs {
 
 /// Arguments for `integrate-agents`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct IntegrateAgentsArgs {
+pub(crate) struct IntegrateAgentsArgs {
     /// Repository path whose top-level `AGENTS.md`/`CLAUDE.md` should be updated.
     pub path: PathBuf,
 }
 
 /// Inspect command namespace.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct InspectCommand {
+pub(crate) struct InspectCommand {
     /// Inspect target.
     #[command(subcommand)]
     pub target: InspectTarget,
@@ -543,7 +543,7 @@ pub struct InspectCommand {
 
 /// Inspectable repository data.
 #[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
-pub enum InspectTarget {
+pub(crate) enum InspectTarget {
     /// Print artifact inventory.
     Artifacts(InspectArtifactsArgs),
     /// Print the semantic graph.
@@ -562,7 +562,7 @@ pub enum InspectTarget {
 
 /// Arguments for `inspect modules`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct InspectModulesArgs {
+pub(crate) struct InspectModulesArgs {
     /// Repository path to inspect.
     pub path: PathBuf,
     /// Use deterministic semantic grouping when planning modules.
@@ -575,7 +575,7 @@ pub struct InspectModulesArgs {
 
 /// Arguments for `inspect dsm`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct InspectDsmArgs {
+pub(crate) struct InspectDsmArgs {
     /// Repository path to inspect.
     pub path: PathBuf,
     /// Output format.
@@ -585,7 +585,7 @@ pub struct InspectDsmArgs {
 
 /// Arguments for `inspect artifacts`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct InspectArtifactsArgs {
+pub(crate) struct InspectArtifactsArgs {
     /// Repository path to inspect.
     pub path: PathBuf,
     /// Output format.
@@ -595,7 +595,7 @@ pub struct InspectArtifactsArgs {
 
 /// Arguments for `inspect graph`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct InspectGraphArgs {
+pub(crate) struct InspectGraphArgs {
     /// Repository path to inspect.
     pub path: PathBuf,
     /// Output format.
@@ -609,7 +609,7 @@ pub struct InspectGraphArgs {
 
 /// Arguments for `inspect env`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct InspectEnvArgs {
+pub(crate) struct InspectEnvArgs {
     /// Repository path to inspect.
     pub path: PathBuf,
     /// Optional environment variable name or stable node id to inspect.
@@ -622,7 +622,7 @@ pub struct InspectEnvArgs {
 
 /// Arguments for `inspect metrics`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
-pub struct InspectMetricsArgs {
+pub(crate) struct InspectMetricsArgs {
     /// Repository path whose last recorded `.lithograph/run.json` to inspect.
     pub path: PathBuf,
     /// Fail with the exceeded thresholds listed when the graph has more
@@ -647,7 +647,7 @@ pub struct InspectMetricsArgs {
 
 /// Supported output formats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum OutputFormat {
+pub(crate) enum OutputFormat {
     /// Human-readable table.
     Table,
     /// Deterministic JSON.
@@ -656,7 +656,7 @@ pub enum OutputFormat {
 
 impl Cli {
     /// Parses command-line arguments from the current process.
-    pub fn parse_args() -> Self {
+    pub(crate) fn parse_args() -> Self {
         Self::parse()
     }
 
@@ -664,7 +664,8 @@ impl Cli {
     ///
     /// Tests use this path to verify the CLI definition without spawning a
     /// process. User-facing process behavior is covered by integration tests.
-    pub fn parse_from_args<I, T>(args: I) -> Self
+    #[cfg(test)]
+    pub(crate) fn parse_from_args<I, T>(args: I) -> Self
     where
         I: IntoIterator<Item = T>,
         T: Into<std::ffi::OsString> + Clone,

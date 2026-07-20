@@ -26,11 +26,11 @@ pub enum AdrStatus {
 }
 
 /// The only section keys [`AdrStore::update_section`] accepts (AC2).
-pub const ADR_SECTION_KEYS: &[&str] = &["context", "decision", "consequences"];
+pub(crate) const ADR_SECTION_KEYS: &[&str] = &["context", "decision", "consequences"];
 
 /// One persisted architecture decision record.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AdrRecord {
+pub(crate) struct AdrRecord {
     /// Stable id, e.g. `"ADR-0001"`.
     pub id: String,
     /// Short decision title.
@@ -54,7 +54,7 @@ pub struct AdrSummary {
 
 /// A validation or lookup failure, always with an actionable message (AC2).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AdrError {
+pub(crate) enum AdrError {
     /// `title` was empty or whitespace-only.
     EmptyTitle,
     /// A required section's content was empty or whitespace-only.
@@ -89,14 +89,14 @@ impl std::error::Error for AdrError {}
 
 /// File-backed ADR store rooted at one repository's `.lithograph/adrs/`.
 #[derive(Debug, Clone)]
-pub struct AdrStore {
+pub(crate) struct AdrStore {
     dir: PathBuf,
 }
 
 impl AdrStore {
     /// Opens the store for a repository. The directory is created lazily
     /// on first write.
-    pub fn new(repo_root: &Path) -> Self {
+    pub(crate) fn new(repo_root: &Path) -> Self {
         Self {
             dir: repo_root.join(".lithograph/adrs"),
         }
@@ -107,7 +107,7 @@ impl AdrStore {
     /// `consequences` is optional -- many real decisions don't have known
     /// consequences yet at proposal time -- and can be added later via
     /// [`Self::update_section`].
-    pub fn create(
+    pub(crate) fn create(
         &self,
         title: &str,
         context: &str,
@@ -140,7 +140,7 @@ impl AdrStore {
     }
 
     /// Reads one ADR by id.
-    pub fn get(&self, id: &str) -> Result<AdrRecord, AdrError> {
+    pub(crate) fn get(&self, id: &str) -> Result<AdrRecord, AdrError> {
         JsonStore
             .read(&self.path_for(id))
             .map_err(|error| AdrError::Io(error.to_string()))?
@@ -149,7 +149,7 @@ impl AdrStore {
 
     /// Sets one section's content, validating the section key and content
     /// (AC1/AC2).
-    pub fn update_section(
+    pub(crate) fn update_section(
         &self,
         id: &str,
         section: &str,
@@ -167,7 +167,7 @@ impl AdrStore {
     }
 
     /// Sets the ADR's lifecycle status.
-    pub fn update_status(&self, id: &str, status: AdrStatus) -> Result<AdrRecord, AdrError> {
+    pub(crate) fn update_status(&self, id: &str, status: AdrStatus) -> Result<AdrRecord, AdrError> {
         let mut record = self.get(id)?;
         record.status = status;
         self.write(&record)?;
@@ -175,7 +175,7 @@ impl AdrStore {
     }
 
     /// Deletes one ADR. Errors with [`AdrError::NotFound`] if it doesn't exist.
-    pub fn delete(&self, id: &str) -> Result<(), AdrError> {
+    pub(crate) fn delete(&self, id: &str) -> Result<(), AdrError> {
         let path = self.path_for(id);
         if !path.exists() {
             return Err(AdrError::NotFound(id.to_owned()));
@@ -184,7 +184,7 @@ impl AdrStore {
     }
 
     /// Lists every ADR, sorted by id.
-    pub fn list(&self) -> Vec<AdrSummary> {
+    pub(crate) fn list(&self) -> Vec<AdrSummary> {
         let Ok(entries) = std::fs::read_dir(&self.dir) else {
             return Vec::new();
         };

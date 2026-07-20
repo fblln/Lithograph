@@ -137,7 +137,8 @@ fn research_cli_saves_results_and_reflects_corroborated_lessons()
         },
         &mut output,
     )?;
-    let lessons: crate::research_feedback::ResearchLessons = serde_json::from_slice(&output)?;
+    let lessons: crate::knowledge::research_feedback::ResearchLessons =
+        serde_json::from_slice(&output)?;
     assert_eq!(lessons.preferred_sources[0].node_id, node_id);
     assert!(
         temp.path()
@@ -892,9 +893,9 @@ fn execute_adr_create_get_update_list_delete_round_trips() -> Result<(), Box<dyn
         },
         &mut created,
     )?;
-    let created: crate::adr::AdrRecord = serde_json::from_slice(&created)?;
+    let created: crate::docs::adr::AdrRecord = serde_json::from_slice(&created)?;
     assert_eq!(created.id, "ADR-0001");
-    assert_eq!(created.status, crate::adr::AdrStatus::Proposed);
+    assert_eq!(created.status, crate::docs::adr::AdrStatus::Proposed);
 
     let mut got = Vec::new();
     execute(
@@ -929,8 +930,8 @@ fn execute_adr_create_get_update_list_delete_round_trips() -> Result<(), Box<dyn
         },
         &mut updated,
     )?;
-    let updated: crate::adr::AdrRecord = serde_json::from_slice(&updated)?;
-    assert_eq!(updated.status, crate::adr::AdrStatus::Accepted);
+    let updated: crate::docs::adr::AdrRecord = serde_json::from_slice(&updated)?;
+    assert_eq!(updated.status, crate::docs::adr::AdrStatus::Accepted);
     assert_eq!(
         updated.sections.get("consequences").map(String::as_str),
         Some("Adds an ops dependency.")
@@ -1006,7 +1007,7 @@ fn execute_adr_update_rejects_unknown_section() -> Result<(), Box<dyn std::error
         },
         &mut created,
     )?;
-    let created: crate::adr::AdrRecord = serde_json::from_slice(&created)?;
+    let created: crate::docs::adr::AdrRecord = serde_json::from_slice(&created)?;
 
     let mut output = Vec::new();
     let result = execute(

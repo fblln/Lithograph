@@ -204,7 +204,7 @@ const PYTHON_STDLIB_MODULES: &[&str] = &[
 
 /// True when `dotted_name` (e.g. `"os"`, `"os.path"`, `"collections.abc"`)
 /// refers to the Python standard library, judged by its top-level segment.
-pub fn is_python_stdlib_module(dotted_name: &str) -> bool {
+pub(crate) fn is_python_stdlib_module(dotted_name: &str) -> bool {
     let top_level = dotted_name.split('.').next().unwrap_or(dotted_name);
     PYTHON_STDLIB_MODULES.contains(&top_level)
 }
@@ -370,7 +370,7 @@ const PYTHON_BUILTINS: &[&str] = &[
 /// name is not a bare global, and a user symbol that merely shares the spelling
 /// is not shadowed here -- shadowing is judged by the caller against local
 /// definitions, exactly as [`is_javascript_builtin`] is used.
-pub fn is_python_builtin(name: &str) -> bool {
+pub(crate) fn is_python_builtin(name: &str) -> bool {
     PYTHON_BUILTINS.contains(&name)
 }
 
@@ -384,7 +384,7 @@ pub fn is_python_builtin(name: &str) -> bool {
 /// (`PyYAML` imports as `yaml`, `beautifulsoup4` as `bs4`, `Pillow` as `PIL`).
 /// Those stay `Unresolved`, same as any other unmatched reference; a curated
 /// alias table would need ongoing upkeep this crate deliberately avoids.
-pub fn normalize_python_package_name(name: &str) -> String {
+pub(crate) fn normalize_python_package_name(name: &str) -> String {
     name.chars()
         .map(|character| match character {
             '-' | '.' => '_',
@@ -396,60 +396,11 @@ pub fn normalize_python_package_name(name: &str) -> String {
 /// Rust standard-library crate names that ship with every toolchain.
 const RUST_STD_CRATES: &[&str] = &["std", "core", "alloc"];
 
-/// Common prelude/std types and traits referenced by bare name (e.g. in a
-/// trait-impl target like `impl Debug for Foo`), where the analyzer never
-/// sees a `std::`-prefixed path to classify by prefix.
-const RUST_PRELUDE_TYPES: &[&str] = &[
-    "Vec",
-    "Option",
-    "Result",
-    "Box",
-    "String",
-    "str",
-    "HashMap",
-    "HashSet",
-    "BTreeMap",
-    "BTreeSet",
-    "VecDeque",
-    "Rc",
-    "Arc",
-    "RefCell",
-    "Cell",
-    "Cow",
-    "Iterator",
-    "IntoIterator",
-    "Debug",
-    "Display",
-    "Clone",
-    "Copy",
-    "Default",
-    "PartialEq",
-    "Eq",
-    "PartialOrd",
-    "Ord",
-    "Hash",
-    "Send",
-    "Sync",
-    "Drop",
-    "From",
-    "Into",
-    "TryFrom",
-    "TryInto",
-    "AsRef",
-    "AsMut",
-    "Deref",
-    "DerefMut",
-    "Fn",
-    "FnMut",
-    "FnOnce",
-    "Error",
-];
-
 /// The std crate a `use` path (with any leading `crate::` already stripped)
 /// is rooted at (`std`/`core`/`alloc`), or `None` for anything else; used to
 /// collapse every std-prefixed `use` into one shared external package node
 /// per crate rather than one per path.
-pub fn rust_std_crate(path: &str) -> Option<&'static str> {
+pub(crate) fn rust_std_crate(path: &str) -> Option<&'static str> {
     let path = path.strip_prefix("::").unwrap_or(path);
     let top_level = path.split("::").next().unwrap_or(path);
     RUST_STD_CRATES
@@ -458,16 +409,10 @@ pub fn rust_std_crate(path: &str) -> Option<&'static str> {
         .copied()
 }
 
-/// True when `name` is a well-known prelude type/trait referenced by bare
-/// name (no path prefix for [`rust_std_crate`] to classify).
-pub fn is_rust_prelude_type(name: &str) -> bool {
-    RUST_PRELUDE_TYPES.contains(&name)
-}
-
 /// ECMAScript, DOM/BOM, Node, and TypeScript-library global names that a
 /// TS/JS file references by bare name without importing them -- the JS
 /// counterpart of [`is_python_stdlib_module`] (LIT-6) and
-/// [`is_rust_prelude_type`] (LIT-66). Deliberately a curated list of *global*
+/// bare-name Rust prelude types (LIT-66). Deliberately a curated list of *global*
 /// identifiers and standard library types only. Prototype method names
 /// (`forEach`, `map`, `filter`) are excluded on purpose: they are receiver
 /// members, not globals, so a bare `filter` could equally be a lodash import
@@ -614,14 +559,14 @@ const JAVASCRIPT_BUILTINS: &[&str] = &[
 /// into JavaScript/TypeScript runtimes, so a reference to it is external
 /// rather than a missing local symbol. Exact-match only: these are unqualified
 /// global names, not dotted paths.
-pub fn is_javascript_builtin(name: &str) -> bool {
+pub(crate) fn is_javascript_builtin(name: &str) -> bool {
     JAVASCRIPT_BUILTINS.contains(&name)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        is_javascript_builtin, is_python_builtin, is_python_stdlib_module, is_rust_prelude_type,
+        is_javascript_builtin, is_python_builtin, is_python_stdlib_module,
         normalize_python_package_name, rust_std_crate,
     };
 
@@ -686,12 +631,5 @@ mod tests {
         assert_eq!(rust_std_crate("std::env::var"), Some("std"));
         assert_eq!(rust_std_crate("serde::Serialize"), None);
         assert_eq!(rust_std_crate("stdlib_lookalike::Thing"), None);
-    }
-
-    #[test]
-    fn recognizes_rust_prelude_types_by_exact_name() {
-        assert!(is_rust_prelude_type("Vec"));
-        assert!(is_rust_prelude_type("Debug"));
-        assert!(!is_rust_prelude_type("MyStruct"));
     }
 }

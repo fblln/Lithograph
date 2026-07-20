@@ -1,73 +1,67 @@
 //! Typed semantic graph: the merged, evidence-backed source of truth built
 //! from repository artifacts and their analyzer output.
 
-pub mod analytics;
-pub mod builder;
-pub mod communities;
-pub mod enrichment;
-pub mod health;
-pub mod index;
-pub mod layout;
-pub mod model;
-pub mod parity_benchmark;
-pub mod pipeline;
-pub mod report;
-pub mod semantic;
-pub mod store;
-pub mod tags;
-pub mod tensions;
-pub mod validate;
+pub(crate) mod analytics;
+pub(crate) mod builder;
+pub(crate) mod communities;
+pub(crate) mod health;
+pub(crate) mod index;
+pub(crate) mod layout;
+pub(crate) mod model;
+pub(crate) mod pipeline;
+pub(crate) mod report;
+pub(crate) mod semantic;
+pub(crate) mod store;
+pub(crate) mod tags;
+pub(crate) mod tensions;
+pub(crate) mod validate;
 
-pub use analytics::{MetricSnapshot, MetricSnapshotStore, NodeMetric};
-pub use builder::GraphBuilder;
-pub use communities::{
-    CommunityAnalysis, CommunityDiagnostics, CommunityScope, CommunitySnapshot,
-    CommunitySnapshotStore, CommunitySummary, CommunityTopic, LEIDEN_ALGORITHM_VERSION,
-    TOPIC_ALGORITHM_VERSION, TopicSnapshot, TopicSnapshotStore, analyze_communities,
-    architecture_aware_scope, environment_aware_scope, label_topic_snapshot, leiden_communities,
+pub(crate) use builder::GraphBuilder;
+pub(crate) use communities::{
+    CommunityScope, CommunitySnapshotStore, CommunitySummary, LEIDEN_ALGORITHM_VERSION,
+    analyze_communities, architecture_aware_scope, environment_aware_scope, leiden_communities,
     leiden_communities_with_diagnostics,
 };
-pub use enrichment::{ENRICHMENT_ALGORITHM_VERSION, EnrichmentOverlay, derive_enrichment};
-pub use health::{HealthFinding, HealthRule, HealthSeverity, HealthThresholds, detect_health};
-pub use index::{
-    ArchitectureAspect, ArchitectureCluster, ArchitectureClusterLink, ArchitectureClusterLinkKind,
-    ArchitectureClusterRelation, ArchitectureSummary, DependencyMatrix, FileTreeNode, GraphSchema,
-    KnowledgeIndex, LabelCount, LanguageSummary, Neighbor, NodeExplanation, PackageSummary,
-    PathHop, PathResult, SearchParams, SearchResult, TraceDirection, TraceParams, TraceRelation,
-    TraceResult, TypeCount,
+pub(crate) use health::{
+    HealthFinding, HealthRule, HealthSeverity, HealthThresholds, detect_health,
 };
-pub use layout::{
-    LAYOUT_ALGORITHM_VERSION, LayoutBudget, LayoutEdge, LayoutRequest, LayoutResult,
-    LayoutSnapshot, LayoutSnapshotStore, PositionedNode, compute_layout, compute_layout_cached,
+pub(crate) use index::{
+    ArchitectureAspect, ArchitectureCluster, ArchitectureSummary, DependencyMatrix, GraphSchema,
+    KnowledgeIndex, NodeExplanation, PathResult, SearchParams, TraceDirection, TraceParams,
+    TraceResult,
 };
-pub use model::{
-    ArtifactNode, CommandNode, CommandProvenance, ConfigNode, ConfigNodeKind, ContainerImageNode,
-    DocumentationNode, EnvVarNode, Graph, GraphNode, GraphNodeId, ModuleLanguage, ModuleNode,
-    PackageNode, Relation, RelationKind, RelationProvenance, RelationResolution, SymbolKind,
-    SymbolNode, UnresolvedNode,
+pub(crate) use layout::{
+    LayoutRequest, LayoutSnapshotStore, compute_layout, compute_layout_cached,
 };
-pub use parity_benchmark::{ParityBenchmark, measure as measure_parity_benchmark};
-pub use pipeline::{
-    GRAPH_BUILD_PASS_ORDER, GRAPH_BUILD_PIPELINE_VERSION, GRAPH_BUILD_TRACE_VERSION,
-    GraphBuildOutput, GraphBuildPass, GraphBuildPassResult, GraphBuildStageTrace, GraphBuildTrace,
+pub(crate) use model::{
+    ArtifactNode, CommandProvenance, ConfigNodeKind, Graph, GraphNode, GraphNodeId, ModuleLanguage,
+    ModuleNode, Relation, RelationKind, RelationProvenance, RelationResolution, SymbolKind,
+};
+// Node-variant types other modules only reference from their own tests.
+#[cfg(test)]
+pub(crate) use model::{
+    CommandNode, ConfigNode, ContainerImageNode, EnvVarNode, PackageNode, SymbolNode,
+    UnresolvedNode,
+};
+#[cfg(test)]
+pub(crate) use pipeline::GRAPH_BUILD_PASS_ORDER;
+pub(crate) use pipeline::{
+    GRAPH_BUILD_PIPELINE_VERSION, GraphBuildOutput, GraphBuildPass, GraphBuildStageTrace,
     GraphBuildTraceConfig, GraphBuildTraceDetail, GraphDecisionTrace,
 };
-pub use report::{GraphReport, graph_report_path, persist_graph_report};
-pub use semantic::{
-    SemanticClassMatch, SemanticClassProfile, SemanticScore, class_profiles, filter_classes,
+pub(crate) use report::{GraphReport, persist_graph_report};
+pub(crate) use semantic::filter_classes;
+pub(crate) use store::{
+    GRAPH_MODEL_VERSION, GRAPH_STORE_SCHEMA_VERSION, GraphArtifactReport, GraphStore,
 };
-pub use store::{
-    GRAPH_ARTIFACT_FORMAT_VERSION, GRAPH_MODEL_VERSION, GRAPH_STORE_SCHEMA_VERSION,
-    GraphArtifactMetadata, GraphArtifactReport, GraphSnapshot, GraphStore, GraphStoreMetadata,
-    GraphStoreWriteOutcome,
+pub(crate) use tags::{
+    GraphTag, TagIndex, TagSource, cluster_display_tags, derive_tags, relation_display_tags,
+    resolve_expression, tension_display_tags,
 };
-pub use tags::{
-    GraphTag, TagIndex, TagSource, cluster_display_tags, derive_tags, inherit_tag,
-    relation_display_tags, resolve_expression, tension_display_tags,
-};
-pub use tensions::{
-    RepositoryTension, TENSION_ALGORITHM_VERSION, TensionCategory, TensionSnapshot,
-    TensionSnapshotStore, score_tensions,
-};
-pub use validate::{GraphIssue, GraphIssueKind, GraphValidator};
+#[cfg(test)]
+pub(crate) use tensions::TensionCategory;
+pub(crate) use tensions::{RepositoryTension, score_tensions};
+#[cfg(test)]
+pub(crate) use validate::GraphIssueKind;
+pub(crate) use validate::{GraphIssue, GraphValidator};
 pub(crate) use validate::{NodeKindTag, node_kind_tag, target_kind_allowed};

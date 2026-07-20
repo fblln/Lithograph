@@ -4,16 +4,13 @@ use crate::domain::Confidence;
 use crate::graph::{
     Graph, GraphNodeId, HealthRule, HealthSeverity, HealthThresholds, detect_health,
 };
-use crate::storage::JsonStore;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// Versioned semantics for repository-tension scoring.
-pub const TENSION_ALGORITHM_VERSION: u32 = 1;
 /// First-class tension categories shared by non-UI and UI consumers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[allow(missing_docs)]
-pub enum TensionCategory {
+pub(crate) enum TensionCategory {
     CouplingHotspot,
     DependencyCycle,
     BridgeBottleneck,
@@ -27,7 +24,7 @@ pub enum TensionCategory {
 /// Typed explainable repository tension.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(missing_docs)]
-pub struct RepositoryTension {
+pub(crate) struct RepositoryTension {
     pub id: String,
     pub category: TensionCategory,
     pub severity: HealthSeverity,
@@ -43,58 +40,8 @@ pub struct RepositoryTension {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<crate::graph::GraphTag>,
 }
-/// A graph-snapshot-bound tension result.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[allow(missing_docs)]
-pub struct TensionSnapshot {
-    pub graph_snapshot_id: String,
-    pub algorithm_version: u32,
-    pub tensions: Vec<RepositoryTension>,
-}
-/// JSON persistence for typed tension snapshots.
-#[derive(Debug, Clone)]
-#[allow(missing_docs)]
-pub struct TensionSnapshotStore {
-    root: std::path::PathBuf,
-}
-#[allow(missing_docs)]
-impl TensionSnapshotStore {
-    pub fn new(root: impl Into<std::path::PathBuf>) -> Self {
-        Self { root: root.into() }
-    }
-    pub fn save(&self, snapshot: &TensionSnapshot) -> std::io::Result<bool> {
-        let payload = serde_json::to_string(snapshot).map_err(std::io::Error::other)?;
-        let path = self.path(snapshot);
-        if JsonStore.read::<String>(&path)?.as_deref() == Some(payload.as_str()) {
-            return Ok(false);
-        }
-        JsonStore.write(&path, &payload)?;
-        Ok(true)
-    }
-    pub fn load(&self, snapshot: &TensionSnapshot) -> std::io::Result<Option<TensionSnapshot>> {
-        let Some(payload): Option<String> = JsonStore.read(&self.path(snapshot))? else {
-            return Ok(None);
-        };
-        serde_json::from_str(&payload)
-            .map(Some)
-            .map_err(std::io::Error::other)
-    }
-    fn path(&self, snapshot: &TensionSnapshot) -> std::path::PathBuf {
-        self.root.join(format!(
-            "{}.json",
-            blake3::hash(
-                format!(
-                    "{}:{}",
-                    snapshot.graph_snapshot_id, snapshot.algorithm_version
-                )
-                .as_bytes()
-            )
-            .to_hex()
-        ))
-    }
-}
 /// Scores health, graph-impact, and supplied drift evidence without UI recomputation.
-pub fn score_tensions(
+pub(crate) fn score_tensions(
     graph: &Graph,
     thresholds: &HealthThresholds,
     drift_evidence: &[String],
@@ -237,19 +184,5 @@ mod tests {
                 &["docs/a.md".into()]
             )
         );
-    }
-    #[test]
-    fn snapshots_round_trip_without_rewriting() -> Result<(), Box<dyn std::error::Error>> {
-        let snapshot = TensionSnapshot {
-            graph_snapshot_id: "g1".into(),
-            algorithm_version: TENSION_ALGORITHM_VERSION,
-            tensions: vec![],
-        };
-        let temp = tempfile::TempDir::new()?;
-        let store = TensionSnapshotStore::new(temp.path());
-        assert!(store.save(&snapshot)?);
-        assert!(!store.save(&snapshot)?);
-        assert_eq!(store.load(&snapshot)?, Some(snapshot));
-        Ok(())
     }
 }

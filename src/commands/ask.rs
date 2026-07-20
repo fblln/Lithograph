@@ -1,7 +1,7 @@
 //! `ask` and `mcp-export`: deterministic local question answering and
 //! MCP-style JSON export over generated Lithograph docs.
 
-use crate::ask::{McpExport, WikiSearch, render_ask_table};
+use crate::agent::ask::{McpExport, WikiSearch, render_ask_table};
 use crate::cli::{AskArgs, McpExportArgs, OutputFormat};
 use std::io::Write;
 

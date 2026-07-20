@@ -1,21 +1,16 @@
 //! Reusable `KnowledgeAgent` framework (LIT-22.6.2): promotes the ad-hoc
 //! deterministic agent shape already used internally by `research.rs` into
-//! a general framework both research agents (LIT-22.6.3) and editor agents
-//! (LIT-22.6.4) build on. An agent declares which named data sources it
-//! needs (required vs. optional), an optional prompt template id for
-//! agents that call a model, and post-processing/validation hooks; the
-//! framework resolves data sources and runs the agent, failing clearly on
-//! a missing *required* source and recording (without failing) a missing
-//! *optional* one.
+//! a general framework the research agents (LIT-22.6.3) build on. An agent
+//! declares which named data sources it requires and post-processing/
+//! validation hooks; the framework resolves those sources and runs the
+//! agent, failing clearly on a missing required source or a failed
+//! validation.
 
-use crate::adr::AdrRecord;
 use crate::domain::Artifact;
-use crate::drift::DriftReport;
 use crate::graph::Graph;
 use crate::plan::DocumentationModule;
-use crate::research::ResearchBrief;
 use serde::Serialize;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 
 /// A named fact an agent can declare a dependency on. Concrete and
@@ -24,20 +19,13 @@ use std::fmt::{Display, Formatter};
 /// registry would be more general but less type-safe for no real benefit
 /// at this scale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum DataSourceKey {
+pub(crate) enum DataSourceKey {
     /// Repository artifact inventory.
     Artifacts,
     /// Built and validated semantic graph.
     Graph,
     /// Planned documentation modules.
     Modules,
-    /// Already-computed research brief (available to agents that run
-    /// after the deterministic research pass, e.g. editor agents).
-    ResearchBrief,
-    /// Persisted architecture decision records (LIT-22.5.4).
-    AdrRecords,
-    /// Deterministic documentation/intent drift findings (LIT-22.5.3).
-    DriftReport,
 }
 
 impl Display for DataSourceKey {
@@ -46,59 +34,50 @@ impl Display for DataSourceKey {
             Self::Artifacts => "artifacts",
             Self::Graph => "graph",
             Self::Modules => "modules",
-            Self::ResearchBrief => "research_brief",
-            Self::AdrRecords => "adr_records",
-            Self::DriftReport => "drift_report",
         };
         formatter.write_str(name)
     }
 }
 
 /// One resolved data source value.
-pub enum DataSourceValue<'a> {
+pub(crate) enum DataSourceValue<'a> {
     /// See [`DataSourceKey::Artifacts`].
     Artifacts(&'a [Artifact]),
     /// See [`DataSourceKey::Graph`].
     Graph(&'a Graph),
     /// See [`DataSourceKey::Modules`].
     Modules(&'a [DocumentationModule]),
-    /// See [`DataSourceKey::ResearchBrief`].
-    ResearchBrief(&'a ResearchBrief),
-    /// See [`DataSourceKey::AdrRecords`].
-    AdrRecords(&'a [AdrRecord]),
-    /// See [`DataSourceKey::DriftReport`].
-    DriftReport(&'a DriftReport),
 }
 
 /// Registry of data sources available for one agent run. Built once per
 /// pipeline run and shared read-only across every agent that runs against
 /// it (agents never mutate the context; each returns its own typed output).
 #[derive(Default)]
-pub struct AgentContext<'a> {
+pub(crate) struct AgentContext<'a> {
     values: BTreeMap<DataSourceKey, DataSourceValue<'a>>,
 }
 
 impl<'a> AgentContext<'a> {
     /// Builds an empty context; call [`Self::with`] to populate it.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
     /// Inserts one data source, replacing any existing value for the same
     /// key.
     #[must_use]
-    pub fn with(mut self, key: DataSourceKey, value: DataSourceValue<'a>) -> Self {
+    pub(crate) fn with(mut self, key: DataSourceKey, value: DataSourceValue<'a>) -> Self {
         self.values.insert(key, value);
         self
     }
 
     /// Looks up one data source.
-    pub fn get(&self, key: DataSourceKey) -> Option<&DataSourceValue<'a>> {
+    pub(crate) fn get(&self, key: DataSourceKey) -> Option<&DataSourceValue<'a>> {
         self.values.get(&key)
     }
 
     /// Looks up the artifact inventory, when present.
-    pub fn artifacts(&self) -> Option<&'a [Artifact]> {
+    pub(crate) fn artifacts(&self) -> Option<&'a [Artifact]> {
         match self.get(DataSourceKey::Artifacts) {
             Some(DataSourceValue::Artifacts(artifacts)) => Some(artifacts),
             _ => None,
@@ -106,7 +85,7 @@ impl<'a> AgentContext<'a> {
     }
 
     /// Looks up the graph, when present.
-    pub fn graph(&self) -> Option<&'a Graph> {
+    pub(crate) fn graph(&self) -> Option<&'a Graph> {
         match self.get(DataSourceKey::Graph) {
             Some(DataSourceValue::Graph(graph)) => Some(graph),
             _ => None,
@@ -114,33 +93,9 @@ impl<'a> AgentContext<'a> {
     }
 
     /// Looks up the planned modules, when present.
-    pub fn modules(&self) -> Option<&'a [DocumentationModule]> {
+    pub(crate) fn modules(&self) -> Option<&'a [DocumentationModule]> {
         match self.get(DataSourceKey::Modules) {
             Some(DataSourceValue::Modules(modules)) => Some(modules),
-            _ => None,
-        }
-    }
-
-    /// Looks up the research brief, when present.
-    pub fn research_brief(&self) -> Option<&'a ResearchBrief> {
-        match self.get(DataSourceKey::ResearchBrief) {
-            Some(DataSourceValue::ResearchBrief(brief)) => Some(brief),
-            _ => None,
-        }
-    }
-
-    /// Looks up the ADR records, when present.
-    pub fn adr_records(&self) -> Option<&'a [AdrRecord]> {
-        match self.get(DataSourceKey::AdrRecords) {
-            Some(DataSourceValue::AdrRecords(records)) => Some(records),
-            _ => None,
-        }
-    }
-
-    /// Looks up the drift report, when present.
-    pub fn drift_report(&self) -> Option<&'a DriftReport> {
-        match self.get(DataSourceKey::DriftReport) {
-            Some(DataSourceValue::DriftReport(report)) => Some(report),
             _ => None,
         }
     }
@@ -148,33 +103,15 @@ impl<'a> AgentContext<'a> {
 
 /// Which data sources one agent needs (AC1).
 #[derive(Debug, Clone, Copy, Default)]
-pub struct DataSourceSpec {
+pub(crate) struct DataSourceSpec {
     /// Sources that must be present, or [`AgentError::MissingRequiredDataSource`]
     /// is returned before the agent ever runs.
     pub required: &'static [DataSourceKey],
-    /// Sources the agent can use if present, but runs without.
-    pub optional: &'static [DataSourceKey],
-}
-
-/// Which declared-optional data sources were actually missing this run,
-/// so an agent can adjust its output (or a caller can report reduced
-/// confidence) without treating absence as an error (AC2).
-#[derive(Debug, Clone, Default)]
-pub struct DataSourceResolution {
-    /// Optional keys declared by the agent that had no value in the context.
-    pub missing_optional: Vec<DataSourceKey>,
-}
-
-impl DataSourceResolution {
-    /// True when `key` was declared optional and had no value.
-    pub fn is_missing(&self, key: DataSourceKey) -> bool {
-        self.missing_optional.contains(&key)
-    }
 }
 
 /// A framework-level agent failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AgentError {
+pub(crate) enum AgentError {
     /// A data source the agent declared `required` had no value in the context.
     MissingRequiredDataSource(DataSourceKey),
     /// The agent's own [`KnowledgeAgent::validate`] rejected its output.
@@ -204,7 +141,7 @@ impl std::error::Error for AgentError {}
 /// source or a failed validation. Implementors only need [`Self::compute`]
 /// (and [`Self::data_sources`]); [`Self::post_process`] and
 /// [`Self::validate`] default to no-ops.
-pub trait KnowledgeAgent {
+pub(crate) trait KnowledgeAgent {
     /// Output report type. The type itself is this agent's output schema
     /// (AC1) -- Rust's type system already gives a precise, checked schema,
     /// so the framework doesn't duplicate it as a separate description.
@@ -218,19 +155,9 @@ pub trait KnowledgeAgent {
         DataSourceSpec::default()
     }
 
-    /// Stable prompt template id for agents that call a model (LIT-22.6.3/
-    /// LIT-22.6.4). Deterministic, template-free agents leave this `None`.
-    fn prompt_template(&self) -> Option<&'static str> {
-        None
-    }
-
     /// Computes this agent's output from the resolved context. Called only
     /// after every `required` data source is confirmed present.
-    fn compute(
-        &self,
-        context: &AgentContext<'_>,
-        resolution: &DataSourceResolution,
-    ) -> Self::Output;
+    fn compute(&self, context: &AgentContext<'_>) -> Self::Output;
 
     /// Adjusts computed output before validation (e.g. sorting, capping
     /// list length). Defaults to identity.
@@ -253,36 +180,17 @@ pub trait KnowledgeAgent {
                 return Err(AgentError::MissingRequiredDataSource(*key));
             }
         }
-        let missing_optional: Vec<DataSourceKey> = spec
-            .optional
-            .iter()
-            .copied()
-            .filter(|key| context.get(*key).is_none())
-            .collect();
-        let resolution = DataSourceResolution { missing_optional };
 
-        let output = self.post_process(self.compute(context, &resolution));
+        let output = self.post_process(self.compute(context));
         self.validate(&output).map_err(AgentError::Validation)?;
         Ok(output)
     }
 }
 
-/// Distinct data-source keys declared across `required`/`optional` in a
-/// [`DataSourceSpec`], useful for reporting which facts an agent touches
-/// without needing to run it.
-pub fn declared_keys(spec: &DataSourceSpec) -> BTreeSet<DataSourceKey> {
-    spec.required
-        .iter()
-        .chain(spec.optional.iter())
-        .copied()
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        AgentContext, AgentError, DataSourceKey, DataSourceResolution, DataSourceSpec,
-        DataSourceValue, KnowledgeAgent, declared_keys,
+        AgentContext, AgentError, DataSourceKey, DataSourceSpec, DataSourceValue, KnowledgeAgent,
     };
     use crate::domain::{
         Artifact, ArtifactCategory, ContentHash, RepoPath, SupportTier, TextStatus,
@@ -304,10 +212,9 @@ mod tests {
     #[derive(Debug, Clone, PartialEq, Serialize)]
     struct CountReport {
         artifact_count: usize,
-        used_optional_modules: bool,
     }
 
-    /// Requires `Artifacts`, optionally uses `Modules`.
+    /// Requires `Artifacts`.
     struct CountAgent;
 
     impl KnowledgeAgent for CountAgent {
@@ -320,20 +227,12 @@ mod tests {
         fn data_sources(&self) -> DataSourceSpec {
             DataSourceSpec {
                 required: &[DataSourceKey::Artifacts],
-                optional: &[DataSourceKey::Modules],
             }
         }
 
-        fn compute(
-            &self,
-            context: &AgentContext<'_>,
-            resolution: &DataSourceResolution,
-        ) -> Self::Output {
+        fn compute(&self, context: &AgentContext<'_>) -> Self::Output {
             let artifact_count = context.artifacts().map(<[_]>::len).unwrap_or(0);
-            CountReport {
-                artifact_count,
-                used_optional_modules: !resolution.is_missing(DataSourceKey::Modules),
-            }
+            CountReport { artifact_count }
         }
     }
 
@@ -352,8 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_optional_data_source_is_recorded_but_non_fatal()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn present_required_data_source_is_used() -> Result<(), Box<dyn std::error::Error>> {
         let artifacts = vec![artifact("a.py")?, artifact("b.py")?];
         let context = AgentContext::new().with(
             DataSourceKey::Artifacts,
@@ -362,31 +260,7 @@ mod tests {
 
         let report = CountAgent.run(&context)?;
 
-        assert_eq!(
-            report,
-            CountReport {
-                artifact_count: 2,
-                used_optional_modules: false,
-            }
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn present_optional_data_source_is_used() -> Result<(), Box<dyn std::error::Error>> {
-        let artifacts = vec![artifact("a.py")?];
-        let modules: Vec<crate::plan::DocumentationModule> = Vec::new();
-        let context = AgentContext::new()
-            .with(
-                DataSourceKey::Artifacts,
-                DataSourceValue::Artifacts(&artifacts),
-            )
-            .with(DataSourceKey::Modules, DataSourceValue::Modules(&modules));
-
-        let report = CountAgent.run(&context)?;
-
-        assert!(report.used_optional_modules);
+        assert_eq!(report, CountReport { artifact_count: 2 });
 
         Ok(())
     }
@@ -403,11 +277,7 @@ mod tests {
             "invalidating-report"
         }
 
-        fn compute(
-            &self,
-            _context: &AgentContext<'_>,
-            _resolution: &DataSourceResolution,
-        ) -> Self::Output {
+        fn compute(&self, _context: &AgentContext<'_>) -> Self::Output {
             AlwaysInvalidReport
         }
 
@@ -447,11 +317,7 @@ mod tests {
             "model-backed-report"
         }
 
-        fn compute(
-            &self,
-            _context: &AgentContext<'_>,
-            _resolution: &DataSourceResolution,
-        ) -> Self::Output {
+        fn compute(&self, _context: &AgentContext<'_>) -> Self::Output {
             let request = ModelRequest {
                 model: "mock".to_owned(),
                 prompt_version: "v1".to_owned(),
@@ -478,23 +344,6 @@ mod tests {
 
         assert_eq!(first, second);
         assert!(first.is_ok());
-    }
-
-    #[test]
-    fn declared_keys_merges_required_and_optional() {
-        let spec = DataSourceSpec {
-            required: &[DataSourceKey::Artifacts],
-            optional: &[DataSourceKey::Modules, DataSourceKey::Artifacts],
-        };
-
-        let keys = declared_keys(&spec);
-
-        assert_eq!(
-            keys,
-            [DataSourceKey::Artifacts, DataSourceKey::Modules]
-                .into_iter()
-                .collect()
-        );
     }
 
     #[test]

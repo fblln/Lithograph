@@ -10,7 +10,7 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 /// Current on-disk graph snapshot schema version.
-pub const GRAPH_STORE_SCHEMA_VERSION: u32 = 1;
+pub(crate) const GRAPH_STORE_SCHEMA_VERSION: u32 = 1;
 
 /// Current graph model version. This is separate from the store wrapper
 /// version so future graph shape changes can invalidate or migrate snapshots
@@ -24,14 +24,14 @@ pub const GRAPH_STORE_SCHEMA_VERSION: u32 = 1;
 /// 4: `GraphNode::Rationale` and `RelationKind::RationaleFor` (LIT-46).
 /// Rationale-prefixed comments become nodes explaining the symbol or
 /// artifact they sit inside.
-pub const GRAPH_MODEL_VERSION: u32 = 4;
+pub(crate) const GRAPH_MODEL_VERSION: u32 = 4;
 
 /// Current portable graph artifact envelope version.
-pub const GRAPH_ARTIFACT_FORMAT_VERSION: u32 = 1;
+pub(crate) const GRAPH_ARTIFACT_FORMAT_VERSION: u32 = 1;
 
 /// Versioned graph snapshot envelope persisted under `.lithograph/graph/`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GraphSnapshot {
+pub(crate) struct GraphSnapshot {
     /// Snapshot metadata.
     pub metadata: GraphStoreMetadata,
     /// Typed semantic graph.
@@ -49,7 +49,7 @@ struct GraphSnapshotRef<'a> {
 
 /// Metadata carried by every persisted graph snapshot.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GraphStoreMetadata {
+pub(crate) struct GraphStoreMetadata {
     /// Version of the snapshot envelope.
     pub schema_version: u32,
     /// Version of the graph model inside the envelope.
@@ -64,7 +64,7 @@ pub struct GraphStoreMetadata {
 
 /// Metadata for a compressed team-shareable graph artifact.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GraphArtifactMetadata {
+pub(crate) struct GraphArtifactMetadata {
     /// Portable artifact envelope version.
     pub artifact_format_version: u32,
     /// Compression algorithm used for the artifact file.
@@ -85,7 +85,7 @@ pub struct GraphArtifactMetadata {
 
 /// Summary of a graph artifact import/export operation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GraphArtifactReport {
+pub(crate) struct GraphArtifactReport {
     /// Artifact path read or written.
     pub artifact_path: PathBuf,
     /// Graph snapshot path read or written.
@@ -102,7 +102,7 @@ struct GraphArtifact {
 
 impl GraphSnapshot {
     /// Creates a current-version snapshot from a graph.
-    pub fn current(graph: Graph) -> Self {
+    pub(crate) fn current(graph: Graph) -> Self {
         Self {
             metadata: GraphStoreMetadata {
                 schema_version: GRAPH_STORE_SCHEMA_VERSION,
@@ -118,30 +118,30 @@ impl GraphSnapshot {
 
 /// Filesystem-backed graph store for one repository.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GraphStore {
+pub(crate) struct GraphStore {
     repo_root: PathBuf,
 }
 
 impl GraphStore {
     /// Creates a graph store rooted at one repository.
-    pub fn new(repo_root: &Path) -> Self {
+    pub(crate) fn new(repo_root: &Path) -> Self {
         Self {
             repo_root: repo_root.to_path_buf(),
         }
     }
 
     /// Path to the legacy graph export retained for compatibility.
-    pub fn legacy_graph_path(&self) -> PathBuf {
+    pub(crate) fn legacy_graph_path(&self) -> PathBuf {
         self.repo_root.join(".lithograph/graph.json")
     }
 
     /// Path to the current versioned graph snapshot.
-    pub fn snapshot_path(&self) -> PathBuf {
+    pub(crate) fn snapshot_path(&self) -> PathBuf {
         self.repo_root.join(".lithograph/graph/current.json")
     }
 
     /// Saves a current-version graph snapshot and the legacy graph export.
-    pub fn save(&self, graph: &Graph) -> io::Result<GraphStoreWriteOutcome> {
+    pub(crate) fn save(&self, graph: &Graph) -> io::Result<GraphStoreWriteOutcome> {
         // Persist a borrowing view so the snapshot never clones the graph. It
         // renders to the same JSON as `GraphSnapshot::current(graph.clone())`.
         let snapshot = GraphSnapshotRef {
@@ -169,7 +169,7 @@ impl GraphStore {
     /// Loads the versioned graph snapshot, falling back to the legacy graph
     /// export when a repository was generated before the store envelope
     /// existed.
-    pub fn load(&self) -> io::Result<GraphSnapshot> {
+    pub(crate) fn load(&self) -> io::Result<GraphSnapshot> {
         if let Some(snapshot) = JsonStore.read::<GraphSnapshot>(&self.snapshot_path())? {
             return migrate(snapshot);
         }
@@ -190,7 +190,7 @@ impl GraphStore {
 
     /// Exports the current graph snapshot as a gzip-compressed artifact with
     /// embedded schema metadata and a checksum over canonical snapshot JSON.
-    pub fn export_artifact(&self, artifact_path: &Path) -> io::Result<GraphArtifactReport> {
+    pub(crate) fn export_artifact(&self, artifact_path: &Path) -> io::Result<GraphArtifactReport> {
         let snapshot = self.load()?;
         let artifact = GraphArtifact {
             metadata: artifact_metadata(&snapshot)?,
@@ -207,7 +207,7 @@ impl GraphStore {
     /// Imports a gzip-compressed graph artifact after checksum and schema
     /// compatibility validation. A successful import writes the current
     /// versioned snapshot.
-    pub fn import_artifact(&self, artifact_path: &Path) -> io::Result<GraphArtifactReport> {
+    pub(crate) fn import_artifact(&self, artifact_path: &Path) -> io::Result<GraphArtifactReport> {
         let artifact = read_compressed_artifact(artifact_path)?;
         verify_artifact(&artifact)?;
         let snapshot = migrate(artifact.snapshot)?;
@@ -223,7 +223,7 @@ impl GraphStore {
 
 /// Result of a graph store save operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GraphStoreWriteOutcome {
+pub(crate) struct GraphStoreWriteOutcome {
     /// Versioned graph snapshot path.
     pub snapshot_path: PathBuf,
     /// Whether the versioned snapshot changed on disk.

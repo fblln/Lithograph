@@ -10,7 +10,7 @@ use tree_sitter::Node;
 
 /// Deep Python analysis output for one artifact.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct PythonAnalysis {
+pub(crate) struct PythonAnalysis {
     /// Dotted module path derived from the artifact path.
     pub module_path: String,
     /// True when this file is a package `__init__.py`.
@@ -46,7 +46,7 @@ pub struct PythonAnalysis {
 
 /// Import statement category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum PythonImportKind {
+pub(crate) enum PythonImportKind {
     /// `import a.b`, optionally `as` aliased.
     Import,
     /// `from a.b import c`, optionally `as` aliased.
@@ -55,7 +55,7 @@ pub enum PythonImportKind {
 
 /// One imported name, with its optional alias.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PythonImportName {
+pub(crate) struct PythonImportName {
     /// Imported name as written.
     pub name: String,
     /// `as` alias, when present.
@@ -64,7 +64,7 @@ pub struct PythonImportName {
 
 /// One `import` or `from ... import ...` statement.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PythonImport {
+pub(crate) struct PythonImport {
     /// Statement category.
     pub kind: PythonImportKind,
     /// From-clause dotted module, when present (`ImportFrom` only).
@@ -79,7 +79,7 @@ pub struct PythonImport {
 
 /// Module-level or nested class.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PythonClass {
+pub(crate) struct PythonClass {
     /// Class name.
     pub name: String,
     /// Base class expressions, as written.
@@ -96,7 +96,7 @@ pub struct PythonClass {
 
 /// Module-level function or method.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PythonFunction {
+pub(crate) struct PythonFunction {
     /// Function or method name.
     pub name: String,
     /// True for `async def`.
@@ -115,7 +115,7 @@ pub struct PythonFunction {
 
 /// Heuristic cross-artifact reference category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum PythonReferenceKind {
+pub(crate) enum PythonReferenceKind {
     /// Call to a function or class defined elsewhere in the same file.
     Call,
     /// `os.environ.get`/`os.getenv` environment variable read.
@@ -144,7 +144,7 @@ pub enum PythonReferenceKind {
 
 /// One heuristic reference extracted from a call expression.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PythonReference {
+pub(crate) struct PythonReference {
     /// Reference category.
     pub kind: PythonReferenceKind,
     /// Extracted literal value, or a best-effort raw expression when dynamic.
@@ -161,7 +161,7 @@ pub struct PythonReference {
 /// and other compound receivers carry no name a binding environment could
 /// type, so they are left out rather than guessed at.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PythonMemberCall {
+pub(crate) struct PythonMemberCall {
     /// Receiver identifier as written, e.g. `self` or `provider`.
     pub receiver: String,
     /// Called method name.
@@ -175,7 +175,7 @@ pub struct PythonMemberCall {
 
 /// LIT-57: one `name = Ctor(...)` binding, which types `name` as `Ctor`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PythonBinding {
+pub(crate) struct PythonBinding {
     /// Bound name.
     pub name: String,
     /// Constructor callee as written, e.g. `Provider` or `json.Provider`.
@@ -197,11 +197,11 @@ pub struct PythonBinding {
 /// instead, so `has_syntax_errors` on the result signals partial rather than
 /// total data loss.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct PythonAnalyzer;
+pub(crate) struct PythonAnalyzer;
 
 impl PythonAnalyzer {
     /// Parses and analyzes a safe Python artifact.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> PythonAnalysis {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> PythonAnalysis {
         if artifact.text_status != TextStatus::Text
             || artifact.model_policy == ModelExposurePolicy::Never
         {

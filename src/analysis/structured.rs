@@ -6,7 +6,7 @@ use serde_json::{Map, Number, Value};
 
 /// Supported structured configuration formats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum StructuredFormat {
+pub(crate) enum StructuredFormat {
     /// YAML document.
     Yaml,
     /// JSON document.
@@ -17,7 +17,7 @@ pub enum StructuredFormat {
 
 /// Structured analysis output for one configuration artifact.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct StructuredAnalysis {
+pub(crate) struct StructuredAnalysis {
     /// Config tree entities in deterministic walk order.
     pub entities: Vec<ConfigEntity>,
     /// Practical references extracted from scalar values and known config keys.
@@ -28,7 +28,7 @@ pub struct StructuredAnalysis {
 
 /// One config tree node.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ConfigEntity {
+pub(crate) struct ConfigEntity {
     /// Stable config path such as `$`, `service.image`, or `required[0]`.
     pub config_path: String,
     /// Node value kind.
@@ -41,7 +41,7 @@ pub struct ConfigEntity {
 
 /// Config value category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ConfigValueKind {
+pub(crate) enum ConfigValueKind {
     /// Mapping/object value.
     Object,
     /// Sequence/array value.
@@ -58,7 +58,7 @@ pub enum ConfigValueKind {
 
 /// Reference category extracted from config.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum ConfigReferenceKind {
+pub(crate) enum ConfigReferenceKind {
     /// Local or absolute path-like value.
     Path,
     /// URL value.
@@ -77,7 +77,7 @@ pub enum ConfigReferenceKind {
 
 /// Config reference with structured-path evidence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ConfigReference {
+pub(crate) struct ConfigReference {
     /// Reference kind.
     pub kind: ConfigReferenceKind,
     /// Extracted reference value.
@@ -90,11 +90,11 @@ pub struct ConfigReference {
 
 /// Parser-backed analyzer for YAML, JSON, and TOML.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct StructuredAnalyzer;
+pub(crate) struct StructuredAnalyzer;
 
 impl StructuredAnalyzer {
     /// Parses and analyzes a safe structured text artifact.
-    pub fn analyze(
+    pub(crate) fn analyze(
         &self,
         artifact: &Artifact,
         text: &str,

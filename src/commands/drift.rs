@@ -3,9 +3,9 @@
 //! model.
 
 use crate::cli::{DriftArgs, OutputFormat};
-use crate::drift::{DriftDetector, DriftReport};
 use crate::graph::GraphBuilder;
 use crate::inventory::{RepositoryWalker, WalkOptions};
+use crate::knowledge::drift::{DriftDetector, DriftReport};
 use std::io::Write;
 
 pub(crate) fn execute_drift<W>(

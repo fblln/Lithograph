@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// Deterministic response used by MCP generation, refinement, and validation tools.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(missing_docs)]
-pub struct SubsystemDocument {
+pub(crate) struct SubsystemDocument {
     pub subsystem_id: String,
     pub graph_snapshot_id: String,
     pub prompt_version: String,
@@ -23,16 +23,16 @@ pub struct SubsystemDocument {
 }
 /// Snapshot-bound persistence for generated and refined subsystem documents.
 #[derive(Debug, Clone)]
-pub struct SubsystemDocumentStore {
+pub(crate) struct SubsystemDocumentStore {
     root: std::path::PathBuf,
 }
 impl SubsystemDocumentStore {
     /// Creates a store rooted at `.lithograph/subsystem-docs`.
-    pub fn new(root: impl Into<std::path::PathBuf>) -> Self {
+    pub(crate) fn new(root: impl Into<std::path::PathBuf>) -> Self {
         Self { root: root.into() }
     }
     /// Writes only changed document payloads.
-    pub fn save(&self, document: &SubsystemDocument) -> std::io::Result<bool> {
+    pub(crate) fn save(&self, document: &SubsystemDocument) -> std::io::Result<bool> {
         let payload = serde_json::to_string(document).map_err(std::io::Error::other)?;
         let path = self.path(document);
         if JsonStore.read::<String>(&path)?.as_deref() == Some(payload.as_str()) {
@@ -42,7 +42,8 @@ impl SubsystemDocumentStore {
         Ok(true)
     }
     /// Loads a saved document only when it matches the requested graph snapshot.
-    pub fn load_current(
+    #[cfg(test)]
+    pub(crate) fn load_current(
         &self,
         subsystem: &str,
         graph_snapshot_id: &str,
@@ -66,7 +67,7 @@ impl SubsystemDocumentStore {
     }
 }
 /// Lists documentable graph subsystems from stable node-id prefixes.
-pub fn list_subsystems(graph: &Graph) -> Vec<String> {
+pub(crate) fn list_subsystems(graph: &Graph) -> Vec<String> {
     let mut values: Vec<_> = graph
         .nodes
         .iter()
@@ -84,7 +85,7 @@ pub fn list_subsystems(graph: &Graph) -> Vec<String> {
     values
 }
 /// Generates deterministic, evidence-limited subsystem documentation from graph facts only.
-pub fn generate_subsystem_doc(
+pub(crate) fn generate_subsystem_doc(
     graph: &Graph,
     subsystem: &str,
     snapshot: &str,
@@ -101,7 +102,7 @@ pub fn generate_subsystem_doc(
 }
 
 /// Generates a document constrained to a caller-resolved tag scope.
-pub fn generate_subsystem_doc_for_nodes(
+pub(crate) fn generate_subsystem_doc_for_nodes(
     graph: &Graph,
     subsystem: &str,
     snapshot: &str,

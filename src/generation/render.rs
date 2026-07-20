@@ -173,7 +173,7 @@ fn validate_mermaid_fences(body: &str) -> Vec<String> {
                 // AC1: node ids must be ASCII, with labels kept separate
                 // in brackets, so a page fails validation before it's
                 // ever written rather than shipping a broken diagram.
-                for detail in crate::mermaid::validate_node_ids(&fence_body) {
+                for detail in crate::docs::mermaid::validate_node_ids(&fence_body) {
                     issues.push(format!(
                         "Mermaid block starting at line {block_start}: {detail}"
                     ));

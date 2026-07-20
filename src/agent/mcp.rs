@@ -1,10 +1,13 @@
 //! Minimal deterministic MCP-like JSON-line server over generated wiki data.
 
-use crate::ask::WikiSearch;
-use crate::docs_model::{GraphDocument, GraphDocumentSection};
-use crate::graph::analytics::{
-    BetweennessPolicy, MetricScope, betweenness, degree_metrics, page_rank,
+use crate::agent::ask::WikiSearch;
+use crate::docs::docs_model::{GraphDocument, GraphDocumentSection};
+use crate::docs::graph_docs::generate_graph_docs;
+use crate::docs::subsystem_docs::{
+    SubsystemDocumentStore, generate_subsystem_doc, generate_subsystem_doc_for_nodes,
+    list_subsystems,
 };
+use crate::graph::analytics::{BetweennessPolicy, betweenness, degree_metrics, page_rank};
 use crate::graph::index::{node_label, node_name};
 use crate::graph::{
     ArchitectureAspect, Graph, GraphNode, GraphNodeId, GraphStore, KnowledgeIndex, LayoutRequest,
@@ -13,20 +16,15 @@ use crate::graph::{
     resolve_expression, tension_display_tags,
 };
 use crate::graph::{HealthThresholds, detect_health, score_tensions};
-use crate::graph_docs::generate_graph_docs;
 use crate::inventory::{RepositoryWalker, WalkOptions};
-use crate::plan::ModulePlanner;
-use crate::research_feedback::{
+use crate::knowledge::research_feedback::{
     AnswerOutcome, AnswerResultInput, ResearchFeedbackStore, unix_timestamp_now,
 };
+use crate::plan::ModulePlanner;
 use crate::resolve::explain_environment;
+use crate::retrieval::search::{CodeSearch, CodeSearchParams};
 use crate::run::{RepositorySnapshot, RunMetadata};
-use crate::search::{CodeSearch, CodeSearchParams};
 use crate::storage::JsonStore;
-use crate::subsystem_docs::{
-    SubsystemDocumentStore, generate_subsystem_doc, generate_subsystem_doc_for_nodes,
-    list_subsystems,
-};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -37,7 +35,7 @@ use std::path::{Component, Path, PathBuf};
 /// AC1/AC2): deterministic and schema-like enough for a caller to
 /// discover what's available without guessing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub struct McpToolInfo {
+pub(crate) struct McpToolInfo {
     /// Stable tool name, passed as `McpRequest.tool`.
     pub name: &'static str,
     /// What the tool does and, where not obvious, its required params.
@@ -48,7 +46,7 @@ pub struct McpToolInfo {
 /// source of truth for both the `list_tools` response and the wiki
 /// export's tool listing (AC4), so the two can never silently drift
 /// apart as new tools are added.
-pub const MCP_TOOLS: &[McpToolInfo] = &[
+pub(crate) const MCP_TOOLS: &[McpToolInfo] = &[
     McpToolInfo {
         name: "list_tools",
         description: "Lists every tool this server implements.",
@@ -225,7 +223,7 @@ pub const MCP_TOOLS: &[McpToolInfo] = &[
 
 /// One request accepted by the local server.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct McpRequest {
+pub(crate) struct McpRequest {
     /// Client-provided request id.
     pub id: Value,
     /// Tool name: read_wiki_structure, read_wiki_contents, graph tools, or ask_question.
@@ -237,7 +235,7 @@ pub struct McpRequest {
 
 /// One response emitted by the local server.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct McpResponse {
+pub(crate) struct McpResponse {
     /// Echoed request id.
     pub id: Value,
     /// Response payload on success.
@@ -308,20 +306,20 @@ struct RelatedRelation {
 
 /// Deterministic wiki MCP handler.
 #[derive(Debug, Clone)]
-pub struct WikiMcpServer {
+pub(crate) struct WikiMcpServer {
     repo_root: PathBuf,
 }
 
 impl WikiMcpServer {
     /// Creates a server bound to one generated repository.
-    pub fn new(repo_root: &Path) -> Self {
+    pub(crate) fn new(repo_root: &Path) -> Self {
         Self {
             repo_root: repo_root.to_path_buf(),
         }
     }
 
     /// Handles one request without live model or network calls.
-    pub fn handle(&self, request: McpRequest) -> McpResponse {
+    pub(crate) fn handle(&self, request: McpRequest) -> McpResponse {
         match self.handle_result(&request) {
             Ok(result) => McpResponse {
                 id: request.id,
@@ -600,12 +598,11 @@ impl WikiMcpServer {
             }
             "get_graph_analytics" => {
                 let graph = self.load_graph()?;
-                let scope = MetricScope::Combined;
-                let degrees = degree_metrics(&graph, &scope);
-                let pagerank = page_rank(&graph, &scope, 20)
+                let degrees = degree_metrics(&graph);
+                let pagerank = page_rank(&graph, 20)
                     .into_iter()
                     .collect::<std::collections::BTreeMap<_, _>>();
-                let between = betweenness(&graph, &scope, BetweennessPolicy::default())
+                let between = betweenness(&graph, BetweennessPolicy::default())
                     .into_iter()
                     .collect::<std::collections::BTreeMap<_, _>>();
                 let nodes = degrees
@@ -717,7 +714,7 @@ impl WikiMcpServer {
                 ))?)
             }
             "search_fulltext" => {
-                let index: crate::fts::FtsIndex = JsonStore
+                let index: crate::retrieval::fts::FtsIndex = JsonStore
                     .read(&self.repo_root.join(".lithograph/fts-index.json"))?
                     .ok_or("no FTS index found; run init or update first")?;
                 let query = request
@@ -748,12 +745,12 @@ impl WikiMcpServer {
                     .unwrap_or_default();
                 // Deterministic and offline, matching this server's design
                 // (LIT-22.4.4 AC3): no live model or network call.
-                let results = crate::semantic_search::SemanticSearch.search(
-                    &crate::semantic_search::MockEmbeddingProvider,
+                let results = crate::retrieval::semantic_search::SemanticSearch.search(
+                    &crate::retrieval::semantic_search::MockEmbeddingProvider,
                     &graph,
                     query,
                     limit,
-                    crate::semantic_search::SemanticSearchWeights::default(),
+                    crate::retrieval::semantic_search::SemanticSearchWeights::default(),
                 )?;
                 Ok(serde_json::to_value(results)?)
             }
@@ -764,8 +761,8 @@ impl WikiMcpServer {
                     .get("query")
                     .and_then(Value::as_str)
                     .ok_or("query_graph requires params.query")?;
-                let query = crate::query::parse(text)?;
-                Ok(serde_json::to_value(crate::query::evaluate(
+                let query = crate::retrieval::query::parse(text)?;
+                Ok(serde_json::to_value(crate::retrieval::query::evaluate(
                     &query, &graph,
                 ))?)
             }
@@ -800,11 +797,13 @@ impl WikiMcpServer {
                 };
                 let artifacts = RepositoryWalker::new(walk_options).walk(&self.repo_root)?;
                 let graph = self.load_graph()?;
-                Ok(serde_json::to_value(crate::drift::DriftDetector.scan(
-                    &artifacts,
-                    &graph,
-                    &self.repo_root,
-                ))?)
+                Ok(serde_json::to_value(
+                    crate::knowledge::drift::DriftDetector.scan(
+                        &artifacts,
+                        &graph,
+                        &self.repo_root,
+                    ),
+                )?)
             }
             "get_architecture" => {
                 let graph = self.load_graph()?;
@@ -832,7 +831,7 @@ impl WikiMcpServer {
                     .ok_or("create_adr requires params.decision")?;
                 let consequences = params.get("consequences").and_then(Value::as_str);
                 Ok(serde_json::to_value(
-                    crate::adr::AdrStore::new(&self.repo_root).create(
+                    crate::docs::adr::AdrStore::new(&self.repo_root).create(
                         title,
                         context,
                         decision,
@@ -847,7 +846,7 @@ impl WikiMcpServer {
                     .and_then(Value::as_str)
                     .ok_or("get_adr requires params.id")?;
                 Ok(serde_json::to_value(
-                    crate::adr::AdrStore::new(&self.repo_root).get(id)?,
+                    crate::docs::adr::AdrStore::new(&self.repo_root).get(id)?,
                 )?)
             }
             "update_adr" => {
@@ -856,7 +855,7 @@ impl WikiMcpServer {
                     .get("id")
                     .and_then(Value::as_str)
                     .ok_or("update_adr requires params.id")?;
-                let store = crate::adr::AdrStore::new(&self.repo_root);
+                let store = crate::docs::adr::AdrStore::new(&self.repo_root);
                 let mut record = store.get(id)?;
                 if let (Some(section), Some(value)) = (
                     params.get("section").and_then(Value::as_str),
@@ -876,11 +875,11 @@ impl WikiMcpServer {
                     .get("id")
                     .and_then(Value::as_str)
                     .ok_or("delete_adr requires params.id")?;
-                crate::adr::AdrStore::new(&self.repo_root).delete(id)?;
+                crate::docs::adr::AdrStore::new(&self.repo_root).delete(id)?;
                 Ok(json!({ "deleted": id }))
             }
             "list_adrs" => Ok(serde_json::to_value(
-                crate::adr::AdrStore::new(&self.repo_root).list(),
+                crate::docs::adr::AdrStore::new(&self.repo_root).list(),
             )?),
             "ask_question" => {
                 let question = request
@@ -939,7 +938,11 @@ impl WikiMcpServer {
     }
 
     /// Runs a JSON-line request loop until EOF.
-    pub fn run<R, W>(&self, reader: R, writer: &mut W) -> Result<(), Box<dyn std::error::Error>>
+    pub(crate) fn run<R, W>(
+        &self,
+        reader: R,
+        writer: &mut W,
+    ) -> Result<(), Box<dyn std::error::Error>>
     where
         R: BufRead,
         W: Write,
@@ -1470,9 +1473,11 @@ fn architecture_aspects(
     Ok(Some(parsed))
 }
 
-/// Parses one `params.status` string into [`crate::adr::AdrStatus`] with a
+/// Parses one `params.status` string into [`crate::docs::adr::AdrStatus`] with a
 /// validation error for an unrecognized value.
-fn adr_status_from_str(status: &str) -> Result<crate::adr::AdrStatus, Box<dyn std::error::Error>> {
+fn adr_status_from_str(
+    status: &str,
+) -> Result<crate::docs::adr::AdrStatus, Box<dyn std::error::Error>> {
     serde_json::from_value(Value::String(status.to_owned()))
         .map_err(|error| format!("invalid params.status `{status}`: {error}").into())
 }
@@ -1483,9 +1488,9 @@ mod tests {
         MCP_TOOLS, McpRequest, StoredGraphDocument, WikiMcpServer, graph_document_response,
         regenerate_graph_document,
     };
+    use crate::docs::graph_docs::generate_graph_docs;
     use crate::generation::MockModel;
     use crate::graph::{Graph, GraphStore};
-    use crate::graph_docs::generate_graph_docs;
     use crate::orchestrate::run_init;
     use serde_json::Value;
     use serde_json::json;
@@ -2550,7 +2555,7 @@ mod tests {
             assert!(names.contains(&expected.to_owned()), "missing {expected}");
         }
 
-        let export = crate::ask::WikiSearch.export(temp.path(), None)?;
+        let export = crate::agent::ask::WikiSearch.export(temp.path(), None)?;
         assert_eq!(names, export.tools);
 
         Ok(())

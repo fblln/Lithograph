@@ -1,12 +1,13 @@
 //! Package summaries and declared-dependency lookups.
 
 use super::KnowledgeIndex;
+#[cfg(test)]
 use crate::graph::{GraphNode, RelationKind};
 use serde::{Deserialize, Serialize};
 
 /// Package summary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PackageSummary {
+pub(crate) struct PackageSummary {
     /// Package name.
     pub name: String,
     /// True when external to the repository.
@@ -23,7 +24,8 @@ impl<'a> KnowledgeIndex<'a> {
     /// edge to, local or external. `package_name` matches a `Package` node's
     /// name exactly (e.g. a registry id from a manifest analyzer), not a
     /// substring.
-    pub fn package_dependencies(&self, package_name: &str) -> Vec<PackageSummary> {
+    #[cfg(test)]
+    pub(crate) fn package_dependencies(&self, package_name: &str) -> Vec<PackageSummary> {
         let degree = self.degree_index();
         let node_by_id = self.node_by_id();
         let Some(source_id) = self.graph.nodes.iter().find_map(|node| match node {

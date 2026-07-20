@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 /// How a barrel republishes names from another module.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ReExportKind {
+pub(crate) enum ReExportKind {
     /// `export * from './a'` -- every name, unrenamed.
     Star,
     /// `export { A as B } from './b'` -- `A` in the target, `B` here.
@@ -31,7 +31,7 @@ pub enum ReExportKind {
 /// One `export ... from` statement, with its specifier already resolved to the
 /// artifact paths it could name.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReExport {
+pub(crate) struct ReExport {
     /// Candidate artifact paths for the specifier, most likely first. More
     /// than one is normal: `./util` may be `util.ts` or `util/index.ts`.
     pub targets: Vec<String>,
@@ -40,7 +40,7 @@ pub struct ReExport {
 }
 
 /// Re-export statements by the artifact path that contains them.
-pub type ReExportMap = BTreeMap<String, Vec<ReExport>>;
+pub(crate) type ReExportMap = BTreeMap<String, Vec<ReExport>>;
 
 /// How many barrel hops to follow before giving up.
 ///
@@ -60,7 +60,7 @@ const MAX_BARREL_DEPTH: usize = 8;
 /// Deterministic: results are collected through sorted structures and the
 /// traversal is breadth-first from `origin`, so nearer declarations come
 /// first and the order never depends on map iteration.
-pub fn barrel_targets(
+pub(crate) fn barrel_targets(
     origin: &str,
     symbol: &str,
     re_exports: &ReExportMap,

@@ -27,7 +27,7 @@ const CLUSTER_TOP_NODES: usize = 5;
 /// One functional architecture community (LIT-22.5.1): a connected
 /// component over [`CLUSTER_EDGE_KINDS`] edges.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ArchitectureCluster {
+pub(crate) struct ArchitectureCluster {
     /// Stable id, derived from the cluster's lexicographically-smallest
     /// member id (deterministic across runs of an unchanged graph).
     pub id: String,
@@ -62,7 +62,7 @@ impl<'a> KnowledgeIndex<'a> {
     /// ids and member order derive only from node/relation ids already
     /// sorted by `Graph::to_json`'s invariants, never from map iteration
     /// order or wall-clock/random tie-breaks.
-    pub fn clusters(&self) -> Vec<ArchitectureCluster> {
+    pub(crate) fn clusters(&self) -> Vec<ArchitectureCluster> {
         let mut parent: BTreeMap<GraphNodeId, GraphNodeId> = BTreeMap::new();
         for relation in &self.graph.relations {
             if !CLUSTER_EDGE_KINDS.contains(&relation.kind) {

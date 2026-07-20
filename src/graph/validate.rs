@@ -40,12 +40,12 @@ impl Display for GraphIssue {
 /// targets, evidence pointing at unknown artifacts, and evidence spans past
 /// the end of their artifact.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct GraphValidator;
+pub(crate) struct GraphValidator;
 
 impl GraphValidator {
     /// Validates `graph` against the artifacts it was built from. An empty
     /// result means the graph is valid.
-    pub fn validate(&self, graph: &Graph, artifacts: &[Artifact]) -> Vec<GraphIssue> {
+    pub(crate) fn validate(&self, graph: &Graph, artifacts: &[Artifact]) -> Vec<GraphIssue> {
         let node_ids: BTreeSet<&GraphNodeId> = graph.nodes.iter().map(GraphNode::id).collect();
         let node_kinds: BTreeMap<&GraphNodeId, NodeKindTag> = graph
             .nodes

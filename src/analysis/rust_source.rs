@@ -10,7 +10,7 @@ use tree_sitter::Node;
 
 /// Deep Rust analysis output for one `.rs` artifact.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct RustAnalysis {
+pub(crate) struct RustAnalysis {
     /// `::`-joined module path derived from the artifact path.
     pub module_path: String,
     /// True when this file is a crate root (`lib.rs`/`main.rs`).
@@ -41,7 +41,7 @@ pub struct RustAnalysis {
 
 /// One flattened `use` path.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RustUse {
+pub(crate) struct RustUse {
     /// `::`-joined imported path, or `path::*` for wildcard imports.
     pub path: String,
     /// `as` alias, when present.
@@ -52,7 +52,7 @@ pub struct RustUse {
 
 /// One `mod` declaration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RustModDeclaration {
+pub(crate) struct RustModDeclaration {
     /// Module name.
     pub name: String,
     /// True for `mod foo { ... }`; false for `mod foo;` (external file).
@@ -63,7 +63,7 @@ pub struct RustModDeclaration {
 
 /// Struct or enum declaration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RustItem {
+pub(crate) struct RustItem {
     /// Item name.
     pub name: String,
     /// Attribute expressions, as written, without the `#[` `]` wrapper.
@@ -76,7 +76,7 @@ pub struct RustItem {
 
 /// Trait declaration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RustTrait {
+pub(crate) struct RustTrait {
     /// Trait name.
     pub name: String,
     /// Attribute expressions, as written, without the `#[` `]` wrapper.
@@ -91,7 +91,7 @@ pub struct RustTrait {
 
 /// Top-level function declaration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RustFunction {
+pub(crate) struct RustFunction {
     /// Function name.
     pub name: String,
     /// Parameter names, in declaration order (`self` included when present).
@@ -108,7 +108,7 @@ pub struct RustFunction {
 
 /// `impl` or trait `impl` block.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RustImpl {
+pub(crate) struct RustImpl {
     /// Implementing type, as written.
     pub target_type: String,
     /// Implemented trait, when this is a trait impl.
@@ -121,7 +121,7 @@ pub struct RustImpl {
 
 /// One macro invocation, e.g. `format!(...)`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RustMacroInvocation {
+pub(crate) struct RustMacroInvocation {
     /// Macro name, without the trailing `!`.
     pub name: String,
     /// Evidence for the invocation.
@@ -130,7 +130,7 @@ pub struct RustMacroInvocation {
 
 /// Heuristic cross-artifact reference category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum RustReferenceKind {
+pub(crate) enum RustReferenceKind {
     /// `std::env::var`/`std::env::var_os` environment variable read.
     EnvRead,
     /// `std::process::Command::new` command invocation.
@@ -145,7 +145,7 @@ pub enum RustReferenceKind {
 
 /// One heuristic reference extracted from a call expression.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RustReference {
+pub(crate) struct RustReference {
     /// Reference category.
     pub kind: RustReferenceKind,
     /// Extracted literal value, or a best-effort raw expression when dynamic.
@@ -163,11 +163,11 @@ pub struct RustReference {
 /// recovers a partial tree instead, so `has_syntax_errors` on the result
 /// signals partial rather than total data loss.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct RustAnalyzer;
+pub(crate) struct RustAnalyzer;
 
 impl RustAnalyzer {
     /// Parses and analyzes a safe Rust artifact.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> RustAnalysis {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> RustAnalysis {
         if artifact.text_status != TextStatus::Text
             || artifact.model_policy == ModelExposurePolicy::Never
         {

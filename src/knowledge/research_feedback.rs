@@ -9,9 +9,9 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 /// On-disk schema for recorded answer outcomes.
-pub const ANSWER_RESULTS_SCHEMA_VERSION: u32 = 1;
+pub(crate) const ANSWER_RESULTS_SCHEMA_VERSION: u32 = 1;
 /// On-disk schema for reflected lessons.
-pub const RESEARCH_LESSONS_SCHEMA_VERSION: u32 = 1;
+pub(crate) const RESEARCH_LESSONS_SCHEMA_VERSION: u32 = 1;
 
 const SCORE_SCALE: i64 = 1_000_000;
 const HALF_LIFE_SECONDS: u64 = 30 * 24 * 60 * 60;
@@ -20,7 +20,7 @@ const CORROBORATION_THRESHOLD: u32 = 2;
 /// What happened after an answer was used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum AnswerOutcome {
+pub(crate) enum AnswerOutcome {
     /// The answer and cited evidence helped.
     Useful,
     /// The cited evidence did not answer the question.
@@ -46,7 +46,7 @@ impl FromStr for AnswerOutcome {
 
 /// Input accepted by CLI and MCP save-result surfaces.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AnswerResultInput {
+pub(crate) struct AnswerResultInput {
     /// Question that was answered.
     pub question: String,
     /// Answer whose outcome was observed.
@@ -63,7 +63,7 @@ pub struct AnswerResultInput {
 
 /// One immutable, content-addressed answer outcome.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AnswerResult {
+pub(crate) struct AnswerResult {
     /// Stable content-derived record id.
     pub id: String,
     /// Question that was answered.
@@ -98,7 +98,7 @@ impl Default for AnswerResultIndex {
 
 /// Aggregated evidence for one still-present graph node.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SourceLesson {
+pub(crate) struct SourceLesson {
     /// Stable graph node id.
     pub node_id: String,
     /// Signed fixed-point score, where 1,000,000 is one fresh useful signal.
@@ -113,7 +113,7 @@ pub struct SourceLesson {
 
 /// Replacement guidance retained from a corrected answer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CorrectionLesson {
+pub(crate) struct CorrectionLesson {
     /// Answer-result record that supplied this correction.
     pub result_id: String,
     /// Still-present graph node the correction concerns.
@@ -126,7 +126,7 @@ pub struct CorrectionLesson {
 
 /// Versioned deterministic reflection output.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ResearchLessons {
+pub(crate) struct ResearchLessons {
     /// Lessons artifact schema version.
     pub schema_version: u32,
     /// Caller-supplied time used for every decay calculation.
@@ -153,30 +153,30 @@ struct Aggregate {
 
 /// Repository-local feedback store under `.lithograph/research`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ResearchFeedbackStore {
+pub(crate) struct ResearchFeedbackStore {
     research_dir: PathBuf,
 }
 
 impl ResearchFeedbackStore {
     /// Creates a store rooted under one repository's research directory.
-    pub fn new(repo_root: &Path) -> Self {
+    pub(crate) fn new(repo_root: &Path) -> Self {
         Self {
             research_dir: repo_root.join(".lithograph/research"),
         }
     }
 
     /// Returns the versioned answer-result index path.
-    pub fn results_path(&self) -> PathBuf {
+    pub(crate) fn results_path(&self) -> PathBuf {
         self.research_dir.join("answer-results.json")
     }
 
     /// Returns the reflected lessons path.
-    pub fn lessons_path(&self) -> PathBuf {
+    pub(crate) fn lessons_path(&self) -> PathBuf {
         self.research_dir.join("lessons.json")
     }
 
     /// Validates and records an outcome. Identical content is idempotent.
-    pub fn save_result(&self, input: AnswerResultInput) -> io::Result<AnswerResult> {
+    pub(crate) fn save_result(&self, input: AnswerResultInput) -> io::Result<AnswerResult> {
         let question = required_text("question", input.question)?;
         let answer = required_text("answer", input.answer)?;
         let correction = input.correction.map(|value| value.trim().to_owned());
@@ -241,7 +241,7 @@ impl ResearchFeedbackStore {
     }
 
     /// Reflects saved outcomes, dropping citations absent from `graph`.
-    pub fn reflect(&self, graph: &Graph, now: u64) -> io::Result<ResearchLessons> {
+    pub(crate) fn reflect(&self, graph: &Graph, now: u64) -> io::Result<ResearchLessons> {
         let index: AnswerResultIndex = JsonStore.read(&self.results_path())?.unwrap_or_default();
         validate_results_schema(index.schema_version)?;
         let valid_nodes = graph
@@ -255,7 +255,7 @@ impl ResearchFeedbackStore {
     }
 
     /// Reads the most recently reflected lessons.
-    pub fn read_lessons(&self) -> io::Result<ResearchLessons> {
+    pub(crate) fn read_lessons(&self) -> io::Result<ResearchLessons> {
         let lessons: ResearchLessons = JsonStore.read(&self.lessons_path())?.ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
@@ -387,7 +387,7 @@ fn reflect_results(
 }
 
 /// Current Unix timestamp in seconds for interactive CLI/MCP defaults.
-pub fn unix_timestamp_now() -> io::Result<u64> {
+pub(crate) fn unix_timestamp_now() -> io::Result<u64> {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_secs())

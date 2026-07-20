@@ -15,7 +15,7 @@ use tree_sitter::Node;
 
 /// Deep analysis output for one TypeScript or TSX artifact.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TypeScriptAnalysis {
+pub(crate) struct TypeScriptAnalysis {
     /// TypeScript grammar selected for the artifact.
     pub language: TypeScriptLanguage,
     /// Existing tree-sitter syntax facts retained during the deep-analysis
@@ -110,7 +110,7 @@ impl TypeScriptLanguage {
 
 /// A TypeScript class declaration and its direct methods.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TypeScriptClass {
+pub(crate) struct TypeScriptClass {
     /// Class name.
     pub name: String,
     /// Direct superclass expressions from the class's `extends` clause.
@@ -125,7 +125,7 @@ pub struct TypeScriptClass {
 
 /// A named TypeScript function, arrow-function binding, or method.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TypeScriptFunction {
+pub(crate) struct TypeScriptFunction {
     /// Name declared by the function or binding.
     pub name: String,
     /// Source evidence for the declaration.
@@ -134,7 +134,7 @@ pub struct TypeScriptFunction {
 
 /// One TypeScript call with a statically readable callee name.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TypeScriptCall {
+pub(crate) struct TypeScriptCall {
     /// Bare function name or the property segment of a member call.
     pub name: String,
     /// Source evidence for the call expression.
@@ -144,7 +144,7 @@ pub struct TypeScriptCall {
 /// One TypeScript environment read. Dynamic property expressions retain their
 /// source expression but have no fabricated variable name.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TypeScriptEnvRead {
+pub(crate) struct TypeScriptEnvRead {
     /// Literal environment name, when statically readable.
     pub name: Option<String>,
     /// Full property expression as written.
@@ -161,7 +161,7 @@ pub struct TypeScriptEnvRead {
 /// (`a.b.method()`, `f().method()`) carry no single name a binding
 /// environment could type, so they are left out rather than guessed at.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TypeScriptMemberCall {
+pub(crate) struct TypeScriptMemberCall {
     /// Receiver identifier as written, e.g. `this` or `provider`.
     pub receiver: String,
     /// Called method name.
@@ -175,7 +175,7 @@ pub struct TypeScriptMemberCall {
 
 /// LIT-57: one `const name = new Ctor(...)` binding, which types `name`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TypeScriptBinding {
+pub(crate) struct TypeScriptBinding {
     /// Bound name.
     pub name: String,
     /// Constructed type name as written.
@@ -191,7 +191,7 @@ pub struct TypeScriptBinding {
 
 /// LIT-45.3: how a barrel re-exports names from another module.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum TypeScriptReExportKind {
+pub(crate) enum TypeScriptReExportKind {
     /// `export * from './a'` -- every name the target exports, unrenamed.
     Star,
     /// `export { A } from './b'`, or `export { A as B } from './b'`, where
@@ -210,7 +210,7 @@ pub enum TypeScriptReExportKind {
 /// namespace object rather than republishing names, so `ns.foo()` is a module
 /// member access and not a symbol a consumer can import by name.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TypeScriptReExport {
+pub(crate) struct TypeScriptReExport {
     /// Module specifier as written, e.g. `./core/ApiError`.
     pub specifier: String,
     /// What is being republished.
@@ -513,27 +513,27 @@ fn classify_binding(
 
 /// Tree-sitter-backed analyzer for TypeScript and TSX artifacts.
 #[derive(Debug, Clone, Copy)]
-pub struct TypeScriptAnalyzer {
+pub(crate) struct TypeScriptAnalyzer {
     language: TypeScriptLanguage,
 }
 
 impl TypeScriptAnalyzer {
     /// Creates an analyzer for standard TypeScript.
-    pub fn typescript() -> Self {
+    pub(crate) fn typescript() -> Self {
         Self {
             language: TypeScriptLanguage::TypeScript,
         }
     }
 
     /// Creates an analyzer for TSX.
-    pub fn tsx() -> Self {
+    pub(crate) fn tsx() -> Self {
         Self {
             language: TypeScriptLanguage::Tsx,
         }
     }
 
     /// Parses a safe TypeScript/TSX artifact and extracts typed declarations.
-    pub fn analyze(&self, artifact: &Artifact, text: &str) -> TypeScriptAnalysis {
+    pub(crate) fn analyze(&self, artifact: &Artifact, text: &str) -> TypeScriptAnalysis {
         let syntax = self.syntax_language().adapter().parse(text);
         // Every bail-out below keeps the syntax facts and yields no deep
         // facts, so they share one shape rather than restating each field.

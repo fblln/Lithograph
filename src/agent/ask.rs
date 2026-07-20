@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 /// One generated wiki page loaded from disk.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct WikiPage {
+pub(crate) struct WikiPage {
     /// Manifest page identifier.
     pub id: String,
     /// Repository-relative documentation path.
@@ -20,7 +20,7 @@ pub struct WikiPage {
 
 /// One query hit.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AskHit {
+pub(crate) struct AskHit {
     /// Page id.
     pub page_id: String,
     /// Repository-relative page path.
@@ -33,7 +33,7 @@ pub struct AskHit {
 
 /// Deterministic answer assembled from generated docs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AskAnswer {
+pub(crate) struct AskAnswer {
     /// Original question.
     pub question: String,
     /// Grounded answer text.
@@ -44,7 +44,7 @@ pub struct AskAnswer {
 
 /// MCP-style static export.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct McpExport {
+pub(crate) struct McpExport {
     /// Available tool names mirrored from DeepWiki-style access patterns.
     pub tools: Vec<String>,
     /// Wiki structure.
@@ -57,7 +57,7 @@ pub struct McpExport {
 
 /// Summary entry for one wiki page.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct WikiPageSummary {
+pub(crate) struct WikiPageSummary {
     /// Page id.
     pub id: String,
     /// Repository-relative page path.
@@ -68,11 +68,11 @@ pub struct WikiPageSummary {
 
 /// Loads generated docs and performs local deterministic retrieval.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct WikiSearch;
+pub(crate) struct WikiSearch;
 
 impl WikiSearch {
     /// Reads every page referenced by `.lithograph/manifest.json`.
-    pub fn load_pages(
+    pub(crate) fn load_pages(
         &self,
         repo_root: &Path,
     ) -> Result<Vec<WikiPage>, Box<dyn std::error::Error>> {
@@ -94,7 +94,7 @@ impl WikiSearch {
     }
 
     /// Answers a question from local generated docs.
-    pub fn ask(
+    pub(crate) fn ask(
         &self,
         repo_root: &Path,
         question: &str,
@@ -104,7 +104,7 @@ impl WikiSearch {
     }
 
     /// Builds a static MCP-style export payload.
-    pub fn export(
+    pub(crate) fn export(
         &self,
         repo_root: &Path,
         question: Option<&str>,
@@ -120,7 +120,7 @@ impl WikiSearch {
             .collect();
         let answer = question.map(|question| answer_from_pages(question, &contents));
         Ok(McpExport {
-            tools: crate::mcp::MCP_TOOLS
+            tools: crate::agent::mcp::MCP_TOOLS
                 .iter()
                 .map(|tool| tool.name.to_owned())
                 .collect(),
@@ -197,7 +197,7 @@ fn first_heading(body: &str) -> Option<String> {
 }
 
 /// Renders an answer in a compact table-like format.
-pub fn render_ask_table(answer: &AskAnswer) -> String {
+pub(crate) fn render_ask_table(answer: &AskAnswer) -> String {
     let mut output = format!("{}\n", answer.answer);
     for hit in &answer.hits {
         output.push_str(&format!(

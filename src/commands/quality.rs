@@ -2,12 +2,12 @@
 //! already-generated documentation. None of these call a language model.
 
 use crate::cli::{GoldenArgs, OutputFormat, QualityArgs, ValidateMermaidArgs};
-use crate::golden::{check_or_update, render_report as render_golden_report};
-use crate::mermaid::{
+use crate::docs::mermaid::{
     fix_path as fix_mermaid_path, render_report as render_mermaid_report,
     validate as validate_mermaid,
 };
-use crate::quality::{inspect as inspect_quality, render_table as render_quality_table};
+use crate::golden::{check_or_update, render_report as render_golden_report};
+use crate::knowledge::quality::{inspect as inspect_quality, render_table as render_quality_table};
 use std::io::Write;
 
 pub(crate) fn execute_golden<W>(

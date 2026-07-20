@@ -5,7 +5,7 @@
 //! `tools/call` envelope the vendored graph explorer frontend expects
 //! (`{jsonrpc, id, method: "tools/call", params: {name, arguments}}`,
 //! response unwrapped from `result.content[].text`), translating to and
-//! from the existing [`crate::mcp::WikiMcpServer`] request/response shapes
+//! from the existing [`crate::agent::mcp::WikiMcpServer`] request/response shapes
 //! so no other graph code needs to change. Every other path falls back to
 //! serving static files from a configured assets directory.
 //!
@@ -18,7 +18,7 @@
 //! request to a fixed time budget so a stuck handler cannot hang the
 //! server indefinitely.
 
-use crate::mcp::{McpRequest, WikiMcpServer};
+use crate::agent::mcp::{McpRequest, WikiMcpServer};
 use axum::Router;
 use axum::error_handling::HandleErrorLayer;
 use axum::extract::rejection::JsonRejection;
@@ -52,14 +52,14 @@ const PRIMARY_PROJECT_ID: &str = "primary";
 
 /// One additional repository root explicitly allowlisted at server start.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NamedProjectRoot {
+pub(crate) struct NamedProjectRoot {
     id: String,
     path: PathBuf,
 }
 
 impl NamedProjectRoot {
     /// Creates a named root. Validation occurs when the registry is built.
-    pub fn new(id: impl Into<String>, path: PathBuf) -> Self {
+    pub(crate) fn new(id: impl Into<String>, path: PathBuf) -> Self {
         Self {
             id: id.into(),
             path,
@@ -140,10 +140,10 @@ fn valid_project_id(id: &str) -> bool {
 
 /// Binds the server's listening socket without accepting connections yet,
 /// returning the bound address (the real port when `port` is `0`) and the
-/// configured router. Split from [`run`] so tests and callers that need
-/// the bound address up front don't have to go through the
-/// graceful-shutdown-on-ctrl-c blocking loop `run` uses for the CLI.
-pub async fn bind(
+/// configured router. Test-only harness over the single-project [`router`];
+/// production serves through [`bind_projects`]/[`run_projects`].
+#[cfg(test)]
+pub(crate) async fn bind(
     repo_root: &Path,
     assets_dir: &Path,
     port: u16,
@@ -153,8 +153,8 @@ pub async fn bind(
     Ok((listener, addr, router(repo_root, assets_dir)))
 }
 
-/// Multi-project variant of [`bind`], restricted to explicitly named roots.
-pub async fn bind_projects(
+/// Multi-project bind, restricted to explicitly named roots.
+pub(crate) async fn bind_projects(
     primary_root: &Path,
     projects: Vec<NamedProjectRoot>,
     assets_dir: &Path,
@@ -166,23 +166,8 @@ pub async fn bind_projects(
     Ok((listener, addr, router_with_registry(registry, assets_dir)))
 }
 
-/// Binds and serves until the process receives `Ctrl-C`, writing the bound
-/// address to `writer` first so the caller knows where to browse.
-pub async fn run(
-    repo_root: &Path,
-    assets_dir: &Path,
-    port: u16,
-    writer: &mut impl Write,
-) -> std::io::Result<()> {
-    let (listener, addr, app) = bind(repo_root, assets_dir, port).await?;
-    writeln!(writer, "Lithograph graph explorer serving on http://{addr}")?;
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-}
-
 /// Serves a primary repository plus explicitly named additional roots.
-pub async fn run_projects(
+pub(crate) async fn run_projects(
     primary_root: &Path,
     projects: Vec<NamedProjectRoot>,
     assets_dir: &Path,
@@ -200,10 +185,12 @@ async fn shutdown_signal() {
     let _ = tokio::signal::ctrl_c().await;
 }
 
-/// Builds the server's router: `POST /rpc` for the graph API, everything
-/// else falls back to static files under `assets_dir`. `assets_dir` need
-/// not exist -- missing files simply 404 rather than the server refusing
+/// Builds the server's single-project router: `POST /rpc` for the graph API,
+/// everything else falls back to static files under `assets_dir`. `assets_dir`
+/// need not exist -- missing files simply 404 rather than the server refusing
 /// to start, so the graph API stays usable before a UI bundle is built.
+/// Test-only; production routes through `router_with_registry`.
+#[cfg(test)]
 fn router(repo_root: &Path, assets_dir: &Path) -> Router {
     // The compatibility single-project path has no user-supplied ID to
     // validate, so construct its fixed registry directly without a fallible
@@ -386,7 +373,7 @@ fn json_rpc_error(id: Value, code: i32, message: String) -> Response {
 }
 
 /// Translates one JSON-RPC `tools/call` request into a
-/// [`crate::mcp::WikiMcpServer`] tool call and back. The actual tool
+/// [`crate::agent::mcp::WikiMcpServer`] tool call and back. The actual tool
 /// handler is synchronous, in-memory graph computation (already
 /// node/edge-budgeted by the tools themselves, e.g. `get_graph_layout` --
 /// see LIT-24.16), so it runs on a blocking-pool thread rather than the
