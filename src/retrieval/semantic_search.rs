@@ -16,7 +16,7 @@ pub(crate) const EMBEDDING_INDEX_VERSION: u32 = 1;
 /// Fixed embedding dimensionality used by every provider in this crate, so
 /// vectors from different providers are at least comparably shaped (real
 /// providers may still differ semantically, but never in size).
-const EMBEDDING_DIMENSIONS: usize = 64;
+pub(crate) const EMBEDDING_DIMENSIONS: usize = 64;
 
 /// Failure embedding a piece of text.
 #[derive(Debug, Clone, PartialEq, Eq)]

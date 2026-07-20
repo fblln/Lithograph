@@ -56,6 +56,9 @@ pub(crate) enum Command {
     /// List what depends on the given nodes or changed files -- "what breaks
     /// if this changes".
     Affected(AffectedArgs),
+    /// Enriched raw-code semantic search ranked under graph constraints.
+    /// Deterministic and offline; builds a cached index under `.lithograph/`.
+    SearchCode(SearchCodeArgs),
     /// Create, read, update, delete, and list architecture decision records.
     Adr(AdrCommand),
     /// Record answer outcomes and reflect them into reusable research lessons.
@@ -346,6 +349,59 @@ pub(crate) struct PathArgs {
     pub from: String,
     /// Node id, name, or substring to reach.
     pub to: String,
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
+    pub format: OutputFormat,
+}
+
+/// Arguments for `search-code`.
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub(crate) struct SearchCodeArgs {
+    /// Repository path.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+    /// Query text (natural language or code).
+    pub query: String,
+    /// Restrict to artifact paths matching this glob.
+    #[arg(long)]
+    pub path_glob: Option<String>,
+    /// Restrict to a detected language id (e.g. `python`, `rust`).
+    #[arg(long)]
+    pub language: Option<String>,
+    /// Restrict to an owning module node id.
+    #[arg(long)]
+    pub module_id: Option<String>,
+    /// Restrict to an owning package node id.
+    #[arg(long)]
+    pub package_id: Option<String>,
+    /// Restrict to an owning service name.
+    #[arg(long)]
+    pub service: Option<String>,
+    /// Restrict to chunks attached to this symbol/graph node id (also the
+    /// expansion anchor when `--expand-hops` is set).
+    #[arg(long)]
+    pub node_id: Option<String>,
+    /// Restrict to an architecture layer.
+    #[arg(long)]
+    pub layer: Option<String>,
+    /// Require each of these tags (repeatable).
+    #[arg(long = "tag")]
+    pub tags: Vec<String>,
+    /// Bounded graph expansion in hops from `--node-id`.
+    #[arg(long, default_value_t = 0)]
+    pub expand_hops: usize,
+    /// Maximum results.
+    #[arg(long, default_value_t = 20)]
+    pub limit: usize,
+    /// Result offset for pagination.
+    #[arg(long, default_value_t = 0)]
+    pub offset: usize,
+    /// Rebuild the cached index before searching.
+    #[arg(long)]
+    pub refresh: bool,
+    /// Include the per-result feature breakdown and explanation.
+    #[arg(long)]
+    pub explain: bool,
     /// Output format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
     pub format: OutputFormat,

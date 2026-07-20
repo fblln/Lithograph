@@ -44,6 +44,7 @@ where
         Some(Command::Path(args)) => query::execute_path(args, writer),
         Some(Command::Explain(args)) => query::execute_explain(args, writer),
         Some(Command::Affected(args)) => query::execute_affected(args, writer),
+        Some(Command::SearchCode(args)) => query::execute_search_code(args, writer),
         Some(Command::Adr(command)) => adr::execute_adr(command, writer),
         Some(Command::Research(command)) => research::execute_research(command, writer),
         Some(Command::Watch(args)) => generate::execute_watch(args, writer),

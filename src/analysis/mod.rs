@@ -1,12 +1,14 @@
 //! Repository analysis primitives.
 
 pub(crate) mod cache;
+pub(crate) mod chunks;
 pub(crate) mod dockerfile;
 pub(crate) mod environment;
 pub(crate) mod external_symbols;
 pub(crate) mod generic_text;
 pub(crate) mod markdown;
 pub(crate) mod packages;
+pub(crate) mod parsed_source;
 pub(crate) mod profiles;
 pub(crate) mod protocols;
 pub(crate) mod python;

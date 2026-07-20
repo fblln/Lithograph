@@ -401,17 +401,31 @@ impl TreeSitterParserAdapter {
     /// Parses source text into typed baseline syntax facts. Parser failures
     /// return fallback output instead of panicking.
     pub fn parse(&self, source: &str) -> TreeSitterAdapterOutput {
+        self.parse_indexed(source).0
+    }
+
+    /// Parses once and returns both the typed baseline facts and the byte
+    /// offsets of each top-level definition, so a single parse can serve both
+    /// fact extraction and syntax-aware chunking (LIT-86.14). Parser failures
+    /// return fallback output and no boundaries instead of panicking.
+    pub fn parse_indexed(&self, source: &str) -> (TreeSitterAdapterOutput, Vec<usize>) {
         let mut parser = tree_sitter::Parser::new();
         if let Err(error) = parser.set_language(&self.language) {
-            return TreeSitterAdapterOutput::fallback(
-                self.language_id,
-                format!("failed to set tree-sitter language: {error}"),
+            return (
+                TreeSitterAdapterOutput::fallback(
+                    self.language_id,
+                    format!("failed to set tree-sitter language: {error}"),
+                ),
+                Vec::new(),
             );
         }
         let Some(tree) = parser.parse(source, None) else {
-            return TreeSitterAdapterOutput::fallback(
-                self.language_id,
-                "tree-sitter parser returned no tree",
+            return (
+                TreeSitterAdapterOutput::fallback(
+                    self.language_id,
+                    "tree-sitter parser returned no tree",
+                ),
+                Vec::new(),
             );
         };
 
@@ -425,7 +439,27 @@ impl TreeSitterParserAdapter {
             syntax_errors: Vec::new(),
         };
         collect_node_facts(self, tree.root_node(), source, &mut output);
-        output
+        (
+            output,
+            self.top_level_definition_boundaries(tree.root_node()),
+        )
+    }
+
+    /// Byte offsets where each top-level definition begins, sorted and unique.
+    /// These are the strong syntax cut points the chunker prefers; only direct
+    /// children of the root are used so chunks split *between* declarations,
+    /// not inside them.
+    fn top_level_definition_boundaries(&self, root: tree_sitter::Node<'_>) -> Vec<usize> {
+        let mut boundaries = Vec::new();
+        let mut cursor = root.walk();
+        for child in root.children(&mut cursor) {
+            if self.definition_kinds.contains(&child.kind()) {
+                boundaries.push(child.start_byte());
+            }
+        }
+        boundaries.sort_unstable();
+        boundaries.dedup();
+        boundaries
     }
 }
 

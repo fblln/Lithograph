@@ -164,6 +164,14 @@ pub(crate) const MCP_TOOLS: &[McpToolInfo] = &[
         description: "Semantic search (deterministic offline embeddings) blended with graph connectivity. Params: query, limit?.",
     },
     McpToolInfo {
+        name: "search_code_semantic",
+        description: "Enriched raw-code semantic search: deterministic offline chunk embeddings ranked under graph constraints. Params: query, path_glob?, language?, module_id?, package_id?, service?, node_id?, layer?, tags_all?, tags_any?, expand_hops?, limit?, offset?, refresh?. Returns results with score breakdown, evidence span, graph refs, freshness, and provider/schema/scoring versions.",
+    },
+    McpToolInfo {
+        name: "explain_code_index",
+        description: "Dry-run explain plan of what a code-search index refresh would do: per-chunk action (Reuse/Insert/Update/Delete) and reason code, with no writes. No params.",
+    },
+    McpToolInfo {
         name: "query_graph",
         description: "Narrow Cypher-like MATCH/WHERE/RETURN query. Params: query, e.g. `MATCH (a:Symbol)-[:Calls]->(b:Symbol) WHERE a.name CONTAINS \"foo\" RETURN a, b`.",
     },
@@ -754,6 +762,26 @@ impl WikiMcpServer {
                 )?;
                 Ok(serde_json::to_value(results)?)
             }
+            "search_code_semantic" => {
+                let search_request = code_search_request(&request.params)?;
+                // Deterministic and offline (matching this server's design): the
+                // mock embedding provider makes no network call.
+                let provider = crate::retrieval::semantic_search::MockEmbeddingProvider;
+                let identity = crate::retrieval::code_index::provider_identity(&provider);
+                let response = crate::retrieval::code_index::search(
+                    &self.repo_root,
+                    &search_request,
+                    &provider,
+                    &identity,
+                )?;
+                Ok(serde_json::to_value(response)?)
+            }
+            "explain_code_index" => {
+                let provider = crate::retrieval::semantic_search::MockEmbeddingProvider;
+                let identity = crate::retrieval::code_index::provider_identity(&provider);
+                let plan = crate::retrieval::code_index::explain(&self.repo_root, &identity)?;
+                Ok(serde_json::to_value(plan)?)
+            }
             "query_graph" => {
                 let graph = self.load_graph()?;
                 let text = request
@@ -1332,6 +1360,70 @@ fn code_search_params(params: &Value) -> CodeSearchParams {
     }
 }
 
+/// Parses MCP params into a [`CodeSearchRequest`](crate::retrieval::code_index::CodeSearchRequest).
+/// Unknown/absent optional fields are simply omitted; `query` is required.
+fn code_search_request(
+    params: &Value,
+) -> Result<crate::retrieval::code_index::CodeSearchRequest, Box<dyn std::error::Error>> {
+    use crate::graph::GraphNodeId;
+    use crate::retrieval::chunk_rank::{Expansion, RankFilters, TagExpr};
+
+    let query = params
+        .get("query")
+        .and_then(Value::as_str)
+        .ok_or("search_code_semantic requires params.query")?
+        .to_owned();
+    let string = |key: &str| params.get(key).and_then(Value::as_str).map(str::to_owned);
+    let node = |key: &str| string(key).map(GraphNodeId::new);
+    let string_list = |key: &str| {
+        params
+            .get(key)
+            .and_then(Value::as_array)
+            .map(|values| {
+                values
+                    .iter()
+                    .filter_map(|value| value.as_str().map(str::to_owned))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    };
+    let usize_param = |key: &str| {
+        params
+            .get(key)
+            .and_then(Value::as_u64)
+            .and_then(|value| usize::try_from(value).ok())
+            .unwrap_or_default()
+    };
+
+    Ok(crate::retrieval::code_index::CodeSearchRequest {
+        query,
+        filters: RankFilters {
+            path_glob: string("path_glob"),
+            language: string("language"),
+            module_id: node("module_id"),
+            package_id: node("package_id"),
+            service: string("service"),
+            node_id: node("node_id"),
+            layer: string("layer"),
+            tags: TagExpr {
+                all: string_list("tags_all"),
+                any: string_list("tags_any"),
+            },
+        },
+        expansion: Expansion {
+            max_hops: usize_param("expand_hops"),
+            relations: Vec::new(),
+            direction: None,
+        },
+        limit: usize_param("limit"),
+        offset: usize_param("offset"),
+        refresh: params
+            .get("refresh")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    })
+}
+
 fn trace_params(params: &Value) -> Result<TraceParams, Box<dyn std::error::Error>> {
     let query = params
         .get("query")
@@ -1497,6 +1589,63 @@ mod tests {
     use std::collections::BTreeSet;
     use std::io::Cursor;
     use std::path::Path;
+
+    /// LIT-86.6 AC#7: the MCP `search_code_semantic` tool returns the same
+    /// ranked results as the direct code-search engine (CLI/MCP/API parity),
+    /// with the documented metadata fields and no error.
+    #[test]
+    fn search_code_semantic_tool_matches_direct_engine() -> Result<(), Box<dyn std::error::Error>> {
+        // The MCP handler loads the generated wiki before dispatching any tool,
+        // so this surface (unlike the direct engine) requires a prior `init`.
+        let temp = tempfile::TempDir::new()?;
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/polyglot"),
+            temp.path(),
+        )?;
+        run_init(temp.path(), &MockModel, "mock", "v1")?;
+        let server = WikiMcpServer::new(temp.path());
+
+        let response = server.handle(McpRequest {
+            id: json!(1),
+            tool: "search_code_semantic".to_owned(),
+            params: json!({ "query": "route service handling", "limit": 5 }),
+        });
+        assert!(response.error.is_none(), "no error: {:?}", response.error);
+        let value = response.result.ok_or("missing result")?;
+        // Documented metadata fields are present (AC#6).
+        assert_eq!(
+            value.get("provider_model").and_then(Value::as_str),
+            Some("mock-hash-v1")
+        );
+        assert!(value.get("scoring_version").is_some());
+        assert!(value.get("freshness").is_some());
+        let results = value
+            .get("results")
+            .and_then(Value::as_array)
+            .ok_or("results")?;
+        assert!(!results.is_empty(), "tool returns hits");
+
+        // Parity: the same query through the direct engine (which the CLI and
+        // viewer also call) yields the same top chunk.
+        let provider = crate::retrieval::semantic_search::MockEmbeddingProvider;
+        let identity = crate::retrieval::code_index::provider_identity(&provider);
+        let direct = crate::retrieval::code_index::search(
+            temp.path(),
+            &crate::retrieval::code_index::CodeSearchRequest {
+                query: "route service handling".to_owned(),
+                limit: 5,
+                ..Default::default()
+            },
+            &provider,
+            &identity,
+        )?;
+        let tool_top = results[0].get("chunk_id").and_then(Value::as_str);
+        assert_eq!(
+            tool_top,
+            direct.results.first().map(|r| r.chunk_id.as_str())
+        );
+        Ok(())
+    }
 
     #[test]
     fn handles_structure_contents_and_question_requests() -> Result<(), Box<dyn std::error::Error>>
